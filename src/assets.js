@@ -16,6 +16,39 @@ export const ASSETS = {
   enemyBattlecruiser:"assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Base/PNGs/Kla'ed - Battlecruiser - Base.png",
   enemyDreadnought:  "assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Base/PNGs/Kla'ed - Dreadnought - Base.png",
 
+  nairanScout:        "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Designs - Base/PNGs/Nairan - Scout - Base.png",
+  nairanFighter:      "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Designs - Base/PNGs/Nairan - Fighter - Base.png",
+  nairanBomber:       "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Designs - Base/PNGs/Nairan - Bomber - Base.png",
+  nairanFrigate:      "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Designs - Base/PNGs/Nairan - Frigate - Base.png",
+  nairanBattlecruiser:"assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Designs - Base/PNGs/Nairan - Battlecruiser - Base.png",
+  nairanDreadnought:  "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Designs - Base/PNGs/Nairan - Dreadnought - Base.png",
+
+  nautolanScout:        "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Designs - Base/PNGs/Nautolan Ship - Scout - Base.png",
+  nautolanFighter:      "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Designs - Base/PNGs/Nautolan Ship - Fighter - Base.png",
+  nautolanBomber:       "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Designs - Base/PNGs/Nautolan Ship - Bomber - Base.png",
+  nautolanFrigate:      "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Designs - Base/PNGs/Nautolan Ship - Frigate - Base.png",
+  nautolanBattlecruiser:"assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Designs - Base/PNGs/Nautolan Ship - Battlecruiser - Base.png",
+  nautolanDreadnought:  "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Designs - Base/PNGs/Nautolan Ship - Dreadnought - Base.png",
+
+  // Kla'ed projectiles
+  klaedBullet:    "assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Projectiles/PNGs/Kla'ed - Bullet.png",
+  klaedBigBullet: "assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Projectiles/PNGs/Kla'ed - Big Bullet.png",
+  klaedRay:       "assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Projectiles/PNGs/Kla'ed - Ray.png",
+  klaedTorpedo:   "assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Projectiles/PNGs/Kla'ed - Torpedo.png",
+  klaedWave:      "assets/Foozle_2DS0012_Void_EnemyFleet_1/Kla'ed/Projectiles/PNGs/Kla'ed - Wave.png",
+  // Nairan projectiles
+  nairanBolt:     "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Weapon Effects - Projectiles/PNGs/Nairan - Bolt.png",
+  nairanRay:      "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Weapon Effects - Projectiles/PNGs/Nairan - Ray.png",
+  nairanRocket:   "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Weapon Effects - Projectiles/PNGs/Nairan - Rocket.png",
+  nairanTorpedo:  "assets/Foozle_2DS0013_Void_EnemyFleet_2/Nairan/Weapon Effects - Projectiles/PNGs/Nairan - Torpedo.png",
+  // Nautolan projectiles
+  nautolanBullet:        "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Weapon Effects - Projectiles/PNGs/Nautolan - Bullet.png",
+  nautolanRay:           "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Weapon Effects - Projectiles/PNGs/Nautolan - Ray.png",
+  nautolanRocket:        "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Weapon Effects - Projectiles/PNGs/Nautolan - Rocket.png",
+  nautolanBomb:          "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Weapon Effects - Projectiles/PNGs/Nautolan - Bomb.png",
+  nautolanSpinningBullet:"assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Weapon Effects - Projectiles/PNGs/Nautolan - Spinning Bullet.png",
+  nautolanWave:          "assets/Foozle_2DS0014_Void_EnemyFleet_3/Nautolan/Weapon Effects - Projectiles/PNGs/Nautolan - Wave.png",
+
   asteroid:     "assets/Foozle_2DS0015_Void_EnvironmentPack/Asteroids/PNGs/Asteroid 01 - Base.png",
   asteroidExplode:"assets/Foozle_2DS0015_Void_EnvironmentPack/Asteroids/PNGs/Asteroid 01 - Explode.png",
   asteroidFlame:"assets/Foozle_2DS0015_Void_EnvironmentPack/Effects/PNGs/Asteroid - Flame.png",

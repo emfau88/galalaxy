@@ -1,4 +1,4 @@
-import { CONFIG } from "./config.js";
+import { CONFIG, CONTROL_CONFIG } from "./config.js";
 
 export class Input {
   constructor(canvas, game) {
@@ -6,10 +6,13 @@ export class Input {
     this.game = game;
     this.active = false;
     this.pointerId = null;
+    this.isTouch = false;   // true when the active pointer is touch/pen
     this.x = 0;
     this.y = 0;
-    this.worldX = 0;
+    this.worldX = 0;        // raw world position (finger/cursor)
     this.worldY = 0;
+    this.shipX = 0;         // offset-adjusted target for the ship
+    this.shipY = 0;
     this.justTapped = false;
     this.tapX = 0;
     this.tapY = 0;
@@ -19,10 +22,12 @@ export class Input {
       const p = this.getPoint(e);
       this.active = true;
       this.pointerId = e.pointerId ?? 1;
+      this.isTouch = e.pointerType === "touch" || e.pointerType === "pen";
       this.x = p.x;
       this.y = p.y;
       this.worldX = p.wx;
       this.worldY = p.wy;
+      this._applyOffset();
       this.justTapped = true;
       this.tapX = p.wx;
       this.tapY = p.wy;
@@ -36,6 +41,7 @@ export class Input {
       this.y = p.y;
       this.worldX = p.wx;
       this.worldY = p.wy;
+      this._applyOffset();
     };
 
     const up = e => {
@@ -57,6 +63,14 @@ export class Input {
       }
       if (e.key.toLowerCase() === "p") game.togglePause();
     });
+  }
+
+  _applyOffset() {
+    const ox = this.isTouch ? CONTROL_CONFIG.touchOffsetX : 0;
+    const oy = this.isTouch ? CONTROL_CONFIG.touchOffsetY : CONTROL_CONFIG.mouseOffsetY;
+    // Clamp so ship stays within the same play-area bounds player.update enforces (36, 88 … W-36, H-38)
+    this.shipX = Math.max(36, Math.min(CONFIG.designW - 36, this.worldX + ox));
+    this.shipY = Math.max(88, Math.min(CONFIG.designH - 38, this.worldY - oy));
   }
 
   getPoint(e) {

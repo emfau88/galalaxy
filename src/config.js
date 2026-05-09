@@ -27,12 +27,27 @@ export const RENDER_CONFIG = {
   playerEngine: { w: 48, h: 48 },
   playerShield: { w: 92, h: 92 },
   enemies: {
-    scout:        { w: 34,  h: 34  },
-    fighter:      { w: 42,  h: 42  },
-    bomber:       { w: 54,  h: 54  },
-    frigate:      { w: 68,  h: 68  },
-    battlecruiser:{ w: 82,  h: 82  },
-    dreadnought:  { w: 120, h: 120 }
+    // Kla'ed Fleet 1
+    scout:              { w: 56,  h: 56  },
+    fighter:            { w: 64,  h: 64  },
+    bomber:             { w: 78,  h: 78  },
+    frigate:            { w: 88,  h: 88  },
+    battlecruiser:      { w: 104, h: 104 },
+    dreadnought:        { w: 136, h: 136 },
+    // Nairan Fleet 2
+    nairanScout:        { w: 54,  h: 54  },
+    nairanFighter:      { w: 62,  h: 62  },
+    nairanBomber:       { w: 76,  h: 76  },
+    nairanFrigate:      { w: 86,  h: 86  },
+    nairanBattlecruiser:{ w: 102, h: 102 },
+    nairanDreadnought:  { w: 138, h: 138 },
+    // Nautolan Fleet 3
+    nautolanScout:        { w: 58,  h: 58  },
+    nautolanFighter:      { w: 68,  h: 68  },
+    nautolanBomber:       { w: 82,  h: 82  },
+    nautolanFrigate:      { w: 94,  h: 94  },
+    nautolanBattlecruiser:{ w: 110, h: 110 },
+    nautolanDreadnought:  { w: 142, h: 142 }
   },
   pickups: { w: 46, h: 46 },
   planet:  { w: 190, h: 190 },
@@ -40,3 +55,48 @@ export const RENDER_CONFIG = {
 };
 
 export const STRIP_RATIO = 2.2;
+
+export const CONTROL_CONFIG = {
+  // Applied only on touch input: ship leads the finger by this many design-pixels upward.
+  // Keeps the ship visible above the thumb. Clamped so ship can't leave the play area.
+  touchOffsetY: 110,
+  // No horizontal offset — lateral precision matters more than thumb coverage.
+  touchOffsetX: 0,
+  // Mouse/desktop: zero offset, ship follows cursor directly.
+  mouseOffsetY: 0,
+};
+
+export const SECTORS = [
+  {
+    index: 0,
+    name: "Kla'ed Frontier",
+    shortName: "SECTOR I",
+    duration: 90,
+    fleet: "klaed",
+    tint: [30, 60, 140]
+  },
+  {
+    index: 1,
+    name: "Nairan Expanse",
+    shortName: "SECTOR II",
+    duration: 90,
+    fleet: "nairan",
+    tint: [100, 30, 140]
+  },
+  {
+    index: 2,
+    name: "Nautolan Depths",
+    shortName: "SECTOR III",
+    duration: 90,
+    fleet: "nautolan",
+    tint: [30, 110, 80]
+  },
+  {
+    index: 3,
+    name: "Void Core",
+    shortName: "SECTOR IV",
+    duration: 90,
+    fleet: "nautolan",
+    tint: [140, 30, 30]
+  }
+];

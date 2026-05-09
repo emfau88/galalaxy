@@ -1,0 +1,7 @@
+*.zip
+*.7z
+*.rar
+node_modules/
+.DS_Store
+Thumbs.db
+.claude/
