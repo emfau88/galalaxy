@@ -1,5 +1,6 @@
 import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp } from "../utils.js";
+import { updateBeam, updatePulse } from "../systems/abilities.js";
 
 export class Player {
   constructor(game) {
@@ -24,6 +25,10 @@ export class Player {
     this.magnet = 0;
     this.shieldRegen = 2.2;
     this.bank = 0;
+    // Signature abilities (0 = not unlocked)
+    this.beam    = 0;
+    this.pulse   = 0;
+    this.barrage = 0;
   }
 
   update(dt) {
@@ -51,6 +56,9 @@ export class Player {
       this.fireTimer = this.fireRate;
       this.fire();
     }
+
+    updateBeam(this, dt);
+    updatePulse(this, dt);
   }
 
   fire() {
@@ -60,10 +68,18 @@ export class Player {
       g.spawnProjectile(this.x + off, this.y - 28, -Math.PI / 2, 640, 11 + this.twin * 1.5, "player", "laser");
     }
 
-    if (this.rocket > 0 && Math.random() < 0.18 + this.rocket * 0.04) {
-      const target = g.closestEnemy(this.x, this.y, 420);
-      const ang = target ? Math.atan2(target.y - this.y, target.x - this.x) : -Math.PI / 2;
-      g.spawnProjectile(this.x, this.y - 25, ang, 420, 26 + this.rocket * 5, "player", "rocket");
+    if (this.rocket > 0) {
+      const rocketChance = 0.18 + this.rocket * 0.04;
+      if (Math.random() < rocketChance) {
+        const count = this.barrage > 0 ? 3 : 1;
+        for (let i = 0; i < count; i++) {
+          const delay = i * 0.07; // stagger rockets slightly via offset spawn position
+          const ox = (i - (count - 1) / 2) * 9;
+          const target = g.closestEnemy(this.x + ox, this.y, 420);
+          const ang = target ? Math.atan2(target.y - this.y, target.x - this.x) + (i - 1) * 0.08 : -Math.PI / 2 + (i - 1) * 0.08;
+          g.spawnProjectile(this.x + ox, this.y - 25, ang, 420 + i * 12, 22 + this.rocket * 4 + this.barrage * 5, "player", "rocket");
+        }
+      }
     }
 
     if (this.zapper > 0 && Math.random() < 0.11 + this.zapper * 0.025) {

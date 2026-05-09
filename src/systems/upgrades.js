@@ -11,7 +11,10 @@ export class UpgradeSystem {
       { id: "speed",  name: "Engine Boost",   desc: "Movement becomes sharper.",           icon: "pickupSuper" },
       { id: "shield", name: "Shield Regen",   desc: "Shield recovers faster.",             icon: "pickupShield" },
       { id: "magnet", name: "Pickup Magnet",  desc: "Energy pulls in from farther away.",  icon: "pickupPulse" },
-      { id: "hp",     name: "Hull Upgrade",   desc: "Max HP increases.",                   icon: "pickupInvincible" }
+      { id: "hp",      name: "Hull Upgrade",    desc: "Max HP increases.",                        icon: "pickupInvincible" },
+      { id: "beam",    name: "Beam Cannon",    desc: "Fires a devastating energy beam every 7s.", icon: "pickupZapper" },
+      { id: "pulse",   name: "Pulse Wave",     desc: "Shockwave damages and pushes enemies away.", icon: "pickupShield" },
+      { id: "barrage", name: "Rocket Barrage", desc: "Rockets launch in rapid 3-shot bursts.",    icon: "pickupRocket" }
     ];
     this.choices = [];
     this.cards = [];
@@ -38,8 +41,17 @@ export class UpgradeSystem {
       case "zapper": p.zapper = Math.min(5, p.zapper + 1); break;
       case "speed":  p.speed += 26; break;
       case "shield": p.maxShield += 12; p.shieldRegen += 1.25; p.shield = p.maxShield; break;
-      case "magnet": p.magnet += 1; break;
-      case "hp":     p.maxHp += 18; p.hp = Math.min(p.maxHp, p.hp + 28); break;
+      case "magnet":  p.magnet += 1; break;
+      case "hp":      p.maxHp += 18; p.hp = Math.min(p.maxHp, p.hp + 28); break;
+      case "beam":    p.beam   = Math.min(3, p.beam + 1);
+                      if (p._beamCooldown === undefined) p._beamCooldown = 2.0; // short first trigger
+                      break;
+      case "pulse":   p.pulse  = Math.min(3, p.pulse + 1);
+                      if (p._pulseCooldown === undefined) p._pulseCooldown = 2.5;
+                      break;
+      case "barrage": p.barrage = Math.min(3, p.barrage + 1);
+                      if (p.rocket === 0) p.rocket = 1; // barrage needs at least rocket 1
+                      break;
     }
     this.game.state = "playing";
   }
@@ -126,10 +138,13 @@ export class UpgradeSystem {
       // Level indicator dots if player has this upgrade
       const p = this.game.player;
       let lvl = 0;
-      if (u.id === "twin") lvl = p.twin;
-      else if (u.id === "rocket") lvl = p.rocket;
-      else if (u.id === "zapper") lvl = p.zapper;
-      else if (u.id === "magnet") lvl = p.magnet;
+      if (u.id === "twin")    lvl = p.twin;
+      else if (u.id === "rocket")  lvl = p.rocket;
+      else if (u.id === "zapper")  lvl = p.zapper;
+      else if (u.id === "magnet")  lvl = p.magnet;
+      else if (u.id === "beam")    lvl = p.beam;
+      else if (u.id === "pulse")   lvl = p.pulse;
+      else if (u.id === "barrage") lvl = p.barrage;
       if (lvl > 0) {
         ctx.fillStyle = CONFIG.colors.cyan;
         for (let d = 0; d < Math.min(lvl, 5); d++) {

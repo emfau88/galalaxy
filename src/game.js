@@ -12,6 +12,7 @@ import { Particle } from "./entities/particle.js";
 import { UpgradeSystem } from "./systems/upgrades.js";
 import { FLEETS, pickFleetEnemy } from "./data/fleets.js";
 import { emitTrail, spawnHitSparks, spawnDeathBurst, emitSectorDust, spawnBossEntrance } from "./systems/fx.js";
+import { drawBeam, drawPulse } from "./systems/abilities.js";
 
 export class Game {
   constructor() {
@@ -500,10 +501,12 @@ export class Game {
   }
 
   drawWorld(ctx) {
+    drawBeam(ctx, this.player, this.time);
     for (const p of this.pickups) p.draw(ctx);
     for (const pr of this.projectiles) pr.draw(ctx, this);
     for (const e of this.enemies) e.draw(ctx, this.loader);
     this.player.draw(ctx, this.loader);
+    drawPulse(ctx, this.player);
 
     for (const z of this.zaps) {
       const a = z.life / z.max;
@@ -1051,6 +1054,64 @@ export class Game {
         ctx.beginPath();
         ctx.roundRect(-len, -bar, len * 2, bar * 2, bar * 0.5);
         ctx.fill();
+        break;
+      }
+      case "beam": {
+        // Vertical beam column with bright core
+        ctx.fillStyle = CONFIG.colors.cyan;
+        ctx.shadowColor = CONFIG.colors.cyan;
+        ctx.shadowBlur = 14;
+        ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.roundRect(-r * 0.45, -r, r * 0.9, r * 2, r * 0.45);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.roundRect(-r * 0.15, -r, r * 0.3, r * 2, r * 0.15);
+        ctx.fill();
+        break;
+      }
+      case "pulse": {
+        // Expanding ring icon
+        ctx.strokeStyle = CONFIG.colors.cyan;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = CONFIG.colors.cyan;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = CONFIG.colors.cyan;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "barrage": {
+        // 3 rocket shapes in a spread
+        ctx.fillStyle = CONFIG.colors.orange;
+        ctx.shadowColor = CONFIG.colors.orange;
+        ctx.shadowBlur = 12;
+        for (const [ox, oa] of [[-r * 0.42, -0.28], [0, 0], [r * 0.42, 0.28]]) {
+          ctx.save();
+          ctx.translate(ox, 0);
+          ctx.rotate(oa);
+          ctx.beginPath();
+          ctx.moveTo(0, -r * 0.85);
+          ctx.lineTo(r * 0.22, r * 0.4);
+          ctx.lineTo(0, r * 0.15);
+          ctx.lineTo(-r * 0.22, r * 0.4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
         break;
       }
       default: {
