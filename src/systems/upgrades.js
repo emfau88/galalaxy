@@ -44,10 +44,10 @@ export class UpgradeSystem {
       case "magnet":  p.magnet += 1; break;
       case "hp":      p.maxHp += 18; p.hp = Math.min(p.maxHp, p.hp + 28); break;
       case "beam":    p.beam   = Math.min(3, p.beam + 1);
-                      if (p._beamCooldown === undefined) p._beamCooldown = 2.0; // short first trigger
+                      if (p._beamCooldown === undefined) p._beamCooldown = 4.0;
                       break;
       case "pulse":   p.pulse  = Math.min(3, p.pulse + 1);
-                      if (p._pulseCooldown === undefined) p._pulseCooldown = 2.5;
+                      if (p._pulseCooldown === undefined) p._pulseCooldown = 5.0;
                       break;
       case "barrage": p.barrage = Math.min(3, p.barrage + 1);
                       if (p.rocket === 0) p.rocket = 1; // barrage needs at least rocket 1

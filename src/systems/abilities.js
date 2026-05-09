@@ -8,9 +8,9 @@ import { clamp } from "../utils.js";
 
 const BEAM_COOLDOWN = 7.0;   // seconds between beams
 const BEAM_DURATION = 0.55;  // seconds beam is visible
-const BEAM_DAMAGE   = 55;    // per enemy hit
-const BEAM_WIDTH    = 18;    // collision half-width (design px)
-const BEAM_LENGTH   = CONFIG.designH; // from player upward, full screen
+const BEAM_DAMAGE   = 48;    // per enemy hit
+const BEAM_WIDTH    = 24;    // collision half-width (design px) — wider for fair mobile hits
+const BEAM_LENGTH   = CONFIG.designH;
 
 export function updateBeam(player, dt) {
   if (!player.beam) return;
@@ -85,10 +85,10 @@ export function drawBeam(ctx, player, time) {
 // ─── Pulse Wave ──────────────────────────────────────────────────────────────
 
 const PULSE_COOLDOWN  = 9.0;   // seconds between pulses
-const PULSE_DURATION  = 0.6;   // ring expand time
-const PULSE_MAX_R     = 160;   // maximum radius (design px)
-const PULSE_DAMAGE    = 22;
-const PULSE_KNOCKBACK = 180;   // px/s impulse
+const PULSE_DURATION  = 0.65;  // ring expand time
+const PULSE_MAX_R     = 155;   // maximum radius (design px)
+const PULSE_DAMAGE    = 18;    // moderate — wave is primarily a space-control tool
+const PULSE_KNOCKBACK = 200;   // px/s impulse — strong push is the point
 
 export function updatePulse(player, dt) {
   if (!player.pulse) return;

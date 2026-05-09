@@ -435,10 +435,11 @@ export class Game {
       ctx.globalAlpha = 1;
     }
 
-    // Sector tint overlay
+    // Sector tint overlay — stronger in later sectors
     const sector = SECTORS[this.currentSectorIndex];
     const [tr, tg, tb] = sector.tint;
-    ctx.fillStyle = `rgba(${tr},${tg},${tb},0.07)`;
+    const tintStrength = 0.09 + this.currentSectorIndex * 0.018;
+    ctx.fillStyle = `rgba(${tr},${tg},${tb},${tintStrength})`;
     ctx.fillRect(0, 0, W, H);
 
     // Stars — brighter and more visible
@@ -513,14 +514,26 @@ export class Game {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = a;
+      // Outer glow pass
       ctx.strokeStyle = CONFIG.colors.pink;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 5;
       ctx.shadowColor = CONFIG.colors.pink;
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = 22;
+      ctx.globalAlpha = a * 0.5;
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
-      const mx = (z.x1 + z.x2) / 2 + (Math.random() - 0.5) * 16;
-      const my = (z.y1 + z.y2) / 2 + (Math.random() - 0.5) * 16;
+      const mx = (z.x1 + z.x2) / 2 + (Math.random() - 0.5) * 18;
+      const my = (z.y1 + z.y2) / 2 + (Math.random() - 0.5) * 18;
+      ctx.lineTo(mx, my);
+      ctx.lineTo(z.x2, z.y2);
+      ctx.stroke();
+      // Bright core pass
+      ctx.strokeStyle = "#ffccff";
+      ctx.lineWidth = 1.8;
+      ctx.shadowBlur = 8;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.moveTo(z.x1, z.y1);
       ctx.lineTo(mx, my);
       ctx.lineTo(z.x2, z.y2);
       ctx.stroke();
@@ -646,7 +659,51 @@ export class Game {
       }
     }
 
+    // Ability cooldown pips — shown bottom-right of HUD panel when abilities are unlocked
+    this.drawAbilityPips(ctx);
+
     ctx.restore();
+  }
+
+  drawAbilityPips(ctx) {
+    const p = this.player;
+    const abilities = [];
+    if (p.beam)    abilities.push({ label: "BEAM",  cd: p._beamCooldown  ?? 0, max: 7.0, color: CONFIG.colors.cyan,   active: p._beamActive });
+    if (p.pulse)   abilities.push({ label: "PULSE", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan,   active: p._pulseActive });
+    if (!abilities.length) return;
+
+    const pipW = 52, pipH = 7, gap = 6;
+    const startX = CONFIG.designW - 12 - abilities.length * (pipW + gap) + gap;
+    const y = 26;
+
+    for (let i = 0; i < abilities.length; i++) {
+      const ab = abilities[i];
+      const x = startX + i * (pipW + gap);
+      const fill = ab.cd <= 0 ? 1 : Math.max(0, 1 - ab.cd / ab.max);
+
+      // Track
+      ctx.fillStyle = "rgba(255,255,255,0.07)";
+      ctx.beginPath();
+      ctx.roundRect(x, y, pipW, pipH, pipH / 2);
+      ctx.fill();
+
+      // Fill — glows when ready
+      if (fill > 0) {
+        ctx.fillStyle = ab.cd <= 0 ? ab.color : "rgba(88,180,180,0.55)";
+        ctx.shadowColor = ab.cd <= 0 ? ab.color : "transparent";
+        ctx.shadowBlur  = ab.cd <= 0 ? 8 : 0;
+        ctx.beginPath();
+        ctx.roundRect(x, y, Math.max(pipH, pipW * fill), pipH, pipH / 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Label
+      ctx.fillStyle = ab.cd <= 0 ? CONFIG.colors.white : CONFIG.colors.dim;
+      ctx.font = "700 7px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(ab.label, x + pipW / 2, y - 3);
+    }
   }
 
   bar(ctx, x, y, w, h, t, color, label) {

@@ -42,15 +42,26 @@ export class Enemy {
 
     this.fireTimer -= dt;
     if (this.boss && this.fireTimer <= 0) {
-      this.fireTimer = 0.95;
+      // Alternating rhythm: tight burst (3 shots) then wide spread (5 shots)
+      this._bossVolley = (this._bossVolley ?? 0) + 1;
+      const isBurst = this._bossVolley % 3 !== 0; // every 3rd volley is the wide spread
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
-      // 5-shot spread aimed at player
-      const spread = 0.26;
-      for (let i = -2; i <= 2; i++) {
-        const a = ang + i * spread;
-        const spd = i === 0 ? 310 : 260;
-        const dmg = i === 0 ? 13 : 9;
-        this.game.spawnProjectile(this.x, this.y + 14, a, spd, dmg, "enemy", "enemy", this.projVisual);
+      if (isBurst) {
+        this.fireTimer = 1.1;
+        const spread = 0.18;
+        for (let i = -1; i <= 1; i++) {
+          const a = ang + i * spread;
+          this.game.spawnProjectile(this.x, this.y + 14, a, 280, 10, "enemy", "enemy", this.projVisual);
+        }
+      } else {
+        this.fireTimer = 1.6; // longer pause after wide spread
+        const spread = 0.30;
+        for (let i = -2; i <= 2; i++) {
+          const a = ang + i * spread;
+          const spd = i === 0 ? 260 : 220; // centre shot slower — more readable to dodge
+          const dmg = i === 0 ? 14 : 8;
+          this.game.spawnProjectile(this.x, this.y + 14, a, spd, dmg, "enemy", "enemy", this.projVisual);
+        }
       }
     } else if (!this.boss && Enemy._canFire(this.type) && this.fireTimer <= 0) {
       this.fireTimer = 2.8;

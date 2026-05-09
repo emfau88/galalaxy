@@ -11,17 +11,17 @@ export const PROJECTILE_VISUALS = {
   klaedBomber:       { assetKey: null,          w: 11,  h: 11, rotOffset: 0,            color: "#ff466b", glowColor: "#ff2040" },
   klaedFrigate:      { assetKey: "klaedBullet", w: 18,  h: 18, rotOffset: Math.PI / 2,  color: "#ff466b", glowColor: "#ff2040" },
   klaedBattlecruiser:{ assetKey: "klaedRay",    w: 72,  h: 38, rotOffset: Math.PI / 2,  color: "#ff6680", glowColor: "#ff2040" },
-  klaedBoss:         { assetKey: "klaedBigBullet", w: 32, h: 16, rotOffset: Math.PI / 2, color: "#ff8899", glowColor: "#ff2040" },
+  klaedBoss:         { assetKey: "klaedBigBullet", w: 38, h: 20, rotOffset: Math.PI / 2, color: "#ff8899", glowColor: "#ff2040" },
 
   // --- Nairan ---
   nairanBomber:       { assetKey: "nairanBolt",    w: 9,   h: 9,  rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff" },
   nairanFrigate:      { assetKey: "nairanRay",     w: 72,  h: 38, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff" },
   nairanBattlecruiser:{ assetKey: "nairanRocket",  w: 16,  h: 16, rotOffset: Math.PI / 2, color: "#dd99ff", glowColor: "#aa44ff" },
-  nairanBoss:         { assetKey: "nairanTorpedo", w: 27,  h: 24, rotOffset: Math.PI / 2, color: "#ee99ff", glowColor: "#aa44ff" },
+  nairanBoss:         { assetKey: "nairanTorpedo", w: 32,  h: 28, rotOffset: Math.PI / 2, color: "#ee99ff", glowColor: "#aa44ff" },
 
   // --- Nautolan ---
   nautolanBomber:       { assetKey: "nautolanSpinningBullet", w: 16, h: 16, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa" },
   nautolanFrigate:      { assetKey: "nautolanRay",            w: 72, h: 38, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa" },
   nautolanBattlecruiser:{ assetKey: "nautolanRocket",         w: 32, h: 32, rotOffset: Math.PI / 2, color: "#66ffdd", glowColor: "#00ddaa" },
-  nautolanBoss:         { assetKey: "nautolanBomb",           w: 16, h: 16, rotOffset: Math.PI / 2, color: "#88ffee", glowColor: "#00ddaa" },
+  nautolanBoss:         { assetKey: "nautolanBomb",           w: 24, h: 24, rotOffset: Math.PI / 2, color: "#88ffee", glowColor: "#00ddaa" },
 };
