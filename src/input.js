@@ -9,8 +9,8 @@ export class Input {
     this.isTouch = false;   // true when the active pointer is touch/pen
     this.x = 0;
     this.y = 0;
-    this.worldX = 0;        // raw world position (finger/cursor)
-    this.worldY = 0;
+    this.worldX = CONFIG.designW / 2; // start centered so title ship has no initial tilt
+    this.worldY = CONFIG.designH / 2;
     this.shipX = 0;         // offset-adjusted target for the ship
     this.shipY = 0;
     this.justTapped = false;

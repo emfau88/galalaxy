@@ -42,6 +42,7 @@ export class Game {
     this.sectorTransition = 0;
     this.bossRewardTimer = 0;
     this.bossRewardData = null;
+    this.titleTime = 0;
     this.player = new Player(this);
     this.enemies = [];
     this.projectiles = [];
@@ -176,6 +177,8 @@ export class Game {
       for (const pr of this.projectiles) emitTrail(this, pr);
       emitSectorDust(this, dt);
     }
+
+    if (this.state === "title") this.titleTime += dt;
 
     if (this.state === "bossReward") {
       this.bossRewardTimer -= dt;
@@ -1331,32 +1334,182 @@ export class Game {
   }
 
   drawTitle(ctx) {
+    const W = CONFIG.designW, H = CONFIG.designH;
+    const t = this.titleTime;
+    const cx = W / 2;
+
     ctx.save();
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(0,0,0,0.36)";
-    ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH);
 
-    ctx.fillStyle = CONFIG.colors.white;
-    ctx.font = "900 40px system-ui";
-    ctx.shadowColor = CONFIG.colors.cyan;
-    ctx.shadowBlur = 24;
-    ctx.fillText("VOID DRIFT", CONFIG.designW / 2, 224);
-    ctx.shadowBlur = 0;
+    // Dark overlay
+    ctx.fillStyle = "rgba(3,6,20,0.55)";
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Parallax star layer (slower, dimmer second pass) ──
+    ctx.save();
+    for (const s of this.stars) {
+      const parallaxY = ((s.y - s.v * 0.008 * t * 60) % H + H) % H;
+      ctx.globalAlpha = s.a * 0.35;
+      ctx.fillStyle = "#c8e8ff";
+      ctx.fillRect(s.x * 0.6 + W * 0.2, parallaxY, s.s * 0.7, s.s * 0.7);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // ── Ship spotlight glow ──
+    const shipPreviewY = 400 + Math.sin(t * 1.6) * 5;
+    ctx.save();
+    const spotGrad = ctx.createRadialGradient(cx, shipPreviewY + 10, 0, cx, shipPreviewY + 10, 80);
+    spotGrad.addColorStop(0, "rgba(88,230,255,0.13)");
+    spotGrad.addColorStop(1, "rgba(88,230,255,0)");
+    ctx.fillStyle = spotGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, shipPreviewY + 10, 80, 40, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Ship preview — parallax tilt from cursor/touch ──
+    // Cursor offset from center → subtle bank angle, max ±0.12 rad
+    const cursorOffsetX = (this.input.worldX || cx) - cx;
+    const titleBank = clamp(cursorOffsetX / W * 0.5, -0.12, 0.12);
+    const _px = this.player.x, _py = this.player.y, _pb = this.player.bank;
+    this.player.x = cx;
+    this.player.y = shipPreviewY;
+    this.player.bank = titleBank;
+    this.player.draw(ctx, this.loader);
+    this.player.x = _px; this.player.y = _py; this.player.bank = _pb;
+
+    // ── Title block ──
+    ctx.font = "500 13px system-ui";
     ctx.fillStyle = CONFIG.colors.dim;
-    ctx.font = "700 15px system-ui";
-    ctx.fillText("Galaxy Survivor", CONFIG.designW / 2, 252);
+    ctx.globalAlpha = 0.55;
+    const oldLine = "VOID DRIFT · GALAXY SURVIVOR";
+    ctx.fillText(oldLine, cx, 164);
+    // Strikethrough only GALAXY
+    const prefixW  = ctx.measureText("VOID DRIFT · ").width;
+    const galaxyW  = ctx.measureText("GALAXY").width;
+    const lineLeft = cx - ctx.measureText(oldLine).width / 2;
+    ctx.strokeStyle = CONFIG.colors.white;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(lineLeft + prefixW, 160);
+    ctx.lineTo(lineLeft + prefixW + galaxyW, 160);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
-    this.drawButton(ctx, 72, 515, 276, 66, "START RUN");
+    // GALALAXY — "LA" in cyan
+    const glowPulse = 18 + Math.sin(t * 2.1) * 10;
+    ctx.font = "900 52px system-ui";
+    ctx.shadowColor = CONFIG.colors.cyan;
+    const galaW   = ctx.measureText("GALA").width;
+    const laW     = ctx.measureText("LA").width;
+    const totalW  = ctx.measureText("GALALAXY").width;
+    const tleft   = cx - totalW / 2;
+    ctx.textAlign = "left";
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.shadowBlur = glowPulse;
+    ctx.fillText("GALA", tleft, 210);
+    ctx.fillStyle = CONFIG.colors.cyan;
+    ctx.shadowBlur = glowPulse * 1.4;
+    ctx.fillText("LA", tleft + galaW, 210);
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.shadowBlur = glowPulse;
+    ctx.fillText("XY", tleft + galaW + laW, 210);
+    ctx.shadowBlur = 0;
+    ctx.textAlign = "center";
 
+    // VOID DRIFT subtitle
+    ctx.font = "700 16px system-ui";
+    ctx.fillStyle = CONFIG.colors.cyan;
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 8;
+    ctx.fillText("VOID DRIFT", cx, 232);
+    ctx.shadowBlur = 0;
+
+    // Flavor text
+    ctx.font = "400 11px system-ui";
+    ctx.fillStyle = CONFIG.colors.dim;
+    ctx.globalAlpha = 0.5;
+    ctx.fillText("Kla'ed Fleet wants to know your location", cx, 248);
+    ctx.globalAlpha = 1;
+
+    // ── Sector names — staggered reveal ──
+    const SECTOR_NAMES = ["I · Kla'ed Frontier", "II · Nairan Expanse", "III · Nautolan Depths", "IV · Void Core"];
+    ctx.font = "500 11px system-ui";
+    for (let i = 0; i < SECTOR_NAMES.length; i++) {
+      const elapsed = t - (0.8 + i * 0.45);
+      if (elapsed <= 0) break;
+      const alpha = Math.min(1, elapsed / 0.35) * 0.28;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = CONFIG.colors.dim;
+      ctx.fillText(SECTOR_NAMES[i], cx, 272 + i * 20);
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Best score — prominent, above button ──
+    if (this.best > 0) {
+      ctx.font = "700 13px system-ui";
+      ctx.fillStyle = CONFIG.colors.cyan;
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(`✦ BEST  ${Math.floor(this.best)}`, cx, 488);
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Start button — pulsing outline + ripple ──
+    const btnX = 72, btnY = 515, btnW = 276, btnH = 66, btnR = 24;
+    const btnCx = btnX + btnW / 2, btnCy = btnY + btnH / 2;
+
+    // Ripple — expands every 3s, fades out
+    const ripplePhase = (t % 3.0) / 3.0; // 0→1 every 3s
+    if (ripplePhase < 0.55) {
+      const rippleR = (btnW * 0.5 + 20) * (ripplePhase / 0.55);
+      const rippleA = (1 - ripplePhase / 0.55) * 0.35;
+      ctx.globalAlpha = rippleA;
+      ctx.strokeStyle = CONFIG.colors.cyan;
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = CONFIG.colors.cyan;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.ellipse(btnCx, btnCy, rippleR, rippleR * (btnH / btnW), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // Button bg
+    ctx.fillStyle = "rgba(88,230,255,0.08)";
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, btnR);
+    ctx.fill();
+    // Pulsing border
+    const btnPulse = 0.55 + Math.sin(t * 2.8) * 0.28;
+    ctx.strokeStyle = CONFIG.colors.cyan;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 14 + btnPulse * 18;
+    ctx.globalAlpha = 0.6 + btnPulse * 0.4;
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, btnR);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    // Label
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "900 20px system-ui";
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 8;
+    ctx.fillText("START RUN", cx, btnY + 42);
+    ctx.shadowBlur = 0;
+
+    // ── Bottom info ──
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "600 12px system-ui";
-    ctx.fillText("Drag to move · Auto-fire · Survive the fleet", CONFIG.designW / 2, 614);
-    ctx.fillText(`Best Score: ${Math.floor(this.best)}`, CONFIG.designW / 2, 638);
+    ctx.fillText("Drag to move · Auto-fire · Survive the fleet", cx, 614);
 
     if (this.loader.errors.length) {
       ctx.fillStyle = CONFIG.colors.orange;
       ctx.font = "700 11px system-ui";
-      ctx.fillText("Some assets failed. Fallback visuals enabled.", CONFIG.designW / 2, 676);
+      ctx.fillText("Some assets failed. Fallback visuals enabled.", cx, 650);
     }
 
     ctx.restore();
