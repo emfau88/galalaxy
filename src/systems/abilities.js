@@ -25,7 +25,8 @@ export function updateBeam(player, dt) {
 }
 
 function fireBeam(player) {
-  player._beamCooldown = BEAM_COOLDOWN;
+  // Cooldown shrinks per level: L1=7s, L2=6s, L3=5s
+  player._beamCooldown = Math.max(5.0, BEAM_COOLDOWN - (player.beam - 1) * 1.0);
   player._beamActive   = true;
   player._beamLife     = BEAM_DURATION;
 
@@ -96,7 +97,9 @@ export function updatePulse(player, dt) {
   if (player._pulseActive) {
     player._pulseLife -= dt;
     const frac = 1 - player._pulseLife / PULSE_DURATION;
-    player._pulseR = frac * (player.pulseReactor ? PULSE_MAX_R * 1.3 : PULSE_MAX_R);
+    // Radius grows per level: L1=155, L2=175, L3=195 (reactor gets +30% on top)
+    const baseR = PULSE_MAX_R + (player.pulse - 1) * 20;
+    player._pulseR = frac * (player.pulseReactor ? baseR * 1.3 : baseR);
     if (player._pulseLife <= 0) player._pulseActive = false;
   }
   if (player._pulseCooldown <= 0) {
@@ -115,12 +118,13 @@ function firePulse(player) {
 
   const game = player.game;
   const dmg = PULSE_DAMAGE + player.pulse * 10;
+  const hitR = PULSE_MAX_R + (player.pulse - 1) * 20;
 
   for (const e of game.enemies) {
     if (e.dead) continue;
     const dx = e.x - player.x, dy = e.y - player.y;
     const d  = Math.sqrt(dx * dx + dy * dy);
-    if (d < PULSE_MAX_R + e.r) {
+    if (d < hitR + e.r) {
       e.damage(dmg);
       // Knockback: push enemy outward
       if (d > 0.01) {

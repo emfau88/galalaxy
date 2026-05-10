@@ -115,9 +115,18 @@ export class Player {
 
   fire() {
     const g = this.game;
-    const shots = this.twin > 0 ? [-9, 9] : [0];
+    // twin 0: single center | 1: two barrels | 2: three | 3: four | 4: five
+    const twinOffsets = [
+      [0],
+      [-10, 10],
+      [-12, 0, 12],
+      [-16, -5, 5, 16],
+      [-18, -9, 0, 9, 18],
+    ];
+    const shots = twinOffsets[Math.min(this.twin, 4)];
+    const twinDmg = 11 + this.twin * 1.5;
     for (const off of shots) {
-      g.spawnProjectile(this.x + off, this.y - 28, -Math.PI / 2, 640, 11 + this.twin * 1.5, "player", "laser");
+      g.spawnProjectile(this.x + off, this.y - 28, -Math.PI / 2, 640, twinDmg, "player", "laser");
     }
 
     if (this.rocket > 0 && !this.rocketDisabled) {

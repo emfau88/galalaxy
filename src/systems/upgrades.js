@@ -17,7 +17,7 @@ const FAMILY_ACCENT = {
 const POOL = [
   // --- Core / Utility ---
   { id: "fire",    name: "Fire Rate",      desc: "Auto cannon fires faster.",           icon: "pickupAuto",        family: "core",   maxLevel: null, minLevel: 0, weight: 10 },
-  { id: "twin",    name: "Twin Shot",      desc: "Adds side barrels.",                  icon: "pickupAuto",        family: "core",   maxLevel: 4,    minLevel: 0, weight: 8  },
+  { id: "twin",    name: "Multi Cannon",   desc: "Adds cannon barrels. Up to 5 shots.", icon: "pickupAuto",        family: "core",   maxLevel: 4,    minLevel: 0, weight: 8  },
   { id: "speed",   name: "Engine Boost",   desc: "Movement becomes sharper.",            icon: "pickupSuper",       family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "shield",  name: "Shield Regen",   desc: "Shield recovers faster.",              icon: "pickupShield",      family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "hp",      name: "Hull Upgrade",   desc: "Max HP increases.",                    icon: "pickupInvincible",  family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
@@ -25,14 +25,14 @@ const POOL = [
 
   // --- Zapper Family ---
   { id: "zapper",  name: "Zapper Chain",   desc: "Occasional lightning strike.",         icon: "pickupZapper",      family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
-  { id: "beam",    name: "Beam Cannon",    desc: "Fires a devastating energy beam.",     icon: "pickupZapper",      family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
+  { id: "beam",    name: "Beam Cannon",    desc: "Energy beam. Higher levels recharge faster.", icon: "pickupZapper", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Rocket Family ---
   { id: "rocket",  name: "Rocket Burst",   desc: "Chance to launch homing rockets.",     icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
   { id: "barrage", name: "Rocket Barrage", desc: "Rockets launch in rapid 3-shot bursts.", icon: "pickupRocket",   family: "rocket", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Pulse Family ---
-  { id: "pulse",   name: "Pulse Wave",     desc: "Shockwave damages and pushes enemies.", icon: "pickupShield",     family: "pulse",  maxLevel: 3,    minLevel: 2, weight: 4  },
+  { id: "pulse",   name: "Pulse Wave",     desc: "Shockwave pushes enemies. Higher levels wider radius.", icon: "pickupShield", family: "pulse",  maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Keystone Upgrades (one per run, minLevel 5, weight low — weighted sampling still biases toward build family) ---
   { id: "overcharged", name: "Overcharged Core",   desc: "Zapper always fires. Rockets disabled.",     icon: "pickupZapper",  family: "zapper", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
