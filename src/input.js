@@ -16,10 +16,20 @@ export class Input {
     this.justTapped = false;
     this.tapX = 0;
     this.tapY = 0;
+    this.exclusionZones = []; // { x, y, w, h } in design-space — taps here skip ship movement
 
     const down = e => {
       e.preventDefault();
       const p = this.getPoint(e);
+      // If tap lands inside a registered exclusion zone, fire as tap-only — no ship movement.
+      if (this.exclusionZones.some(z =>
+        p.wx >= z.x && p.wx <= z.x + z.w && p.wy >= z.y && p.wy <= z.y + z.h
+      )) {
+        this.justTapped = true;
+        this.tapX = p.wx;
+        this.tapY = p.wy;
+        return; // do NOT set active or update worldX/Y
+      }
       this.active = true;
       this.pointerId = e.pointerId ?? 1;
       this.isTouch = e.pointerType === "touch" || e.pointerType === "pen";

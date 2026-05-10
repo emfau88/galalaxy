@@ -67,6 +67,11 @@ export class Game {
       }
     });
 
+    // Mute button exclusion zone — bottom-right, 48×48 design-px hit area
+    const MBX = CONFIG.designW - 52, MBY = CONFIG.designH - 52;
+    this._muteBtnZone = { x: MBX, y: MBY, w: 48, h: 48 };
+    this.input.exclusionZones.push(this._muteBtnZone);
+
     this.initStars();
     this.loader.load().then(() => {
       if (this.state === "loading") this.state = "title";
@@ -216,8 +221,9 @@ export class Game {
   }
 
   handleTap(x, y) {
-    // Mute button — top-right corner, always visible (40×40 hit area)
-    if (x > CONFIG.designW - 48 && x < CONFIG.designW - 8 && y > 8 && y < 48) {
+    // Mute button — bottom-right, matches exclusion zone
+    const mz = this._muteBtnZone;
+    if (x >= mz.x && x <= mz.x + mz.w && y >= mz.y && y <= mz.y + mz.h) {
       this.toggleMusic();
       return;
     }
@@ -604,7 +610,8 @@ export class Game {
   }
 
   drawMuteButton(ctx) {
-    const x = CONFIG.designW - 28, y = 28, r = 14;
+    const mz = this._muteBtnZone;
+    const x = mz.x + mz.w / 2, y = mz.y + mz.h / 2, r = 14;
     ctx.save();
     // Background circle
     ctx.globalAlpha = 0.55;
