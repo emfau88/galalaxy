@@ -28,22 +28,22 @@ export const RENDER_CONFIG = {
   playerShield: { w: 92, h: 92 },
   enemies: {
     // Kla'ed Fleet 1
-    scout:              { w: 56,  h: 56  },
-    fighter:            { w: 64,  h: 64  },
+    scout:              { w: 68,  h: 68  },
+    fighter:            { w: 77,  h: 77  },
     bomber:             { w: 78,  h: 78  },
     frigate:            { w: 88,  h: 88  },
     battlecruiser:      { w: 104, h: 104 },
     dreadnought:        { w: 136, h: 136 },
     // Nairan Fleet 2
-    nairanScout:        { w: 54,  h: 54  },
-    nairanFighter:      { w: 62,  h: 62  },
+    nairanScout:        { w: 65,  h: 65  },
+    nairanFighter:      { w: 74,  h: 74  },
     nairanBomber:       { w: 76,  h: 76  },
     nairanFrigate:      { w: 86,  h: 86  },
     nairanBattlecruiser:{ w: 102, h: 102 },
     nairanDreadnought:  { w: 138, h: 138 },
     // Nautolan Fleet 3
-    nautolanScout:        { w: 58,  h: 58  },
-    nautolanFighter:      { w: 68,  h: 68  },
+    nautolanScout:        { w: 70,  h: 70  },
+    nautolanFighter:      { w: 82,  h: 82  },
     nautolanBomber:       { w: 82,  h: 82  },
     nautolanFrigate:      { w: 94,  h: 94  },
     nautolanBattlecruiser:{ w: 110, h: 110 },

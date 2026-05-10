@@ -124,7 +124,9 @@ export class Game {
     this.bossActive = false;
     this.bossWarning = 0;
     this.sectorTransition = 0;
+    this.evolutionFlash = 0;
     this.shake = 0;
+    this.upgrades._pickCount = 0;
     this.state = "playing";
   }
 
@@ -179,6 +181,7 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 20);
     this.bossWarning = Math.max(0, this.bossWarning - dt);
     this.sectorTransition = Math.max(0, this.sectorTransition - dt);
+    this.evolutionFlash = Math.max(0, this.evolutionFlash - dt);
   }
 
   handleTap(x, y) {
@@ -231,6 +234,7 @@ export class Game {
       this.best = SaveSystem.best();
       this.state = "victory";
     } else {
+      this.evolutionFlash = 0.7;
       this.currentSectorIndex++;
       this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
       this.sectorTransition = 3.0;
@@ -279,7 +283,16 @@ export class Game {
             e.damage(pr.dmg);
             pr.dead = true;
             spawnHitSparks(this, pr.x, pr.y, pr);
-            if (pr.kind === "rocket") this.explosion(pr.x, pr.y, 16);
+            if (pr.kind === "rocket") {
+              this.explosion(pr.x, pr.y, 16);
+              if (this.player.siegePayload) {
+                for (const ne of this.enemies) {
+                  if (ne.dead || ne === e) continue;
+                  if (this.dist2(pr.x, pr.y, ne.x, ne.y) < 55 * 55) ne.damage(pr.dmg * 0.4);
+                }
+                this.explosion(pr.x, pr.y, 28);
+              }
+            }
             break;
           }
         }
@@ -337,10 +350,18 @@ export class Game {
     for (const e of this.enemies) {
       if (e.dead) continue;
       const d = this.dist2(x, y, e.x, e.y);
-      if (d < bd) {
-        bd = d;
-        best = e;
-      }
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+
+  closestEnemyExcluding(x, y, range, exclude) {
+    let best = null;
+    let bd = range * range;
+    for (const e of this.enemies) {
+      if (e.dead || e === exclude) continue;
+      const d = this.dist2(x, y, e.x, e.y);
+      if (d < bd) { bd = d; best = e; }
     }
     return best;
   }
@@ -365,9 +386,10 @@ export class Game {
     this.burst(x, y, CONFIG.colors.cyan, Math.floor(size * 0.22));
   }
 
-  spawnZap(x1, y1, x2, y2) {
-    this.zaps.push({ x1, y1, x2, y2, life: 0.11, max: 0.11 });
-    this.burst(x2, y2, CONFIG.colors.pink, 8);
+  spawnZap(x1, y1, x2, y2, secondary = false) {
+    const life = secondary ? 0.13 : 0.18;
+    this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary });
+    this.burst(x2, y2, CONFIG.colors.pink, secondary ? 5 : 14);
   }
 
   deathBurst(enemy) { spawnDeathBurst(this, enemy.x, enemy.y, enemy); }
@@ -398,6 +420,7 @@ export class Game {
     if (this.state === "gameOver") this.drawGameOver(ctx);
     if (this.state === "victory") this.drawVictory(ctx);
     if (this.state === "paused") this.drawPaused(ctx);
+    if (this.evolutionFlash > 0) this.drawEvolutionFlash(ctx);
     if (this.state === "playing") this.drawHud(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
 
@@ -511,27 +534,28 @@ export class Game {
 
     for (const z of this.zaps) {
       const a = z.life / z.max;
+      const sec = z.secondary;
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = a;
-      // Outer glow pass
+      // Jitter midpoint — two segments give lightning feel
+      const mx = (z.x1 + z.x2) / 2 + (Math.random() - 0.5) * (sec ? 10 : 20);
+      const my = (z.y1 + z.y2) / 2 + (Math.random() - 0.5) * (sec ? 10 : 20);
+      // Outer glow
+      ctx.globalAlpha = a * (sec ? 0.3 : 0.55);
       ctx.strokeStyle = CONFIG.colors.pink;
-      ctx.lineWidth = 5;
+      ctx.lineWidth = sec ? 3 : 6;
       ctx.shadowColor = CONFIG.colors.pink;
-      ctx.shadowBlur = 22;
-      ctx.globalAlpha = a * 0.5;
+      ctx.shadowBlur = sec ? 12 : 26;
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
-      const mx = (z.x1 + z.x2) / 2 + (Math.random() - 0.5) * 18;
-      const my = (z.y1 + z.y2) / 2 + (Math.random() - 0.5) * 18;
       ctx.lineTo(mx, my);
       ctx.lineTo(z.x2, z.y2);
       ctx.stroke();
-      // Bright core pass
-      ctx.strokeStyle = "#ffccff";
-      ctx.lineWidth = 1.8;
-      ctx.shadowBlur = 8;
-      ctx.globalAlpha = a;
+      // Bright core
+      ctx.globalAlpha = a * (sec ? 0.6 : 1.0);
+      ctx.strokeStyle = sec ? "#ddaaff" : "#ffccff";
+      ctx.lineWidth = sec ? 1.2 : 2.2;
+      ctx.shadowBlur = sec ? 5 : 10;
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
       ctx.lineTo(mx, my);
@@ -562,96 +586,162 @@ export class Game {
 
   drawHud(ctx) {
     ctx.save();
-    // HUD panel
-    ctx.fillStyle = "rgba(2,6,20,0.72)";
-    ctx.strokeStyle = "rgba(88,180,255,0.12)";
+    const W = CONFIG.designW;
+    const p = this.player;
+
+    // ── Panel background ─────────────────────────────────────────────
+    ctx.fillStyle = "rgba(2,6,20,0.76)";
+    ctx.strokeStyle = "rgba(88,180,255,0.09)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(12, 12, CONFIG.designW - 24, 70, 16);
+    ctx.roundRect(10, 10, W - 20, 74, 14);
     ctx.fill();
     ctx.stroke();
 
-    // Bars
-    this.bar(ctx, 26, 26, 158, 11, this.player.hp / this.player.maxHp, CONFIG.colors.red, "HP");
-    this.bar(ctx, 26, 49, 158, 11, this.player.shield / this.player.maxShield, CONFIG.colors.cyan, "SH");
-    this.bar(ctx, 216, 49, 165, 11, this.xp / this.xpNeed, CONFIG.colors.green, "XP");
+    // ── LEFT: HP + Shield ────────────────────────────────────────────
+    const iconX = 22;   // icon center x — enough room for 9px icons
+    const barX  = 40;   // bar starts after icon + gap
 
-    // Score
+    // HP bar
+    const hpW = 110, hpH = 12, hpY = 28;
+    this.bar(ctx, barX, hpY, hpW, hpH, p.hp / p.maxHp, CONFIG.colors.red, "");
+
+    // Heart icon — vertically centered on HP bar
+    this._drawHeartIcon(ctx, iconX, hpY + hpH / 2, 9, "rgba(255,80,105,0.9)");
+
+    // HP value — right-aligned to bar end
     ctx.textAlign = "right";
-    ctx.fillStyle = CONFIG.colors.white;
-    ctx.font = "800 17px system-ui";
-    ctx.fillText(Math.floor(this.score).toString(), 384, 31);
+    ctx.fillStyle = "rgba(255,180,180,0.5)";
+    ctx.font = "500 8px system-ui";
+    ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, barX + hpW, 26);
 
-    // Level and time
-    ctx.fillStyle = CONFIG.colors.dim;
-    ctx.font = "600 11px system-ui";
-    ctx.fillText(`LV ${this.level}  ·  ${fmtTime(this.runTime)}`, 384, 73);
+    // Shield bar
+    const shW = 110, shH = 6, shY = 46;
+    ctx.globalAlpha = 0.78;
+    this.bar(ctx, barX, shY, shW, shH, p.shield / p.maxShield, CONFIG.colors.cyan, "");
+    ctx.globalAlpha = 1;
 
-    // Sector display — center of HUD panel
+    // Shield icon — vertically centered on shield bar, bündig unter Herz
+    this._drawShieldIcon(ctx, iconX, shY + shH / 2, 8, "rgba(88,230,255,0.8)");
+
+    // Timer — very subtle, bottom-left of panel
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(180,200,230,0.3)";
+    ctx.font = "500 8px system-ui";
+    ctx.fillText(fmtTime(this.runTime), 14, 66);
+
+    // ── CENTER: Sector info ──────────────────────────────────────────
     const sector = SECTORS[this.currentSectorIndex];
-    const cx = CONFIG.designW / 2;
-    ctx.textAlign = "center";
-    ctx.fillStyle = CONFIG.colors.dim;
-    ctx.font = "700 9px system-ui";
-    ctx.fillText(sector.shortName, cx, 26);
+    const [tr, tg, tb] = sector.tint;
+    const sectorAccent = `rgb(${Math.min(255,tr+140)},${Math.min(255,tg+140)},${Math.min(255,tb+170)})`;
+    const cx = W / 2;
 
-    if (this.bossActive) {
-      // Pulsing BOSS text
-      const pulse = Math.abs(Math.sin(this.time * 6));
-      ctx.globalAlpha = 0.7 + 0.3 * pulse;
-      ctx.fillStyle = CONFIG.colors.red;
-      ctx.font = "800 10px system-ui";
-      ctx.fillText("BOSS ACTIVE", cx, 46);
+    // Sector number — prominent
+    ctx.textAlign = "center";
+    ctx.fillStyle = sectorAccent;
+    ctx.font = "800 11px system-ui";
+    ctx.fillText(sector.shortName, cx, 27);
+
+    // Sector name — subdued
+    ctx.fillStyle = "rgba(200,215,240,0.5)";
+    ctx.font = "500 8px system-ui";
+    ctx.fillText(sector.name.toUpperCase(), cx, 38);
+
+    // Sector progress dots — 4 dots, one per sector
+    const dotY = 52, dotR = 3, dotGap = 10;
+    const dotStartX = cx - (SECTORS.length - 1) * dotGap / 2;
+    for (let s = 0; s < SECTORS.length; s++) {
+      const dx = dotStartX + s * dotGap;
+      const done = s < this.currentSectorIndex;
+      const current = s === this.currentSectorIndex;
+      ctx.beginPath();
+      ctx.arc(dx, dotY, current ? dotR : dotR * 0.7, 0, Math.PI * 2);
+      if (done) {
+        ctx.fillStyle = sectorAccent;
+        ctx.globalAlpha = 0.7;
+      } else if (current) {
+        ctx.fillStyle = sectorAccent;
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = sectorAccent;
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.15)";
+        ctx.globalAlpha = 1;
+      }
+      ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
-    } else {
-      // Sector timer bar centered under sector name
-      const progress = this.sectorTimer / sector.duration;
-      const [tr, tg, tb] = sector.tint;
-      const barColor = `rgb(${Math.min(255, tr + 80)},${Math.min(255, tg + 80)},${Math.min(255, tb + 120)})`;
-      this.bar(ctx, cx - 55, 35, 110, 7, progress, barColor, "");
     }
 
-    // Boss warning HUD badge
+    // Boss state — replaces dots row when active
+    if (this.bossActive) {
+      // Overdraw the dot row area
+      ctx.fillStyle = "rgba(2,6,20,0.0)"; // transparent — just alpha reset
+      const pulse = 0.8 + 0.2 * Math.abs(Math.sin(this.time * 4));
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = CONFIG.colors.red;
+      ctx.font = "700 9px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("▸  BOSS", cx, 55);
+      ctx.globalAlpha = 1;
+    }
+
+    // Boss warning — below panel
     if (this.bossWarning > 0) {
-      const a = Math.min(1, this.bossWarning) * Math.abs(Math.sin(this.time * 8));
+      const a = clamp(this.bossWarning * 0.7, 0, 1) * Math.abs(Math.sin(this.time * 6));
       ctx.globalAlpha = a;
       ctx.fillStyle = CONFIG.colors.red;
-      ctx.font = "800 11px system-ui";
+      ctx.font = "600 10px system-ui";
       ctx.textAlign = "center";
-      ctx.fillText(`⚠ ${sector.name.toUpperCase()} BOSS`, CONFIG.designW / 2, 92);
+      ctx.fillText("⚠  BOSS INCOMING", W / 2, 96);
       ctx.globalAlpha = 1;
     }
 
-    // Boss HP bar — shown below HUD panel while boss is active (skip during warning flash)
+    // ── RIGHT: XP Ring + Score ───────────────────────────────────────
+    const ringX = W - 36, ringY = 46, ringR = 22;
+    this._drawXpRing(ctx, ringX, ringY, ringR);
+
+    // Score — above ring, right-aligned
+    ctx.textAlign = "right";
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "800 16px system-ui";
+    ctx.fillText(Math.floor(this.score).toString(), W - 14, 26);
+
+    // "SCORE" micro-label
+    ctx.fillStyle = "rgba(180,200,230,0.35)";
+    ctx.font = "500 7px system-ui";
+    ctx.fillText("SCORE", W - 14, 15);
+
+    // ── Boss HP bar ──────────────────────────────────────────────────
     if (this.bossActive && this.bossWarning <= 0) {
       const boss = this.enemies.find(e => e.boss && !e.dead);
       if (boss) {
-        const bx = 26, by = 88, bw = CONFIG.designW - 52, bh = 10;
-        // Background
+        const bx = 18, by = 90, bw = W - 36, bh = 7;
         ctx.fillStyle = "rgba(2,6,20,0.82)";
         ctx.beginPath();
-        ctx.roundRect(bx - 4, by - 14, bw + 8, bh + 20, 8);
+        ctx.roundRect(bx - 4, by - 11, bw + 8, bh + 17, 7);
         ctx.fill();
-        // Label
-        ctx.textAlign = "center";
-        ctx.fillStyle = CONFIG.colors.red;
-        ctx.font = "700 9px system-ui";
-        ctx.fillText("DREADNOUGHT", CONFIG.designW / 2, by - 2);
-        // HP fraction text
-        ctx.fillStyle = CONFIG.colors.dim;
-        ctx.font = "600 8px system-ui";
-        ctx.fillText(`${Math.ceil(boss.hp)} / ${boss.maxHp}`, CONFIG.designW / 2, by + bh + 9);
-        // Bar track
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(255,100,120,0.65)";
+        ctx.font = "600 7px system-ui";
+        ctx.fillText(sector.name.toUpperCase() + " COMMANDER", bx, by - 2);
+
+        const hpFrac = boss.hp / boss.maxHp;
+        ctx.textAlign = "right";
+        ctx.fillStyle = "rgba(255,180,180,0.45)";
+        ctx.font = "500 7px system-ui";
+        ctx.fillText(`${Math.ceil(boss.hp)} / ${boss.maxHp}`, bx + bw, by - 2);
+
+        ctx.fillStyle = "rgba(255,255,255,0.07)";
         ctx.beginPath();
         ctx.roundRect(bx, by, bw, bh, bh / 2);
         ctx.fill();
-        // HP fill
-        const hpFrac = boss.hp / boss.maxHp;
-        const barColor = hpFrac > 0.5 ? CONFIG.colors.red : hpFrac > 0.25 ? CONFIG.colors.orange : "#ff2020";
-        ctx.fillStyle = barColor;
-        ctx.shadowColor = barColor;
-        ctx.shadowBlur = 10;
+
+        const bColor = hpFrac > 0.5 ? CONFIG.colors.red : hpFrac > 0.25 ? CONFIG.colors.orange : "#ff2020";
+        ctx.fillStyle = bColor;
+        ctx.shadowColor = bColor;
+        ctx.shadowBlur = 7;
         ctx.beginPath();
         ctx.roundRect(bx, by, Math.max(bh, bw * hpFrac), bh, bh / 2);
         ctx.fill();
@@ -659,27 +749,130 @@ export class Game {
       }
     }
 
-    // Ability cooldown pips — shown bottom-right of HUD panel when abilities are unlocked
+    // ── Ability pips ─────────────────────────────────────────────────
     this.drawAbilityPips(ctx);
 
+    ctx.restore();
+  }
+
+  _drawXpRing(ctx, cx, cy, r) {
+    const frac = clamp(this.xp / this.xpNeed, 0, 1);
+    const nearFull = frac >= 0.85;
+
+    // Outer track
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // XP fill arc — clockwise from top
+    if (frac > 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+      ctx.strokeStyle = nearFull ? "#aaffcc" : CONFIG.colors.green;
+      ctx.shadowColor  = nearFull ? "#aaffcc" : CONFIG.colors.green;
+      ctx.shadowBlur   = nearFull ? 12 : 4;
+      ctx.lineWidth    = 4;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Inner dark fill so level number reads cleanly
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(2,6,20,0.7)";
+    ctx.fill();
+
+    // "XP" micro-label above number
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(180,200,230,0.4)";
+    ctx.font = "500 6px system-ui";
+    ctx.fillText("XP", cx, cy - 5);
+
+    // Level number
+    ctx.fillStyle = nearFull ? "#aaffcc" : CONFIG.colors.white;
+    ctx.font = `800 ${this.level >= 10 ? 10 : 12}px system-ui`;
+    ctx.fillText(this.level.toString(), cx, cy + 4);
+
+    // "SHIP LV" micro-label below number
+    ctx.fillStyle = "rgba(180,200,230,0.32)";
+    ctx.font = "500 5px system-ui";
+    ctx.fillText("SHIP LV", cx, cy + 11);
+  }
+
+  // Heart icon — two circular arcs meeting at a bottom point
+  _drawHeartIcon(ctx, cx, cy, r, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    // Offset center slightly upward so visual center feels correct
+    const y = cy - r * 0.08;
+    // Left bump center and right bump center
+    const bumpR  = r * 0.56;
+    const lx = cx - bumpR * 0.92;
+    const rx = cx + bumpR * 0.92;
+    const by = y - r * 0.18; // bump centers sit above mid
+    ctx.beginPath();
+    // Start at the bottom tip
+    ctx.moveTo(cx, y + r);
+    // Left side: curve up to left bump, around it, back to center top
+    ctx.bezierCurveTo(cx - r * 0.18, y + r * 0.5,  cx - r, y + r * 0.1,  lx, by + bumpR);
+    ctx.arc(lx, by, bumpR, Math.PI * 0.5, Math.PI * 1.85, false);
+    // Cross to right bump
+    ctx.arc(rx, by, bumpR, Math.PI * 1.15, Math.PI * 0.5, false);
+    // Right side: curve back down to bottom tip
+    ctx.bezierCurveTo(cx + r, y + r * 0.1,  cx + r * 0.18, y + r * 0.5,  cx, y + r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Shield icon — classic heater-shield silhouette (wide top, tapered to bottom point)
+  _drawShieldIcon(ctx, cx, cy, r, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    const top  = cy - r;
+    const mid  = cy + r * 0.15;  // where sides start curving inward
+    const tip  = cy + r;         // bottom point
+    const hw   = r * 0.92;       // half-width at top
+    ctx.beginPath();
+    // Top-left corner (rounded)
+    ctx.moveTo(cx - hw + r * 0.22, top);
+    // Flat top edge
+    ctx.lineTo(cx + hw - r * 0.22, top);
+    // Top-right arc
+    ctx.quadraticCurveTo(cx + hw, top, cx + hw, top + r * 0.28);
+    // Right side straight down then curve inward to tip
+    ctx.lineTo(cx + hw, mid);
+    ctx.quadraticCurveTo(cx + hw, tip - r * 0.15, cx, tip);
+    // Left side mirror
+    ctx.quadraticCurveTo(cx - hw, tip - r * 0.15, cx - hw, mid);
+    ctx.lineTo(cx - hw, top + r * 0.28);
+    // Top-left arc
+    ctx.quadraticCurveTo(cx - hw, top, cx - hw + r * 0.22, top);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 
   drawAbilityPips(ctx) {
     const p = this.player;
     const abilities = [];
-    if (p.beam)    abilities.push({ label: "BEAM",  cd: p._beamCooldown  ?? 0, max: 7.0, color: CONFIG.colors.cyan,   active: p._beamActive });
-    if (p.pulse)   abilities.push({ label: "PULSE", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan,   active: p._pulseActive });
+    if (p.beam)  abilities.push({ label: "BEAM",  cd: p._beamCooldown  ?? 0, max: 7.0, color: CONFIG.colors.cyan });
+    if (p.pulse) abilities.push({ label: "PULSE", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan });
     if (!abilities.length) return;
 
-    const pipW = 52, pipH = 7, gap = 6;
-    const startX = CONFIG.designW - 12 - abilities.length * (pipW + gap) + gap;
-    const y = 26;
+    // Vertically stacked, left of XP ring — ring center is at (W-36, 46)
+    const pipW = 48, pipH = 6, gap = 8;
+    const totalH = abilities.length * pipH + (abilities.length - 1) * gap;
+    const startY = 46 - totalH / 2;  // vertically centered on ring
+    const x = CONFIG.designW - 36 - 22 - 10 - pipW; // ring left edge minus gap minus pipW
 
     for (let i = 0; i < abilities.length; i++) {
       const ab = abilities[i];
-      const x = startX + i * (pipW + gap);
-      const fill = ab.cd <= 0 ? 1 : Math.max(0, 1 - ab.cd / ab.max);
+      const y = startY + i * (pipH + gap);
+      const ready = ab.cd <= 0;
+      const fill = ready ? 1 : Math.max(0, 1 - ab.cd / ab.max);
 
       // Track
       ctx.fillStyle = "rgba(255,255,255,0.07)";
@@ -687,47 +880,46 @@ export class Game {
       ctx.roundRect(x, y, pipW, pipH, pipH / 2);
       ctx.fill();
 
-      // Fill — glows when ready
+      // Fill
       if (fill > 0) {
-        ctx.fillStyle = ab.cd <= 0 ? ab.color : "rgba(88,180,180,0.55)";
-        ctx.shadowColor = ab.cd <= 0 ? ab.color : "transparent";
-        ctx.shadowBlur  = ab.cd <= 0 ? 8 : 0;
+        ctx.fillStyle = ready ? ab.color : "rgba(88,180,180,0.4)";
+        ctx.shadowColor = ready ? ab.color : "transparent";
+        ctx.shadowBlur  = ready ? 8 : 0;
         ctx.beginPath();
         ctx.roundRect(x, y, Math.max(pipH, pipW * fill), pipH, pipH / 2);
         ctx.fill();
         ctx.shadowBlur = 0;
       }
 
-      // Label
-      ctx.fillStyle = ab.cd <= 0 ? CONFIG.colors.white : CONFIG.colors.dim;
-      ctx.font = "700 7px system-ui";
-      ctx.textAlign = "center";
-      ctx.fillText(ab.label, x + pipW / 2, y - 3);
+      // Label above bar — right-aligned so it doesn't crowd the ring
+      ctx.fillStyle = ready ? CONFIG.colors.white : "rgba(180,200,230,0.38)";
+      ctx.font = "600 7px system-ui";
+      ctx.textAlign = "right";
+      ctx.fillText(ab.label, x + pipW, y - 2);
     }
   }
 
   bar(ctx, x, y, w, h, t, color, label) {
     t = clamp(t, 0, 1);
-    // Track background
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, h / 2);
     ctx.fill();
-    // Fill
     if (t > 0) {
       ctx.fillStyle = color;
       ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 6;
       ctx.beginPath();
       ctx.roundRect(x, y, Math.max(h, w * t), h, h / 2);
       ctx.fill();
       ctx.shadowBlur = 0;
     }
-    // Label
-    ctx.fillStyle = CONFIG.colors.dim;
-    ctx.font = "700 8px system-ui";
-    ctx.textAlign = "left";
-    ctx.fillText(label, x, y - 3);
+    if (label) {
+      ctx.fillStyle = "rgba(180,200,230,0.5)";
+      ctx.font = "600 8px system-ui";
+      ctx.textAlign = "left";
+      ctx.fillText(label, x, y - 2);
+    }
   }
 
   drawSectorTransition(ctx) {
@@ -757,6 +949,62 @@ export class Game {
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "600 13px system-ui";
     ctx.fillText(sector.name, CONFIG.designW / 2, 374);
+
+    // Evolution badge — show new ship tier
+    const tier = this.player.shipTier();
+    const branch = this.player.shipBranch();
+    if (tier >= 2) {
+      const TIER_NAMES  = ["", "", "COMBAT FRAME", "WARSHIP ONLINE", "FLAGSHIP ASCENDED"];
+      const BRANCH_GLOWS = { assault: "#c8d8ff", energy: "#88ccff", siege: "#ffaa40" };
+      const badgeGlow = BRANCH_GLOWS[branch] || CONFIG.colors.cyan;
+      const tierLabel = TIER_NAMES[tier] || `TIER ${tier}`;
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.fillStyle = badgeGlow;
+      ctx.shadowColor = badgeGlow;
+      ctx.shadowBlur = 14;
+      ctx.font = "800 14px system-ui";
+      ctx.fillText("▲  " + tierLabel + "  ▲", CONFIG.designW / 2, 420);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = CONFIG.colors.dim;
+      ctx.font = "500 11px system-ui";
+      ctx.fillText(branch.toUpperCase() + " FRAME", CONFIG.designW / 2, 440);
+    }
+
+    ctx.restore();
+  }
+
+  drawEvolutionFlash(ctx) {
+    // Flash lifetime: 0.7s — sharp white punch fades to nothing
+    // Shape: instant-on at 0.7, fast decay curve so it feels like a hit, not a fade
+    const raw = this.evolutionFlash / 0.7; // 1.0 → 0.0
+    const alpha = raw * raw;               // quadratic decay — snappy
+
+    const tier   = this.player.shipTier();
+    const branch = this.player.shipBranch();
+    const BRANCH_GLOWS = { assault: "255,240,255", energy: "160,220,255", siege: "255,190,80" };
+    const rgb = BRANCH_GLOWS[branch] || "180,220,255";
+
+    ctx.save();
+
+    // Full-screen white punch
+    ctx.globalAlpha = alpha * 0.72;
+    ctx.fillStyle = `rgb(${rgb})`;
+    ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH);
+
+    // Centered tier text — only visible in first half of flash
+    if (raw > 0.45) {
+      const textAlpha = (raw - 0.45) / 0.55;
+      const TIER_NAMES = ["", "", "COMBAT FRAME", "WARSHIP ONLINE", "FLAGSHIP ASCENDED"];
+      const label = TIER_NAMES[tier] || `TIER ${tier} UNLOCKED`;
+      ctx.globalAlpha = textAlpha;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = `rgb(${rgb})`;
+      ctx.shadowBlur = 28;
+      ctx.font = "900 26px system-ui";
+      ctx.fillText(label, CONFIG.designW / 2, CONFIG.designH / 2);
+      ctx.shadowBlur = 0;
+    }
 
     ctx.restore();
   }
@@ -1169,6 +1417,49 @@ export class Game {
           ctx.fill();
           ctx.restore();
         }
+        break;
+      }
+      case "overcharged": {
+        // Lightning bolt in gold/purple
+        ctx.strokeStyle = "#cc66ff";
+        ctx.shadowColor = "#cc66ff";
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(r * 0.2, -r);
+        ctx.lineTo(-r * 0.2, -r * 0.1);
+        ctx.lineTo(r * 0.25, -r * 0.1);
+        ctx.lineTo(-r * 0.2, r);
+        ctx.stroke();
+        break;
+      }
+      case "siege": {
+        // Large rocket with orange aura
+        ctx.fillStyle = "#ff8800";
+        ctx.shadowColor = "#ff8800";
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.moveTo(0, -r);
+        ctx.lineTo(r * 0.32, r * 0.5);
+        ctx.lineTo(0, r * 0.2);
+        ctx.lineTo(-r * 0.32, r * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case "reactor": {
+        // Concentric rings in teal
+        ctx.strokeStyle = "#00ffcc";
+        ctx.shadowColor = "#00ffcc";
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.75, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
         break;
       }
       default: {

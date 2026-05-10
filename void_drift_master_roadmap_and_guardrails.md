@@ -411,7 +411,21 @@ IN PROGRESS — Combat Feel Pass complete. Mobile Controls complete. FX pass com
 # MILESTONE 2 — BUILD IDENTITY SYSTEM
 
 ## STATUS
-PLANNED
+IN PROGRESS — Build Drift System (Bulk 1) implemented 2026-05-10.
+
+---
+
+## IMPLEMENTED (2026-05-10)
+
+### Build Drift System — Bulk 1
+- Upgrade pool restructured: `family` (zapper/rocket/pulse/core), `maxLevel`, `minLevel`, `weight` per entry
+- `_pickCount` tracked per run, resets in `startRun()`
+- `roll()` rewritten: weighted sample without replacement, dominant affinity gets 2.2× weight, rival families 0.7×
+- Signature upgrades (beam, barrage, pulse) gated behind `minLevel: 2` — don't appear in first 2 picks
+- Maxed upgrades removed from pool automatically
+- Barrage requires rocket ≥ 1 in pool filter
+- Upgrade cards: family-tinted bg/border/shadow, family tag label (top-right), level dots in family color
+- `src/systems/upgrades.js` fully rewritten (~200 LOC)
 
 ---
 
@@ -518,11 +532,11 @@ Reduced mobility.
 The game should recognize current build direction.
 
 Tasks:
-- [ ] Upgrade family weighting
-- [ ] Build affinity tracking
-- [ ] Upgrade rarity tiers
-- [ ] Upgrade synergy weighting
-- [ ] Duplicate upgrade handling
+- [x] Upgrade family weighting
+- [x] Build affinity tracking
+- [x] Upgrade rarity tiers (minLevel gates signature upgrades)
+- [x] Upgrade synergy weighting (affinity 2.2× bonus)
+- [x] Duplicate upgrade handling (maxed upgrades removed from pool)
 
 ---
 
@@ -541,7 +555,23 @@ Tasks:
 # MILESTONE 3 — SHIP EVOLUTION
 
 ## STATUS
-PLANNED
+IN PROGRESS — Bulk 1 implemented 2026-05-10.
+
+---
+
+## IMPLEMENTED (2026-05-10)
+
+### Ship Evolution — Bulk 1
+- `shipTier()`: returns 1–4 based on `currentSectorIndex` (sector 1=T1, sector 2=T2, etc.)
+- `shipBranch()`: returns "assault"|"energy"|"siege" from build affinity (zapper+beam → energy, rocket+barrage → siege, default → assault)
+- T2+: primary engine cone tinted by branch color (assault=silver, energy=cyan-blue, siege=orange)
+- T2+: shield ring tinted by branch color
+- T3+: flanking side engine nozzles (canvas drawn, behind ship body)
+- T3+: side cannon stubs (small rectangles, branch-colored, drawn behind ship body)
+- T4: pulsing energy core orb at ship center (drawn over ship body)
+- Sector transition screen: evolution badge showing tier name + branch frame label (appears at T2+)
+- Branch accent colors defined in `BRANCH_COLORS` at top of player.js
+- All purely canvas-drawn — no new image assets required
 
 ---
 
@@ -570,9 +600,9 @@ Ship evolution should:
 Starter ship.
 
 Tasks:
-- [ ] Finalize base silhouette
-- [ ] Finalize base engine visuals
-- [ ] Finalize readability
+- [x] Finalize base silhouette
+- [x] Finalize base engine visuals
+- [x] Finalize readability
 
 ---
 
@@ -580,9 +610,9 @@ Tasks:
 Expanded combat ship.
 
 Tasks:
-- [ ] Second weapon mount
-- [ ] Improved engine layer
-- [ ] Slight silhouette growth
+- [x] Improved engine layer (branch-tinted engine cone)
+- [x] Branch-colored shield ring
+- [ ] Slight silhouette growth (visual size bump)
 - [ ] More aggressive posture
 
 ---
@@ -591,10 +621,10 @@ Tasks:
 Advanced warship.
 
 Tasks:
-- [ ] Side cannons
-- [ ] Improved shield visuals
-- [ ] Additional FX mounting
-- [ ] Larger visual identity
+- [x] Side cannons (stub rectangles, branch-colored)
+- [x] Improved shield visuals (thicker, stronger glow)
+- [x] Side engine nozzles
+- [ ] Larger visual identity (size/silhouette pass)
 
 ---
 
@@ -602,8 +632,9 @@ Tasks:
 Final evolved flagship.
 
 Tasks:
-- [ ] Heavy energy core visuals
-- [ ] Strong evolved silhouette
+- [x] Heavy energy core visuals (pulsing orb)
+- [x] Extended side cannon stubs (longer at T4)
+- [ ] Strong evolved silhouette (size pass)
 - [ ] Final-sector presentation feel
 
 ---
@@ -627,8 +658,8 @@ Rocket-focused.
 Sector completion should feel meaningful.
 
 Tasks:
-- [ ] Evolution transition screen
-- [ ] Evolution VFX
+- [x] Evolution transition screen (tier badge + branch label in sector transition)
+- [x] Evolution VFX (screen-punch flash on boss kill, branch-colored, tier name overlay)
 - [ ] Evolution pacing balancing
 - [ ] Evolution readability
 

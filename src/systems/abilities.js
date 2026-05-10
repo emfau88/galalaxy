@@ -91,15 +91,18 @@ const PULSE_DAMAGE    = 18;    // moderate — wave is primarily a space-control
 const PULSE_KNOCKBACK = 200;   // px/s impulse — strong push is the point
 
 export function updatePulse(player, dt) {
-  if (!player.pulse) return;
+  if (!player.pulse && !player.pulseReactor) return;
   player._pulseCooldown = (player._pulseCooldown ?? 0) - dt;
   if (player._pulseActive) {
     player._pulseLife -= dt;
     const frac = 1 - player._pulseLife / PULSE_DURATION;
-    player._pulseR = frac * PULSE_MAX_R;
+    player._pulseR = frac * (player.pulseReactor ? PULSE_MAX_R * 1.3 : PULSE_MAX_R);
     if (player._pulseLife <= 0) player._pulseActive = false;
   }
   if (player._pulseCooldown <= 0) {
+    // Reactor keystone fires automatically on a fixed 6s rhythm
+    const cd = player.pulseReactor ? 6.0 : PULSE_COOLDOWN;
+    player._pulseCooldown = cd;
     firePulse(player);
   }
 }
