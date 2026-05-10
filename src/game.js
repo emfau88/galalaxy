@@ -1403,8 +1403,14 @@ export class Game {
     ctx.save();
     ctx.textAlign = "center";
 
-    // Dark overlay
-    ctx.fillStyle = "rgba(3,6,20,0.55)";
+    // Dark overlay — heavy enough to suppress battle screen behind title
+    ctx.fillStyle = "rgba(2,4,16,0.88)";
+    ctx.fillRect(0, 0, W, H);
+    // Second pass: deep vignette toward edges for depth
+    const vignette = ctx.createRadialGradient(W/2, H/2, H*0.25, W/2, H/2, H*0.78);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,8,0.55)");
+    ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, W, H);
 
     // ── Parallax star layer (slower, dimmer second pass) ──
@@ -1443,8 +1449,8 @@ export class Game {
 
     // ── Title block ──
     ctx.font = "500 13px system-ui";
-    ctx.fillStyle = CONFIG.colors.dim;
-    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "#b8d4f0";
+    ctx.globalAlpha = 0.7;
     const oldLine = "VOID DRIFT · GALAXY SURVIVOR";
     ctx.fillText(oldLine, cx, 164);
     // Strikethrough only GALAXY
@@ -1490,8 +1496,8 @@ export class Game {
 
     // Flavor text
     ctx.font = "400 11px system-ui";
-    ctx.fillStyle = CONFIG.colors.dim;
-    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "#b8d4f0";
+    ctx.globalAlpha = 0.75;
     ctx.fillText("Kla'ed Fleet wants to know your location", cx, 248);
     ctx.globalAlpha = 1;
 
@@ -1501,9 +1507,9 @@ export class Game {
     for (let i = 0; i < SECTOR_NAMES.length; i++) {
       const elapsed = t - (0.8 + i * 0.45);
       if (elapsed <= 0) break;
-      const alpha = Math.min(1, elapsed / 0.35) * 0.28;
+      const alpha = Math.min(1, elapsed / 0.35) * 0.55;
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = CONFIG.colors.dim;
+      ctx.fillStyle = "#b8d4f0";
       ctx.fillText(SECTOR_NAMES[i], cx, 272 + i * 20);
     }
     ctx.globalAlpha = 1;
