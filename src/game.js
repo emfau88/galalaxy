@@ -43,6 +43,10 @@ export class Game {
     this.bossRewardTimer = 0;
     this.bossRewardData = null;
     this.titleTime = 0;
+    this.musicMuted = false;
+    this._music = new Audio("assets/music/track1.ogg");
+    this._music.loop = true;
+    this._music.volume = 0.28;
     this.player = new Player(this);
     this.enemies = [];
     this.projectiles = [];
@@ -196,7 +200,29 @@ export class Game {
     this.evolutionFlash = Math.max(0, this.evolutionFlash - dt);
   }
 
+  _tryStartMusic() {
+    if (!this.musicMuted && this._music.paused) {
+      this._music.play().catch(() => {});
+    }
+  }
+
+  toggleMusic() {
+    this.musicMuted = !this.musicMuted;
+    if (this.musicMuted) {
+      this._music.pause();
+    } else {
+      this._music.play().catch(() => {});
+    }
+  }
+
   handleTap(x, y) {
+    // Mute button — top-right corner, always visible (40×40 hit area)
+    if (x > CONFIG.designW - 48 && x < CONFIG.designW - 8 && y > 8 && y < 48) {
+      this.toggleMusic();
+      return;
+    }
+    this._tryStartMusic();
+
     if (this.state === "title") {
       if (y > 500 && y < 610) this.startRun();
     } else if (this.state === "gameOver") {
@@ -572,7 +598,36 @@ export class Game {
     if (this.evolutionFlash > 0 && this.state !== "bossReward") this.drawEvolutionFlash(ctx);
     if (this.state === "playing") this.drawHud(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
+    this.drawMuteButton(ctx);
 
+    ctx.restore();
+  }
+
+  drawMuteButton(ctx) {
+    const x = CONFIG.designW - 28, y = 28, r = 14;
+    ctx.save();
+    // Background circle
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "rgba(2,6,20,0.82)";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = this.musicMuted ? "rgba(255,255,255,0.2)" : CONFIG.colors.cyan;
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = this.musicMuted ? 0.3 : 0.6;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    // Icon — speaker shape
+    ctx.globalAlpha = this.musicMuted ? 0.35 : 0.9;
+    ctx.fillStyle = this.musicMuted ? "rgba(255,255,255,0.6)" : CONFIG.colors.cyan;
+    ctx.font = "500 14px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.musicMuted ? "🔇" : "🔊", x, y);
+    ctx.textBaseline = "alphabetic";
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
