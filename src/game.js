@@ -190,8 +190,7 @@ export class Game {
     if (this.state === "title") this.titleTime += dt;
 
     if (this.state === "bossReward") {
-      this.bossRewardTimer -= dt;
-      if (this.bossRewardTimer <= 0) this._endBossReward();
+      this.bossRewardTimer -= dt; // counts down to 0 then stops — player must tap to continue
     }
 
     for (const p of this.particles) p.update(dt);
@@ -1313,13 +1312,17 @@ export class Game {
       });
     }
 
-    // ── Tap hint — appears after 1.2s ──
+    // ── Tap hint — appears after 1.2s, pulses to draw attention ──
     if (elapsed > 1.2) {
-      const hintAlpha = clamp((elapsed - 1.2) / 0.4, 0, 1) * (0.4 + 0.2 * Math.sin(this.time * 4));
-      ctx.globalAlpha = hintAlpha;
-      ctx.fillStyle = CONFIG.colors.dim;
-      ctx.font = "500 10px system-ui";
-      ctx.fillText("Tap to continue", cx, H - 80);
+      const hintFade = clamp((elapsed - 1.2) / 0.4, 0, 1);
+      const hintPulse = 0.6 + 0.4 * Math.abs(Math.sin(this.time * 2.2));
+      ctx.globalAlpha = hintFade * hintPulse;
+      ctx.fillStyle = CONFIG.colors.white;
+      ctx.font = "600 13px system-ui";
+      ctx.shadowColor = d.branchColor;
+      ctx.shadowBlur = 10;
+      ctx.fillText("TAP TO CONTINUE", cx, H - 72);
+      ctx.shadowBlur = 0;
     }
 
     ctx.restore();
