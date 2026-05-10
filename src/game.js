@@ -10,7 +10,7 @@ import { Projectile } from "./entities/projectile.js";
 import { XpPickup } from "./entities/pickup.js";
 import { Particle } from "./entities/particle.js";
 import { UpgradeSystem } from "./systems/upgrades.js";
-import { FLEETS, pickFleetEnemy } from "./data/fleets.js";
+import { FLEETS, pickFleetEnemy, pickSoloEnemy } from "./data/fleets.js";
 import { emitTrail, spawnHitSparks, spawnDeathBurst, emitSectorDust, spawnBossEntrance } from "./systems/fx.js";
 import { drawBeam, drawPulse } from "./systems/abilities.js";
 
@@ -40,6 +40,8 @@ export class Game {
     this.bossActive = false;
     this.bossWarning = 0;
     this.sectorTransition = 0;
+    this.bossRewardTimer = 0;
+    this.bossRewardData = null;
     this.player = new Player(this);
     this.enemies = [];
     this.projectiles = [];
@@ -125,6 +127,8 @@ export class Game {
     this.bossWarning = 0;
     this.sectorTransition = 0;
     this.evolutionFlash = 0;
+    this.bossRewardTimer = 0;
+    this.bossRewardData = null;
     this.shake = 0;
     this.upgrades._pickCount = 0;
     this.state = "playing";
@@ -173,6 +177,11 @@ export class Game {
       emitSectorDust(this, dt);
     }
 
+    if (this.state === "bossReward") {
+      this.bossRewardTimer -= dt;
+      if (this.bossRewardTimer <= 0) this._endBossReward();
+    }
+
     for (const p of this.particles) p.update(dt);
     for (const z of this.zaps) z.life -= dt;
     this.particles = this.particles.filter(p => !p.dead).slice(-CONFIG.particleCap);
@@ -195,6 +204,9 @@ export class Game {
       this.upgrades.handleTap(x, y);
     } else if (this.state === "paused") {
       this.state = "playing";
+    } else if (this.state === "bossReward") {
+      // Tap-to-dismiss: only allow after first 0.8s so accidental taps don't skip the reveal
+      if (this.bossRewardTimer < 2.4) this._endBossReward();
     }
   }
 
@@ -215,14 +227,37 @@ export class Game {
     const sector = SECTORS[this.currentSectorIndex];
     const sectorProgress = 1 - this.sectorTimer / sector.duration;
     const difficulty = 1 + this.currentSectorIndex * 0.6 + sectorProgress * 0.5;
-    const interval = clamp(1.0 - difficulty * 0.08, 0.22, 1.0);
+    // spawnMult > 1 stretches the interval (fewer spawns); Sector I uses 0.9 → interval ÷ 0.9
+    const interval = clamp((1.0 - difficulty * 0.08) / (sector.spawnMult ?? 1.0), 0.22, 1.0);
 
     if (this.spawnTimer <= 0 && this.enemies.length < CONFIG.enemyCap) {
       this.spawnTimer = interval;
       const fleet = FLEETS[sector.fleet];
-      this.spawnEnemy(pickFleetEnemy(fleet, sectorProgress), false);
-      if (difficulty > 1.8 && Math.random() < 0.2) {
-        this.spawnEnemy(pickFleetEnemy(fleet, sectorProgress), false);
+      const speedMult = sector.enemySpeedMult ?? 1.0;
+
+      // Formation chance per sector; suppressed in Sector I before 15s elapsed
+      // and suppressed during bossWarning. Formation replaces the normal solo spawn.
+      const formationChance = [0.25, 0.30, 0.34, 0.36][this.currentSectorIndex] ?? 0.25;
+      const sectorElapsed = sector.duration - this.sectorTimer;
+      const formationAllowed = !this.bossWarning &&
+                               !(this.currentSectorIndex === 0 && sectorElapsed < 15) &&
+                               this.enemies.length + 5 <= CONFIG.enemyCap;
+
+      if (formationAllowed && Math.random() < formationChance) {
+        // Formation tick — spawn formation instead of solo enemy; give a longer cooldown
+        this.spawnTimer = interval * 2.2;
+        this.spawnFormation(fleet, sectorProgress, speedMult);
+      } else {
+        const type = pickSoloEnemy(fleet, sectorProgress);
+        // Scouts/fighters that do spawn solo cross diagonally instead of chasing.
+        const isLight = /scout|fighter/i.test(type);
+        const soloFlyby = isLight && Math.random() < 0.50
+          ? this._makeDiagonalFlyby(Enemy.defs[type]?.speed ?? 90, speedMult)
+          : null;
+        this.spawnEnemy(type, false, speedMult, soloFlyby);
+        if (difficulty > 1.8 && Math.random() < 0.2) {
+          this.spawnEnemy(pickSoloEnemy(fleet, sectorProgress), false, speedMult);
+        }
       }
     }
   }
@@ -230,41 +265,150 @@ export class Game {
   onBossKilled() {
     this.bossActive = false;
     if (this.currentSectorIndex >= SECTORS.length - 1) {
+      // Final boss — go straight to victory, no evolution reward
       SaveSystem.setBest(this.score);
       this.best = SaveSystem.best();
       this.state = "victory";
-    } else {
-      this.evolutionFlash = 0.7;
-      this.currentSectorIndex++;
-      this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
-      this.sectorTransition = 3.0;
+      return;
     }
+
+    // Advance sector immediately so shipTier() already reflects the new tier
+    // when the reward overlay renders the ship.
+    this.currentSectorIndex++;
+    this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
+
+    // Build reward data snapshot for the overlay
+    const tier   = this.player.shipTier();   // now the new tier
+    const branch = this.player.shipBranch();
+    const TIER_NAMES   = ["", "MK-I FRAME", "MK-II FRAME", "MK-III FRAME", "MK-IV FRAME"];
+    const TIER_SUBTITLES = ["", "Scout Hull", "Combat Frame", "Warship Online", "Flagship Ascended"];
+    const BRANCH_LABELS = { assault: "Assault Systems", energy: "Energy Systems", siege: "Siege Systems" };
+    const BRANCH_COLORS_HEX = { assault: "#c8d8ff", energy: "#88ccff", siege: "#ffaa40" };
+    const MOVE_BONUS  = ["", "+0%", "+5%", "+8%", "+10%"];
+    const FIRE_BONUS  = ["", "+0%", "+6%", "+10%", "+14%"];
+
+    this.bossRewardData = {
+      tier,
+      branch,
+      tierName:     TIER_NAMES[tier]    || `MK-${tier} FRAME`,
+      tierSubtitle: TIER_SUBTITLES[tier] || `Tier ${tier}`,
+      branchLabel:  BRANCH_LABELS[branch] || "Systems",
+      branchColor:  BRANCH_COLORS_HEX[branch] || CONFIG.colors.cyan,
+      moveBonusStr: MOVE_BONUS[tier]  || "",
+      fireBonusStr: FIRE_BONUS[tier]  || "",
+    };
+
+    this.bossRewardTimer = 3.2; // total display time in seconds
+    this.state = "bossReward";
   }
 
-  spawnEnemy(type, boss) {
-    // Weighted side selection: top 45%, left 22.5%, right 22.5%, bottom 10%.
-    // Bottom is reduced because the thumb covers that area on mobile.
-    const r = Math.random();
-    const side = r < 0.45 ? 0 : r < 0.675 ? 1 : r < 0.90 ? 2 : 3;
+  _endBossReward() {
+    this.state = "playing";
+    this.sectorTransition = 2.2;
+    this.bossRewardData = null;
+  }
+
+  spawnEnemy(type, boss, speedMult = 1.0, flyby = null) {
     let x, y;
     if (boss) {
       x = CONFIG.designW / 2;
       y = -90;
-    } else if (side === 0) {
-      x = Math.random() * CONFIG.designW;
-      y = -50;
-    } else if (side === 1) {
-      x = CONFIG.designW + 50;
-      y = Math.random() * CONFIG.designH * 0.65;
-    } else if (side === 2) {
-      x = -50;
-      y = Math.random() * CONFIG.designH * 0.65;
+    } else if (flyby && flyby.vx !== 0) {
+      // Diagonal flyby: enter from the edge the velocity comes from, at a random vertical position.
+      x = flyby.vx > 0 ? -50 : CONFIG.designW + 50;
+      y = CONFIG.designH * (0.05 + Math.random() * 0.45); // upper half — readable on mobile
     } else {
-      x = Math.random() * CONFIG.designW;
-      y = CONFIG.designH + 50;
+      // Weighted side selection: top 45%, left 22.5%, right 22.5%, bottom 10%.
+      const r = Math.random();
+      const side = r < 0.45 ? 0 : r < 0.675 ? 1 : r < 0.90 ? 2 : 3;
+      if (side === 0) {
+        x = Math.random() * CONFIG.designW;
+        y = -50;
+      } else if (side === 1) {
+        x = CONFIG.designW + 50;
+        y = Math.random() * CONFIG.designH * 0.65;
+      } else if (side === 2) {
+        x = -50;
+        y = Math.random() * CONFIG.designH * 0.65;
+      } else {
+        x = Math.random() * CONFIG.designW;
+        y = CONFIG.designH + 50;
+      }
     }
-    this.enemies.push(new Enemy(this, type, x, y, boss));
+    this.enemies.push(new Enemy(this, type, x, y, boss, speedMult, flyby));
     if (boss) this.bossEntrance(x, y);
+  }
+
+  // Spawns 3–5 small enemies in a formation using flyby behavior.
+  // Patterns: 0=horizontal line, 1=diagonal line, 2=shallow-V
+  // Always enters from the top. Does NOT add normal spawn timer delay.
+  spawnFormation(fleet, sectorProgress, speedMult) {
+    // Only scouts/fighters in formations
+    const lightTypes = Object.keys(fleet.phases[0]).filter(t => /scout|fighter/i.test(t));
+    if (!lightTypes.length) return;
+    const type = lightTypes[Math.floor(Math.random() * lightTypes.length)];
+
+    const baseSpeed = Enemy.defs[type]?.speed ?? 90;
+    const spd = baseSpeed * speedMult * 1.15;
+    const s = 46; // spacing between slots
+
+    // 5 named shapes — each is an array of {dx, dy} offsets from formation center.
+    // All offsets are in "formation space": x=across travel axis, y=along travel axis.
+    const SHAPES = [
+      // horizontal line (3)
+      [{ dx: -s,   dy: 0 }, { dx: 0,    dy: 0 }, { dx: s,    dy: 0 }],
+      // diagonal line (4)
+      [{ dx: -s*1.5, dy: -s*0.5 }, { dx: -s*0.5, dy: 0 }, { dx: s*0.5, dy: s*0.5 }, { dx: s*1.5, dy: s }],
+      // V-shape (5, tip leads)
+      [{ dx: 0, dy: 0 }, { dx: -s, dy: s*0.7 }, { dx: s, dy: s*0.7 }, { dx: -s*2, dy: s*1.4 }, { dx: s*2, dy: s*1.4 }],
+      // diamond (4)
+      [{ dx: 0, dy: -s*0.7 }, { dx: -s, dy: 0 }, { dx: s, dy: 0 }, { dx: 0, dy: s*0.7 }],
+      // arrow / wedge (5, tip leads)
+      [{ dx: 0, dy: 0 }, { dx: -s, dy: s*0.6 }, { dx: s, dy: s*0.6 }, { dx: -s*1.8, dy: s*0.2 }, { dx: s*1.8, dy: s*0.2 }],
+    ];
+
+    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+    const fromSide = Math.random() < 0.5;
+
+    // All enemies in this formation share the same flyby vector — no individual wobble.
+    // sineAmp:0 keeps the block tight; the shape provides all visual interest.
+    if (fromSide) {
+      const fromLeft = Math.random() < 0.5;
+      const vx = (fromLeft ? 1 : -1) * spd;
+      const cy = CONFIG.designH * (0.15 + Math.random() * 0.40);
+      const flyby = { vx, vy: 0, sineAmp: 0, sineFreq: 0 };
+      for (const off of shape) {
+        if (this.enemies.length >= CONFIG.enemyCap) break;
+        // In side-entry: dx maps to y-axis, dy maps to x-axis (along travel direction)
+        const ex = fromLeft
+          ? -50 - Math.max(0, off.dy)
+          : CONFIG.designW + 50 + Math.max(0, -off.dy);
+        const ey = clamp(cy + off.dx, 30, CONFIG.designH - 30);
+        this.enemies.push(new Enemy(this, type, ex, ey, false, speedMult, flyby));
+      }
+    } else {
+      const cx = CONFIG.designW * (0.2 + Math.random() * 0.6);
+      const flyby = { vx: 0, vy: spd, sineAmp: 0, sineFreq: 0 };
+      for (const off of shape) {
+        if (this.enemies.length >= CONFIG.enemyCap) break;
+        const ex = clamp(cx + off.dx, 30, CONFIG.designW - 30);
+        const ey = -50 - Math.max(0, off.dy); // tip enters first
+        this.enemies.push(new Enemy(this, type, ex, ey, false, speedMult, flyby));
+      }
+    }
+  }
+
+  // Returns a flyby object for a solo enemy crossing diagonally.
+  // Enters from left or right edge, travels toward the opposite side with a downward angle.
+  _makeDiagonalFlyby(baseSpeed, speedMult) {
+    const fromLeft = Math.random() < 0.5;
+    const spd = baseSpeed * speedMult * 1.1;
+    // Horizontal component carries enemy across full canvas width; vertical keeps it moving down.
+    // angle 15–35° below horizontal — horizontal component dominant, clearly crossing not chasing.
+    const angleRad = (0.26 + Math.random() * 0.35); // ~15–35° in radians
+    const vx = (fromLeft ? 1 : -1) * Math.cos(angleRad) * spd;
+    const vy = Math.sin(angleRad) * spd;
+    return { vx, vy, sineAmp: 12, sineFreq: 2.0 };
   }
 
   updateCollections(dt) {
@@ -420,7 +564,9 @@ export class Game {
     if (this.state === "gameOver") this.drawGameOver(ctx);
     if (this.state === "victory") this.drawVictory(ctx);
     if (this.state === "paused") this.drawPaused(ctx);
-    if (this.evolutionFlash > 0) this.drawEvolutionFlash(ctx);
+    if (this.state === "bossReward") this.drawBossReward(ctx);
+    // evolutionFlash suppressed during/after bossReward (bossReward owns that moment now)
+    if (this.evolutionFlash > 0 && this.state !== "bossReward") this.drawEvolutionFlash(ctx);
     if (this.state === "playing") this.drawHud(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
 
@@ -1004,6 +1150,111 @@ export class Game {
       ctx.font = "900 26px system-ui";
       ctx.fillText(label, CONFIG.designW / 2, CONFIG.designH / 2);
       ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }
+
+  drawBossReward(ctx) {
+    if (!this.bossRewardData) return;
+    const d = this.bossRewardData;
+    const W = CONFIG.designW, H = CONFIG.designH;
+    const total = 3.2;
+    const elapsed = total - this.bossRewardTimer;  // 0 → 3.2
+
+    // Phase timings:
+    //   0.0–0.5s  : flash punch fades in (ship silhouette beats in)
+    //   0.5–3.2s  : full overlay readable
+    // Alpha envelope: fade-in over 0.3s, hold, no fade-out (tap or timer ends it)
+    const alpha = clamp(elapsed / 0.3, 0, 1);
+
+    ctx.save();
+
+    // ── Semi-transparent dark overlay — ship stays visible beneath ──
+    ctx.globalAlpha = alpha * 0.78;
+    ctx.fillStyle = "rgba(2,5,18,0.88)";
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Branch-colored pulse ring around ship position ──
+    // Ship is drawn at its actual position in drawWorld(); we draw a glow behind it.
+    const pulse = 0.55 + 0.22 * Math.sin(this.time * 5);
+    ctx.globalAlpha = alpha * pulse * 0.45;
+    ctx.beginPath();
+    ctx.arc(this.player.x, this.player.y, 72, 0, Math.PI * 2);
+    ctx.fillStyle = d.branchColor;
+    ctx.shadowColor = d.branchColor;
+    ctx.shadowBlur = 38;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // ── Text block — centred vertically in upper half ──
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = "center";
+    const cx = W / 2;
+
+    // "BOSS DEFEATED" micro-label
+    ctx.fillStyle = CONFIG.colors.red;
+    ctx.font = "700 11px system-ui";
+    ctx.shadowColor = CONFIG.colors.red;
+    ctx.shadowBlur = 10;
+    ctx.fillText("BOSS DEFEATED", cx, 188);
+    ctx.shadowBlur = 0;
+
+    // Tier name — big headline
+    ctx.fillStyle = d.branchColor;
+    ctx.font = "900 28px system-ui";
+    ctx.shadowColor = d.branchColor;
+    ctx.shadowBlur = 22;
+    ctx.fillText("SHIP EVOLUTION", cx, 228);
+    ctx.shadowBlur = 0;
+
+    // Subtitle: MK-II FRAME etc.
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "800 18px system-ui";
+    ctx.fillText(d.tierName, cx, 258);
+
+    // Branch label
+    ctx.fillStyle = d.branchColor;
+    ctx.font = "600 12px system-ui";
+    ctx.fillText(d.branchLabel + " Online", cx, 280);
+
+    // ── Divider ──
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.strokeStyle = d.branchColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - 90, 296); ctx.lineTo(cx + 90, 296);
+    ctx.stroke();
+
+    // ── Bonus lines — only appear after 0.6s (stagger feel) ──
+    if (elapsed > 0.6) {
+      const bonusAlpha = clamp((elapsed - 0.6) / 0.35, 0, 1);
+      ctx.globalAlpha = alpha * bonusAlpha;
+      ctx.fillStyle = CONFIG.colors.dim;
+      ctx.font = "500 12px system-ui";
+      const lineH = 22;
+      const lines = [
+        `+ Movement Response  ${d.moveBonusStr}`,
+        `+ Auto-Fire Efficiency  ${d.fireBonusStr}`,
+        `+ Hull Systems Reinforced`,
+      ];
+      // Only show bonus lines that have real values for this tier
+      const visibleLines = d.tier >= 2 ? lines : [];
+      visibleLines.forEach((txt, i) => {
+        ctx.fillStyle = i < 2 ? d.branchColor : CONFIG.colors.dim;
+        ctx.font = i < 2 ? "600 12px system-ui" : "500 11px system-ui";
+        ctx.globalAlpha = alpha * bonusAlpha * (i < 2 ? 0.9 : 0.55);
+        ctx.fillText(txt, cx, 316 + i * lineH);
+      });
+    }
+
+    // ── Tap hint — appears after 1.2s ──
+    if (elapsed > 1.2) {
+      const hintAlpha = clamp((elapsed - 1.2) / 0.4, 0, 1) * (0.4 + 0.2 * Math.sin(this.time * 4));
+      ctx.globalAlpha = hintAlpha;
+      ctx.fillStyle = CONFIG.colors.dim;
+      ctx.font = "500 10px system-ui";
+      ctx.fillText("Tap to continue", cx, H - 80);
     }
 
     ctx.restore();

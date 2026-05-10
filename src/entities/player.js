@@ -48,6 +48,26 @@ export class Player {
     return Math.min(4, this.game.currentSectorIndex + 1);
   }
 
+  // Movement responsiveness bonus by tier (total, not per-frame stack).
+  // T1: ×1.00, T2: ×1.05, T3: ×1.08, T4: ×1.10
+  getEvolutionMoveMultiplier() {
+    const t = this.shipTier();
+    if (t >= 4) return 1.10;
+    if (t >= 3) return 1.08;
+    if (t >= 2) return 1.05;
+    return 1.0;
+  }
+
+  // Auto-fire efficiency bonus by tier (multiplier < 1 means faster firing).
+  // T1: ×1.00, T2: ×0.94, T3: ×0.90, T4: ×0.86
+  getEvolutionFireRateMultiplier() {
+    const t = this.shipTier();
+    if (t >= 4) return 0.86;
+    if (t >= 3) return 0.90;
+    if (t >= 2) return 0.94;
+    return 1.0;
+  }
+
   // Returns "assault"|"energy"|"siege" based on build affinity
   shipBranch() {
     const zapScore    = this.zapper + this.beam * 2;
@@ -71,8 +91,10 @@ export class Player {
     }
 
     const oldX = this.x;
-    this.x = lerp(this.x, tx, clamp(dt * 12, 0, 1));
-    this.y = lerp(this.y, ty, clamp(dt * 12, 0, 1));
+    // speed 360 (base) → followRate 12. Evolution adds a small tier bonus on top.
+    const followRate = clamp(12 * (this.speed / 360) * this.getEvolutionMoveMultiplier(), 8, 18);
+    this.x = lerp(this.x, tx, clamp(dt * followRate, 0, 1));
+    this.y = lerp(this.y, ty, clamp(dt * followRate, 0, 1));
     this.vx = (this.x - oldX) / Math.max(dt, 0.001);
     this.bank = lerp(this.bank, clamp(this.vx / 520, -0.35, 0.35), clamp(dt * 9, 0, 1));
 
@@ -82,7 +104,8 @@ export class Player {
 
     this.fireTimer -= dt;
     if (this.fireTimer <= 0) {
-      this.fireTimer = this.fireRate;
+      // Evolution multiplier < 1 means faster effective fire rate; does not mutate base fireRate.
+      this.fireTimer = this.fireRate * this.getEvolutionFireRateMultiplier();
       this.fire();
     }
 
@@ -115,17 +138,19 @@ export class Player {
       const overcharged = this.keystoneId === "overcharged";
       const chance = overcharged ? 1.0 : 0.15 + this.zapper * 0.025;
       if (Math.random() < chance) {
-        const zapDmg = (12 + this.zapper * 5) * (overcharged ? 2.2 : 1);
+        // Base 20 dmg: reliably one-shots a scout (hp 18) at zapper level 1.
+        // Each extra level adds 5 dmg; fighters (hp 34) die in ~2 zaps at level 1.
+        const zapDmg = (20 + this.zapper * 5) * (overcharged ? 2.2 : 1);
         const primary = g.closestEnemy(this.x, this.y, 300);
         if (primary) {
           primary.damage(zapDmg);
           g.spawnZap(this.x, this.y - 10, primary.x, primary.y);
-          // Chain — find next closest enemy near primary target
-          const chainCount = overcharged ? 2 : (this.zapper >= 3 ? 1 : 0);
+          // Chain from zapper level 2 (was 3); range 200 (was 140) — visibly useful on mobile.
+          const chainCount = overcharged ? 2 : (this.zapper >= 2 ? 1 : 0);
           if (chainCount > 0) {
             let last = primary;
             for (let c = 0; c < chainCount; c++) {
-              const next = g.closestEnemyExcluding(last.x, last.y, 140, last);
+              const next = g.closestEnemyExcluding(last.x, last.y, 200, last);
               if (!next) break;
               next.damage(zapDmg * 0.6);
               g.spawnZap(last.x, last.y, next.x, next.y, true);

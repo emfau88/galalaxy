@@ -137,20 +137,32 @@ export class UpgradeSystem {
     switch (u.id) {
       case "fire":    p.fireRate = Math.max(0.105, p.fireRate * 0.86); break;
       case "twin":    p.twin = Math.min(4, p.twin + 1); break;
-      case "rocket":  p.rocket = Math.min(5, p.rocket + 1); break;
-      case "zapper":  p.zapper = Math.min(5, p.zapper + 1); break;
+      case "rocket":  p.rocket = Math.min(5, p.rocket + 1);
+                      // Prime auto-fire so the first rocket fires in the next shot cycle.
+                      p.fireTimer = Math.min(p.fireTimer, 0.05);
+                      break;
+      case "zapper":  p.zapper = Math.min(5, p.zapper + 1);
+                      // Prime the auto-fire timer so the first zap fires within one shot cycle.
+                      p.fireTimer = Math.min(p.fireTimer, 0.05);
+                      break;
       case "speed":   p.speed += 26; break;
       case "shield":  p.maxShield += 12; p.shieldRegen += 1.25; p.shield = p.maxShield; break;
       case "magnet":  p.magnet += 1; break;
       case "hp":      p.maxHp += 18; p.hp = Math.min(p.maxHp, p.hp + 28); break;
       case "beam":    p.beam = Math.min(3, p.beam + 1);
-                      if (p._beamCooldown === undefined) p._beamCooldown = 4.0;
+                      // First pickup: fire within 0.5s. Re-pick: don't reset a nearly-ready beam.
+                      if (p._beamCooldown === undefined) p._beamCooldown = 0.5;
+                      else p._beamCooldown = Math.min(p._beamCooldown, 0.5);
                       break;
       case "pulse":   p.pulse = Math.min(3, p.pulse + 1);
-                      if (p._pulseCooldown === undefined) p._pulseCooldown = 5.0;
+                      // First pickup: fire within 0.5s. Re-pick: don't reset a nearly-ready pulse.
+                      if (p._pulseCooldown === undefined) p._pulseCooldown = 0.5;
+                      else p._pulseCooldown = Math.min(p._pulseCooldown, 0.5);
                       break;
       case "barrage": p.barrage = Math.min(3, p.barrage + 1);
                       if (p.rocket === 0) p.rocket = 1;
+                      // Prime auto-fire so the first barrage fires immediately.
+                      p.fireTimer = Math.min(p.fireTimer, 0.05);
                       break;
       case "overcharged":
         p.keystoneId     = "overcharged";

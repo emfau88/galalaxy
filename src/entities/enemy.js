@@ -2,7 +2,8 @@ import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp, dist2 } from "../utils.js";
 
 export class Enemy {
-  constructor(game, type, x, y, boss = false) {
+  // flyby: optional { vx, vy, sineAmp, sineFreq } — if set, enemy uses fixed-velocity movement
+  constructor(game, type, x, y, boss = false, speedMult = 1.0, flyby = null) {
     this.game = game;
     this.type = type;
     this.x = x;
@@ -12,7 +13,8 @@ export class Enemy {
     this.r = boss ? def.r * 1.3 : def.r;
     this.maxHp = boss ? def.hp * 6 : def.hp;
     this.hp = this.maxHp;
-    this.speed = boss ? def.speed * 0.45 : def.speed;
+    // speedMult only applies to regular enemies; boss speed is never reduced by sector tuning
+    this.speed = boss ? def.speed * 0.45 : def.speed * speedMult;
     this.damagePower = boss ? def.damage * 1.8 : def.damage;
     this.score = boss ? def.score * 8 : def.score;
     this.imgKey = def.img;
@@ -21,6 +23,9 @@ export class Enemy {
     this.fireTimer = boss ? 1.2 : 2.5 + Math.random() * 2;
     this.wobble = Math.random() * Math.PI * 2;
     this.dead = false;
+    // flyby stores { vx, vy, sineAmp, sineFreq } — null means normal chase behavior
+    this.flyby = flyby || null;
+    this._flybyT = 0; // local time accumulator for sine drift
   }
 
   update(dt) {
@@ -33,6 +38,17 @@ export class Enemy {
       const holdX = CONFIG.designW / 2 + Math.sin(this.game.time * 0.55 + this.wobble) * 72;
       this.x = lerp(this.x, holdX, clamp(dt * 1.4, 0, 1));
       this.y = lerp(this.y, holdY, clamp(dt * (this.y < 0 ? 2.2 : 0.9), 0, 1));
+    } else if (this.flyby) {
+      // Flyby: fixed velocity + optional perpendicular sine drift — does NOT chase player
+      this._flybyT += dt;
+      const f = this.flyby;
+      // Perpendicular axis to travel direction for the sine wiggle
+      const len = Math.hypot(f.vx, f.vy) || 1;
+      const px = -f.vy / len; // perpendicular unit x
+      const py =  f.vx / len; // perpendicular unit y
+      const sineOffset = Math.sin(this._flybyT * (f.sineFreq ?? 2.2) + this.wobble) * (f.sineAmp ?? 0);
+      this.x += (f.vx + px * sineOffset) * dt;
+      this.y += (f.vy + py * sineOffset) * dt;
     } else {
       const a = Math.atan2(p.y - this.y, p.x - this.x);
       const side = Math.sin(this.game.time * 2 + this.wobble) * 28;
@@ -74,7 +90,11 @@ export class Enemy {
       this.damage(this.boss ? 4 : 999);
     }
 
-    if (!this.boss && (this.x < -160 || this.x > CONFIG.designW + 160 || this.y > CONFIG.designH + 180)) this.dead = true;
+    if (!this.boss) {
+      const margin = this.flyby ? 220 : 160;
+      if (this.x < -margin || this.x > CONFIG.designW + margin ||
+          this.y < -margin || this.y > CONFIG.designH + margin) this.dead = true;
+    }
   }
 
   damage(amount) {
@@ -101,7 +121,11 @@ export class Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     const p = this.game.player;
-    ctx.rotate(Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2);
+    // Flyby enemies face their travel direction; chase/boss enemies face the player.
+    const drawAngle = this.flyby
+      ? Math.atan2(this.flyby.vy, this.flyby.vx) + Math.PI / 2
+      : Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2;
+    ctx.rotate(drawAngle);
 
     const image = img.get(this.imgKey);
     const rc = RENDER_CONFIG.enemies[this.type] || { w: this.r * 2, h: this.r * 2 };

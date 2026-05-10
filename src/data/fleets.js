@@ -33,18 +33,34 @@ export const FLEETS = {
   }
 };
 
-// Returns a random enemy type from a fleet's phase-weighted table.
-// sectorProgress: 0.0 (sector start) → 1.0 (boss imminent)
-export function pickFleetEnemy(fleet, sectorProgress) {
-  const phases = fleet.phases;
-  const phaseIndex = sectorProgress < 0.4 ? 0 : sectorProgress < 0.75 ? 1 : 2;
-  const bias = phases[phaseIndex];
+function _pickFromBias(bias) {
   const roll = Math.random();
   let acc = 0;
   for (const [type, weight] of Object.entries(bias)) {
     acc += weight;
     if (roll < acc) return type;
   }
-  // Fallback to first key
   return Object.keys(bias)[0];
+}
+
+// Standard pick — used for formations (scouts/fighters expected).
+export function pickFleetEnemy(fleet, sectorProgress) {
+  const phaseIndex = sectorProgress < 0.4 ? 0 : sectorProgress < 0.75 ? 1 : 2;
+  return _pickFromBias(fleet.phases[phaseIndex]);
+}
+
+// Solo-chaser pick — scouts/fighters halved in weight so heavier units dominate solo spawns.
+export function pickSoloEnemy(fleet, sectorProgress) {
+  const phaseIndex = sectorProgress < 0.4 ? 0 : sectorProgress < 0.75 ? 1 : 2;
+  const base = fleet.phases[phaseIndex];
+  const adjusted = {};
+  let total = 0;
+  for (const [type, w] of Object.entries(base)) {
+    const iw = /scout|fighter/i.test(type) ? w * 0.4 : w;
+    adjusted[type] = iw;
+    total += iw;
+  }
+  // Renormalize
+  for (const t of Object.keys(adjusted)) adjusted[t] /= total;
+  return _pickFromBias(adjusted);
 }

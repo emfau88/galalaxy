@@ -71,9 +71,11 @@ export const SECTORS = [
     index: 0,
     name: "Kla'ed Frontier",
     shortName: "SECTOR I",
-    duration: 90,
+    duration: 65,
     fleet: "klaed",
-    tint: [30, 60, 140]
+    tint: [30, 60, 140],
+    spawnMult: 0.9,       // ~10% fewer regular spawns than formula baseline
+    enemySpeedMult: 0.9   // regular enemies 10% slower; does not affect boss
   },
   {
     index: 1,
@@ -81,22 +83,28 @@ export const SECTORS = [
     shortName: "SECTOR II",
     duration: 90,
     fleet: "nairan",
-    tint: [100, 30, 140]
+    tint: [100, 30, 140],
+    spawnMult: 1.0,
+    enemySpeedMult: 1.0
   },
   {
     index: 2,
     name: "Nautolan Depths",
     shortName: "SECTOR III",
-    duration: 90,
+    duration: 105,
     fleet: "nautolan",
-    tint: [30, 110, 80]
+    tint: [30, 110, 80],
+    spawnMult: 1.0,
+    enemySpeedMult: 1.0
   },
   {
     index: 3,
     name: "Void Core",
     shortName: "SECTOR IV",
-    duration: 90,
+    duration: 115,
     fleet: "nautolan",
-    tint: [140, 30, 30]
+    tint: [140, 30, 30],
+    spawnMult: 1.0,
+    enemySpeedMult: 1.0
   }
 ];

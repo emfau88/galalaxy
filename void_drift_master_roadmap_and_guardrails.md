@@ -408,6 +408,72 @@ IN PROGRESS — Combat Feel Pass complete. Mobile Controls complete. FX pass com
 
 ---
 
+# MILESTONE 1.5 — SPAWN VARIETY & COMBAT RHYTHM
+
+## STATUS
+IMPLEMENTED 2026-05-10
+
+---
+
+## IMPLEMENTED
+
+### Engine Boost Fix
+- Movement lerp now derived from `this.speed / 360` — Engine Boost upgrade visibly affects ship responsiveness
+- Evolution move multiplier applied per tier (+0/+5/+8/+10%)
+- Evolution fire rate multiplier applied per tier (+0/+6/+10/+14%)
+
+### Sector Tuning
+- Sector durations: I=65s, II=90s, III=105s, IV=115s (was all 90s)
+- `spawnMult` and `enemySpeedMult` per sector (Sector I: 0.9/0.9, others 1.0/1.0)
+- Formation suppressed in Sector I for first 15 seconds
+
+### Zapper Combat Feel
+- Base zap damage 12→20 (reliably one-shots scouts at level 1)
+- Chain fires at zapper ≥ 2 (was ≥ 3)
+- Chain search radius 140→200px
+- First-shot priming on all upgrade picks (fireTimer set to 0.05s)
+
+### Boss Reward Overlay
+- `"bossReward"` game state: 3.2s pause after non-final boss kill
+- Full overlay: tier name, branch label, move/fire bonuses staggered at 0.6s
+- Tap-to-dismiss after 0.8s
+- Ship drawn with branch pulse ring behind it
+- `evolutionFlash` suppressed during overlay
+
+### Enemy Flyby System
+- `flyby: { vx, vy, sineAmp, sineFreq }` added to `Enemy` constructor
+- Flyby enemies use fixed-velocity movement, do not chase player
+- Face travel direction in draw (not player direction)
+- Despawn margin 220px (vs 160px for chasers)
+
+### Formation System
+- `spawnFormation()` in game.js: 5 named shapes (horizontal line, diagonal line, V, diamond, arrow/wedge)
+- Formations enter from top (50%) or side (50%) — side entry is unambiguously non-chasing
+- All enemies in a formation share identical flyby vector (`sineAmp: 0`) — stay as tight block
+- Formation chance per sector: 25/30/34/36%
+- Formation suppressed during bossWarning
+
+### Solo Flyby Tuning
+- `pickSoloEnemy()` added to fleets.js: scout/fighter weight ×0.4 for solo spawns — heavier units dominate solo chaser roles
+- 50% of solo scout/fighter spawns get diagonal flyby (angle 15–35°, horizontal-dominant)
+- `_makeDiagonalFlyby()`: enters from left/right edge, vx dominant over vy
+
+---
+
+## TASKS
+- [x] Engine Boost fix
+- [x] Sector duration tuning
+- [x] Zapper first-shot satisfaction
+- [x] Boss reward overlay
+- [x] Flyby enemy movement
+- [x] Formation spawning (5 shapes, side + top entry)
+- [x] Solo flyby for scouts/fighters
+- [x] Solo spawn bias toward heavier units
+- [ ] Validate formation readability on real device
+- [ ] Validate flyby angles feel correct at all screen sizes
+
+---
+
 # MILESTONE 2 — BUILD IDENTITY SYSTEM
 
 ## STATUS
