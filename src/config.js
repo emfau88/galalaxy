@@ -24,8 +24,8 @@ export const CONFIG = {
 
 export const RENDER_CONFIG = {
   player: { w: 76, h: 76 },
-  playerEngine: { w: 48, h: 48 },
-  playerShield: { w: 92, h: 92 },
+  // Shield source frames are 64x64 around a 48x48 ship registration.
+  playerShield: { w: 76 * (64 / 48), h: 76 * (64 / 48) },
   enemies: {
     // Kla'ed Fleet 1
     scout:              { w: 68,  h: 68  },

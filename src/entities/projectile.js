@@ -3,7 +3,7 @@ import { clamp } from "../utils.js";
 import { ENEMY_WEAPON_PROFILES, PROJECTILE_VISUALS } from "../data/projectiles.js";
 
 export class Projectile {
-  constructor(x, y, a, speed, dmg, owner, kind, visualKey = null) {
+  constructor(x, y, a, speed, dmg, owner, kind, visualKey = null, options = {}) {
     this.x = x;
     this.y = y;
     this.vx = Math.cos(a) * speed;
@@ -13,8 +13,13 @@ export class Projectile {
     this.kind = kind;
     this.visualKey = visualKey || (owner === "player" ? kind : "klaedNormal");
     this.weaponProfile = owner === "enemy" ? ENEMY_WEAPON_PROFILES[this.visualKey] : null;
-    this.r = this.weaponProfile?.hitRadius ?? (kind === "rocket" ? 6 : kind === "enemy" ? 5 : 4);
-    this.life = this.weaponProfile?.life ?? (kind === "rocket" ? 1.9 : (kind === "enemy" && owner === "enemy") ? 2.6 : 1.25);
+    this.r = options.hitRadius ?? this.weaponProfile?.hitRadius ?? (kind === "rocket" ? 6 : kind === "enemy" ? 5 : 4);
+    this.life = options.life ?? this.weaponProfile?.life ?? (kind === "rocket" ? 1.9 : (kind === "enemy" && owner === "enemy") ? 2.6 : 1.25);
+    this.target = options.target || null;
+    this.turnRate = options.turnRate || 0;
+    this.piercing = options.piercing || false;
+    this.hitTargets = new Set();
+    this.onHit = typeof options.onHit === "function" ? options.onHit : null;
     this.age = 0;
     this.dead = false;
   }
@@ -27,6 +32,9 @@ export class Projectile {
       if (t) {
         this._steerToward(t.x, t.y, 3.4, dt);
       }
+    } else if (this.kind === "zapper" && this.owner === "player") {
+      if (!this.target || this.target.dead) this.target = game.closestEnemy(this.x, this.y, 360);
+      if (this.target) this._steerToward(this.target.x, this.target.y, this.turnRate || 8, dt);
     } else if (this.owner === "enemy" && this.weaponProfile?.behavior === "homing") {
       const p = game.player;
       this._steerToward(p.x, p.y, this.weaponProfile.turnRate ?? 0.5, dt);
@@ -96,8 +104,13 @@ export class Projectile {
     if (vis && vis.assetKey) {
       const img = game.loader.get(vis.assetKey);
       if (img) {
-        ctx.globalCompositeOperation = "lighter";
-        ctx.globalAlpha = 0.92;
+        // Preserve the authored palette. Additive blending washed the Foozle
+        // sprites toward white and made different projectile families converge.
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = vis.glowColor;
+        ctx.shadowBlur = 7;
         if (this._drawAssetFrame(ctx, img, vis)) {
           ctx.restore();
           return;

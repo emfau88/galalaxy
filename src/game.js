@@ -12,7 +12,22 @@ import { Particle } from "./entities/particle.js";
 import { UpgradeSystem } from "./systems/upgrades.js";
 import { FLEETS, pickFleetEnemy, pickSoloEnemy } from "./data/fleets.js";
 import { emitTrail, spawnHitSparks, spawnDeathBurst, emitSectorDust, spawnBossEntrance } from "./systems/fx.js";
-import { drawBeam, drawPulse } from "./systems/abilities.js";
+import { drawPulse } from "./systems/abilities.js";
+
+const PLAYER_VISUAL_TEST_STAGES = [
+  { title: "STARTER SHIP", detail: "Base Engine · integrated starter weapon · no shield module", player: {} },
+  { title: "ENGINE BOOST I", detail: "Big Pulse Engine · powered exhaust", player: { speedLevel: 1 } },
+  { title: "ENGINE BOOST II", detail: "Burst Engine · powered exhaust", player: { speedLevel: 2 } },
+  { title: "ENGINE BOOST III", detail: "Supercharged Engine · powered exhaust", player: { speedLevel: 3 } },
+  { title: "AUTO CANNON", detail: "Appears after Fire Rate or Multi Cannon", weapon: "auto", player: { fireLevel: 1 } },
+  { title: "SHIELD UPGRADE I", detail: "Front Shield", player: { shieldLevel: 1 } },
+  { title: "SHIELD UPGRADE II", detail: "Front and Side Shield", player: { shieldLevel: 2 } },
+  { title: "SHIELD UPGRADE III", detail: "Round Shield", player: { shieldLevel: 3 } },
+  { title: "ROCKET BUILD", detail: "Rocket launcher firing cycle", weapon: "rockets", player: { rocket: 3, barrage: 2, speedLevel: 2, shieldLevel: 1 } },
+  { title: "ZAPPER BUILD", detail: "Zapper firing cycle", weapon: "zapper", player: { zapper: 4, speedLevel: 2, shieldLevel: 2 } },
+  { title: "BIG SPACE GUN", detail: "Big Space Gun firing cycle", weapon: "bigGun", player: { beam: 2, speedLevel: 3, shieldLevel: 2 } },
+  { title: "INVINCIBILITY", detail: "Invincibility Shield hit state", player: { speedLevel: 3, shieldLevel: 2, invuln: 999 } },
+];
 
 export class Game {
   constructor() {
@@ -26,6 +41,15 @@ export class Game {
     this.prevState = "title";
     this.last = performance.now();
     this.time = 0;
+    const searchParams = new URLSearchParams(window.location.search);
+    this.visualTestMode = searchParams.get("test") === "upgrade-visuals";
+    const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
+    this.visualTestStartIndex = Number.isFinite(requestedStage)
+      ? Math.max(0, Math.min(PLAYER_VISUAL_TEST_STAGES.length - 1, requestedStage))
+      : 0;
+    this.visualTestIndex = 0;
+    this.visualTestTimer = 0;
+    this.visualTestWeaponTimer = 0;
     this.runTime = 0;
     this.score = 0;
     this.kills = 0;
@@ -74,7 +98,9 @@ export class Game {
 
     this.initStars();
     this.loader.load().then(() => {
-      if (this.state === "loading") this.state = "title";
+      if (this.state !== "loading") return;
+      if (this.visualTestMode) this.startVisualTest();
+      else this.state = "title";
     });
 
     requestAnimationFrame(t => this.loop(t));
@@ -144,6 +170,54 @@ export class Game {
     this.state = "playing";
   }
 
+  startVisualTest() {
+    this.state = "visualTest";
+    this.visualTestIndex = this.visualTestStartIndex;
+    this._applyVisualTestStage();
+  }
+
+  _applyVisualTestStage() {
+    const stage = PLAYER_VISUAL_TEST_STAGES[this.visualTestIndex];
+    this.player = new Player(this);
+    this.player.x = CONFIG.designW / 2;
+    this.player.y = 430;
+    Object.assign(this.player, stage.player);
+    this.player.speed = 360 + this.player.speedLevel * 26;
+    this.player.maxShield = 55 + this.player.shieldLevel * 12;
+    this.player.shield = this.player.maxShield;
+    this.player.vx = 120;
+    this.projectiles = [];
+    this.zaps = [];
+    if (stage.weapon) this.player.previewWeaponFire(stage.weapon);
+    this.visualTestTimer = 0;
+    this.visualTestWeaponTimer = 1.9;
+  }
+
+  nextVisualTestStage() {
+    this.visualTestIndex = (this.visualTestIndex + 1) % PLAYER_VISUAL_TEST_STAGES.length;
+    this._applyVisualTestStage();
+  }
+
+  updateVisualTest(dt) {
+    this.visualTestTimer += dt;
+    this.visualTestWeaponTimer -= dt;
+    this.player.vx = 120;
+    this.player.bank = Math.sin(this.time * 1.8) * 0.06;
+    this.player.updatePendingWeaponShots(dt);
+    for (const projectile of this.projectiles) {
+      projectile.update(dt, this);
+      emitTrail(this, projectile);
+    }
+    this.projectiles = this.projectiles.filter(projectile => !projectile.dead);
+
+    if (this.visualTestWeaponTimer <= 0) {
+      const stage = PLAYER_VISUAL_TEST_STAGES[this.visualTestIndex];
+      if (stage.weapon) this.player.previewWeaponFire(stage.weapon);
+      this.visualTestWeaponTimer = 1.9;
+    }
+    if (this.visualTestTimer >= 3.4) this.nextVisualTestStage();
+  }
+
   endRun() {
     SaveSystem.setBest(this.score);
     this.best = SaveSystem.best();
@@ -173,6 +247,8 @@ export class Game {
 
     const tap = this.input.consumeTap();
     if (tap) this.handleTap(tap.x, tap.y);
+
+    if (this.state === "visualTest") this.updateVisualTest(dt);
 
     if (this.state === "playing") {
       this.runTime += dt;
@@ -241,6 +317,8 @@ export class Game {
     } else if (this.state === "bossReward") {
       // Tap-to-dismiss: only allow after first 0.8s so accidental taps don't skip the reveal
       if (this.bossRewardTimer < 2.4) this._endBossReward();
+    } else if (this.state === "visualTest") {
+      this.nextVisualTestStage();
     }
   }
 
@@ -457,10 +535,13 @@ export class Game {
       if (pr.owner === "player") {
         for (const e of this.enemies) {
           if (e.dead) continue;
+          if (pr.hitTargets.has(e)) continue;
           if (this.dist2(pr.x, pr.y, e.x, e.y) < (pr.r + e.r) ** 2) {
             e.damage(pr.dmg);
-            pr.dead = true;
+            pr.hitTargets.add(e);
+            if (!pr.piercing) pr.dead = true;
             spawnHitSparks(this, pr.x, pr.y, pr);
+            if (pr.onHit) pr.onHit(e, pr, this);
             if (pr.kind === "rocket") {
               this.explosion(pr.x, pr.y, 16);
               if (this.player.siegePayload) {
@@ -471,7 +552,7 @@ export class Game {
                 this.explosion(pr.x, pr.y, 28);
               }
             }
-            break;
+            if (!pr.piercing) break;
           }
         }
       } else {
@@ -496,9 +577,11 @@ export class Game {
     return dx * dx + dy * dy;
   }
 
-  spawnProjectile(x, y, a, speed, dmg, owner, kind, visualKey = null) {
-    if (this.projectiles.length >= CONFIG.projectileCap) return;
-    this.projectiles.push(new Projectile(x, y, a, speed, dmg, owner, kind, visualKey));
+  spawnProjectile(x, y, a, speed, dmg, owner, kind, visualKey = null, options = {}) {
+    if (this.projectiles.length >= CONFIG.projectileCap) return null;
+    const projectile = new Projectile(x, y, a, speed, dmg, owner, kind, visualKey, options);
+    this.projectiles.push(projectile);
+    return projectile;
   }
 
   dropXp(x, y, n) {
@@ -590,7 +673,7 @@ export class Game {
     ctx.translate(sx, sy);
 
     this.drawBackground(ctx);
-    this.drawWorld(ctx);
+    if (this.state !== "title" && this.state !== "loading") this.drawWorld(ctx);
 
     if (this.state === "loading") this.drawLoading(ctx);
     if (this.state === "title") this.drawTitle(ctx);
@@ -599,12 +682,51 @@ export class Game {
     if (this.state === "victory") this.drawVictory(ctx);
     if (this.state === "paused") this.drawPaused(ctx);
     if (this.state === "bossReward") this.drawBossReward(ctx);
+    if (this.state === "visualTest") this.drawVisualTest(ctx);
     // evolutionFlash suppressed during/after bossReward (bossReward owns that moment now)
     if (this.evolutionFlash > 0 && this.state !== "bossReward") this.drawEvolutionFlash(ctx);
     if (this.state === "playing") this.drawHud(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
     this.drawMuteButton(ctx);
 
+    ctx.restore();
+  }
+
+  drawVisualTest(ctx) {
+    const stage = PLAYER_VISUAL_TEST_STAGES[this.visualTestIndex];
+    const progress = this.visualTestTimer / 3.4;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(2,6,20,0.82)";
+    ctx.fillRect(18, 22, CONFIG.designW - 36, 104);
+    ctx.strokeStyle = "rgba(88,230,255,0.55)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(18, 22, CONFIG.designW - 36, 104);
+
+    ctx.fillStyle = CONFIG.colors.cyan;
+    ctx.font = "800 12px system-ui";
+    ctx.fillText(`FOOZLE UPGRADE PREVIEW  ${this.visualTestIndex + 1}/${PLAYER_VISUAL_TEST_STAGES.length}`, CONFIG.designW / 2, 48);
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "900 24px system-ui";
+    ctx.fillText(stage.title, CONFIG.designW / 2, 79);
+    ctx.fillStyle = CONFIG.colors.dim;
+    ctx.font = "600 12px system-ui";
+    ctx.fillText(stage.detail, CONFIG.designW / 2, 104);
+
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fillRect(40, 115, CONFIG.designW - 80, 3);
+    ctx.fillStyle = CONFIG.colors.cyan;
+    ctx.fillRect(40, 115, (CONFIG.designW - 80) * clamp(progress, 0, 1), 3);
+
+    ctx.fillStyle = "rgba(2,6,20,0.78)";
+    ctx.fillRect(42, 588, CONFIG.designW - 84, 74);
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "800 13px system-ui";
+    ctx.fillText("Tap/click: next stage", CONFIG.designW / 2, 618);
+    ctx.fillStyle = CONFIG.colors.dim;
+    ctx.font = "600 11px system-ui";
+    ctx.fillText("Stages also advance automatically", CONFIG.designW / 2, 642);
     ctx.restore();
   }
 
@@ -735,7 +857,6 @@ export class Game {
   }
 
   drawWorld(ctx) {
-    drawBeam(ctx, this.player, this.time);
     for (const p of this.pickups) p.draw(ctx);
     for (const pr of this.projectiles) pr.draw(ctx, this);
     for (const e of this.enemies) e.draw(ctx, this.loader);
@@ -1068,7 +1189,7 @@ export class Game {
   drawAbilityPips(ctx) {
     const p = this.player;
     const abilities = [];
-    if (p.beam)  abilities.push({ label: "BEAM",  cd: p._beamCooldown  ?? 0, max: 7.0, color: CONFIG.colors.cyan });
+    if (p.beam)  abilities.push({ label: "BIG GUN", cd: p._beamCooldown ?? 0, max: 7.0, color: "#7cff91" });
     if (p.pulse) abilities.push({ label: "PULSE", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan });
     if (!abilities.length) return;
 
@@ -1427,17 +1548,7 @@ export class Game {
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    // ── Ship spotlight glow ──
     const shipPreviewY = 400 + Math.sin(t * 1.6) * 5;
-    ctx.save();
-    const spotGrad = ctx.createRadialGradient(cx, shipPreviewY + 10, 0, cx, shipPreviewY + 10, 80);
-    spotGrad.addColorStop(0, "rgba(88,230,255,0.13)");
-    spotGrad.addColorStop(1, "rgba(88,230,255,0)");
-    ctx.fillStyle = spotGrad;
-    ctx.beginPath();
-    ctx.ellipse(cx, shipPreviewY + 10, 80, 40, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
 
     // ── Ship preview — parallax tilt from cursor/touch ──
     // Cursor offset from center → subtle bank angle, max ±0.12 rad
@@ -1447,7 +1558,13 @@ export class Game {
     this.player.x = cx;
     this.player.y = shipPreviewY;
     this.player.bank = titleBank;
-    this.player.draw(ctx, this.loader);
+    this.player.draw(ctx, this.loader, {
+      showWeapon: false,
+      showShield: false,
+      showPassive: false,
+      showKeystone: false,
+      forceEngineLevel: 0,
+    });
     this.player.x = _px; this.player.y = _py; this.player.bank = _pb;
 
     // ── Title block ──

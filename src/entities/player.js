@@ -1,15 +1,23 @@
 import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp } from "../utils.js";
 import { updateBeam, updatePulse } from "../systems/abilities.js";
+import {
+  PLAYER_ANIMATION_FPS,
+  PLAYER_INVINCIBILITY_VISUAL,
+  PLAYER_MODULE_FRAME,
+  PLAYER_SHIELD_FRAME,
+  PLAYER_WEAPON_VISUALS,
+  playerEngineVisual,
+  playerShieldVisual,
+  playerWeaponVisualKey,
+} from "../data/playerVisuals.js";
 
 // Branch accent colors
 const BRANCH_COLORS = {
-  assault: { primary: "#c8d8ff", engine: "rgba(180,200,255,1)", glow: "#aabbff" },
-  energy:  { primary: "#88aaff", engine: "rgba(120,160,255,1)", glow: "#88ccff" },
-  siege:   { primary: "#ffb060", engine: "rgba(255,160,60,1)",  glow: "#ffaa40" },
+  assault: { primary: "#c8d8ff", glow: "#aabbff" },
+  energy:  { primary: "#88aaff", glow: "#88ccff" },
+  siege:   { primary: "#ffb060", glow: "#ffaa40" },
 };
-
-const SHIP_TIER_SCALE = [0, 1, 1.06, 1.12, 1.18];
 
 export class Player {
   constructor(game) {
@@ -47,6 +55,10 @@ export class Player {
     this.rocketDisabled = false;
     this.siegePayload  = false;
     this.pulseReactor  = false;
+    this.weaponAnimations = Object.create(null);
+    this.pendingWeaponShots = [];
+    this._autoBarrel = 0;
+    this._rocketBarrel = 0;
   }
 
   // Returns 1–4 based on current sector
@@ -55,7 +67,59 @@ export class Player {
   }
 
   shipVisualScale() {
-    return SHIP_TIER_SCALE[this.shipTier()] || 1;
+    const physicalUpgrades =
+      Math.min(5, this.fireLevel) * 0.35 +
+      Math.min(4, this.twin) * 0.75 +
+      Math.min(5, this.rocket) * 0.65 +
+      Math.min(5, this.zapper) * 0.65 +
+      Math.min(3, this.speedLevel) * 0.8 +
+      Math.min(3, this.shieldLevel) * 0.65 +
+      Math.min(4, this.hpLevel) * 0.45 +
+      Math.min(3, this.beam) * 0.8 +
+      Math.min(3, this.pulse) * 0.45 +
+      Math.min(3, this.barrage) * 0.45;
+    return 1 + Math.min(0.1, physicalUpgrades * 0.006);
+  }
+
+  equippedWeaponVisualKey() {
+    return playerWeaponVisualKey(this);
+  }
+
+  triggerWeaponAnimation(key, cycleDuration = null, frameCount = null) {
+    const visual = PLAYER_WEAPON_VISUALS[key];
+    if (!visual) return 1 / PLAYER_ANIMATION_FPS;
+
+    const now = this.game.time || 0;
+    const activeFrameCount = frameCount ?? visual.frameCount;
+    const duration = cycleDuration ?? activeFrameCount / PLAYER_ANIMATION_FPS;
+    const frameDuration = duration / activeFrameCount;
+    this.weaponAnimations[key] = {
+      startedAt: now,
+      activeUntil: now + duration,
+      frameDuration,
+      frameCount: activeFrameCount,
+    };
+    return frameDuration;
+  }
+
+  isWeaponAnimationActive(key) {
+    const state = this.weaponAnimations[key];
+    return Boolean(state && (this.game.time || 0) < state.activeUntil);
+  }
+
+  queueWeaponShot(delay, fire) {
+    this.pendingWeaponShots.push({ remaining: Math.max(0, delay), fire });
+  }
+
+  updatePendingWeaponShots(dt) {
+    // Iterate backwards so callbacks can safely queue follow-up shots.
+    for (let i = this.pendingWeaponShots.length - 1; i >= 0; i--) {
+      const shot = this.pendingWeaponShots[i];
+      shot.remaining -= dt;
+      if (shot.remaining > 0) continue;
+      this.pendingWeaponShots.splice(i, 1);
+      shot.fire();
+    }
   }
 
   // Movement responsiveness bonus by tier (total, not per-frame stack).
@@ -111,22 +175,33 @@ export class Player {
     this.invuln = Math.max(0, this.invuln - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.shield = clamp(this.shield + this.shieldRegen * dt, 0, this.maxShield);
+    this.updatePendingWeaponShots(dt);
 
     this.fireTimer -= dt;
     if (this.fireTimer <= 0) {
       // Evolution multiplier < 1 means faster effective fire rate; does not mutate base fireRate.
       this.fireTimer = this.fireRate * this.getEvolutionFireRateMultiplier();
-      this.fire();
+      this.fire(this.fireTimer);
     }
 
     updateBeam(this, dt);
     updatePulse(this, dt);
   }
 
-  fire() {
-    const g = this.game;
-    const visualScale = this.shipVisualScale();
-    // twin 0: single center | 1: two barrels | 2: three | 3: four | 4: five
+  fire(autoCycleDuration = this.fireRate * this.getEvolutionFireRateMultiplier()) {
+    this._fireAuto(autoCycleDuration);
+    this._tryFireRockets();
+    this._tryFireZapper();
+  }
+
+  _fireAuto(cycleDuration) {
+    const visual = PLAYER_WEAPON_VISUALS.auto;
+    const frameDuration = this.triggerWeaponAnimation("auto", cycleDuration);
+    const moduleVisible = this.equippedWeaponVisualKey() === "auto";
+    const authoredAutoUnlocked = this.fireLevel > 0 || this.twin > 0;
+
+    // twin 0: alternate the authored two barrels when the Auto Cannon is
+    // mounted. Higher levels keep the established multi-shot spread.
     const twinOffsets = [
       [0],
       [-10, 10],
@@ -134,52 +209,143 @@ export class Player {
       [-16, -5, 5, 16],
       [-18, -9, 0, 9, 18],
     ];
-    const shots = twinOffsets[Math.min(this.twin, 4)];
+    const offsets = [...twinOffsets[Math.min(this.twin, 4)]];
+    if (moduleVisible && offsets.length === 1) {
+      offsets[0] = visual.muzzles[this._autoBarrel % visual.muzzles.length].x;
+      this._autoBarrel++;
+    }
+
     const twinDmg = 11 + this.twin * 1.5;
-    for (const off of shots) {
-      g.spawnProjectile(this.x + off * visualScale, this.y - 28 * visualScale, -Math.PI / 2, 640, twinDmg, "player", "laser");
+    const delay = moduleVisible ? visual.releaseFrames[0] * frameDuration : 0;
+    for (const offset of offsets) {
+      this.queueWeaponShot(delay, () => {
+        const scale = this.shipVisualScale();
+        this.game.spawnProjectile(
+          this.x + offset * scale,
+          this.y + visual.muzzles[0].y * scale,
+          -Math.PI / 2,
+          640,
+          twinDmg,
+          "player",
+          "laser",
+          authoredAutoUnlocked ? visual.projectileKey : "laser",
+        );
+      });
     }
+  }
 
-    if (this.rocket > 0 && !this.rocketDisabled) {
-      const rocketChance = 0.18 + this.rocket * 0.04;
-      if (Math.random() < rocketChance) {
-        const count = this.barrage > 0 ? 3 : 1;
-        for (let i = 0; i < count; i++) {
-          const ox = (i - (count - 1) / 2) * 9;
-          const target = g.closestEnemy(this.x + ox, this.y, 420);
-          const ang = target ? Math.atan2(target.y - this.y, target.x - this.x) + (i - 1) * 0.08 : -Math.PI / 2 + (i - 1) * 0.08;
-          const dmgMult = this.siegePayload ? 2.5 : 1;
-          g.spawnProjectile(this.x + ox * visualScale, this.y - 25 * visualScale, ang, 420 + i * 12, (22 + this.rocket * 4 + this.barrage * 5) * dmgMult, "player", "rocket");
+  _tryFireRockets(force = false) {
+    if ((!this.rocket && !force) || this.rocketDisabled || this.isWeaponAnimationActive("rockets")) return;
+    const chance = 0.18 + this.rocket * 0.04;
+    if (!force && Math.random() >= chance) return;
+
+    const visual = PLAYER_WEAPON_VISUALS.rockets;
+    const count = this.barrage > 0 || force ? 3 : 1;
+    // Frames 0–6 contain the first launch/recovery. The full 17-frame strip
+    // is reserved for the authored three-shot barrage.
+    const animationFrames = count > 1 ? visual.frameCount : 7;
+    const frameDuration = this.triggerWeaponAnimation("rockets", null, animationFrames);
+    const dmgMult = this.siegePayload ? 2.5 : 1;
+    const damage = (22 + Math.max(1, this.rocket) * 4 + this.barrage * 5) * dmgMult;
+
+    for (let i = 0; i < count; i++) {
+      const muzzle = visual.muzzles[(this._rocketBarrel + i) % visual.muzzles.length];
+      const releaseFrame = visual.releaseFrames[Math.min(i, visual.releaseFrames.length - 1)];
+      this.queueWeaponShot(releaseFrame * frameDuration, () => {
+        const scale = this.shipVisualScale();
+        const x = this.x + muzzle.x * scale;
+        const y = this.y + muzzle.y * scale;
+        const target = this.game.closestEnemy(x, y, 420);
+        const spread = count > 1 ? (i - 1) * 0.08 : 0;
+        const angle = target ? Math.atan2(target.y - y, target.x - x) + spread : -Math.PI / 2 + spread;
+        this.game.spawnProjectile(x, y, angle, 420 + i * 12, damage, "player", "rocket", visual.projectileKey);
+      });
+    }
+    this._rocketBarrel = (this._rocketBarrel + count) % visual.muzzles.length;
+  }
+
+  _tryFireZapper(force = false) {
+    if ((!this.zapper && !force) || this.isWeaponAnimationActive("zapper")) return;
+    const overcharged = this.keystoneId === "overcharged";
+    const chance = overcharged ? 1 : 0.15 + this.zapper * 0.025;
+    if (!force && Math.random() >= chance) return;
+
+    const target = this.game.closestEnemy(this.x, this.y, 300);
+    if (!target && !force) return;
+
+    const visual = PLAYER_WEAPON_VISUALS.zapper;
+    const frameDuration = this.triggerWeaponAnimation("zapper");
+    const zapDmg = (20 + Math.max(1, this.zapper) * 5) * (overcharged ? 2.2 : 1);
+    const chainCount = overcharged ? 2 : (this.zapper >= 2 ? 1 : 0);
+
+    this.queueWeaponShot(visual.releaseFrames[0] * frameDuration, () => {
+      const scale = this.shipVisualScale();
+      const muzzle = visual.muzzles[0];
+      const x = this.x + muzzle.x * scale;
+      const y = this.y + muzzle.y * scale;
+      const currentTarget = target && !target.dead ? target : this.game.closestEnemy(x, y, 360);
+      const angle = currentTarget ? Math.atan2(currentTarget.y - y, currentTarget.x - x) : -Math.PI / 2;
+      this.game.spawnProjectile(x, y, angle, 760, zapDmg, "player", "zapper", visual.projectileKey, {
+        target: currentTarget,
+        turnRate: 9,
+        hitRadius: 5,
+        life: 0.85,
+        onHit: hit => this._chainZapperHit(hit, zapDmg, chainCount),
+      });
+    });
+  }
+
+  _chainZapperHit(primary, damage, chainCount) {
+    if (!chainCount) return;
+    const visited = new Set([primary]);
+    let last = primary;
+    for (let c = 0; c < chainCount; c++) {
+      let next = null;
+      let bestDistance = 200 * 200;
+      for (const enemy of this.game.enemies) {
+        if (enemy.dead || visited.has(enemy)) continue;
+        const distance = this.game.dist2(last.x, last.y, enemy.x, enemy.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          next = enemy;
         }
       }
+      if (!next) break;
+      next.damage(damage * 0.6);
+      this.game.spawnZap(last.x, last.y, next.x, next.y, true);
+      visited.add(next);
+      last = next;
     }
+  }
 
-    if (this.zapper > 0) {
-      const overcharged = this.keystoneId === "overcharged";
-      const chance = overcharged ? 1.0 : 0.15 + this.zapper * 0.025;
-      if (Math.random() < chance) {
-        // Base 20 dmg: reliably one-shots a scout (hp 18) at zapper level 1.
-        // Each extra level adds 5 dmg; fighters (hp 34) die in ~2 zaps at level 1.
-        const zapDmg = (20 + this.zapper * 5) * (overcharged ? 2.2 : 1);
-        const primary = g.closestEnemy(this.x, this.y, 300);
-        if (primary) {
-          primary.damage(zapDmg);
-          g.spawnZap(this.x, this.y - 10 * visualScale, primary.x, primary.y);
-          // Chain from zapper level 2 (was 3); range 200 (was 140) — visibly useful on mobile.
-          const chainCount = overcharged ? 2 : (this.zapper >= 2 ? 1 : 0);
-          if (chainCount > 0) {
-            let last = primary;
-            for (let c = 0; c < chainCount; c++) {
-              const next = g.closestEnemyExcluding(last.x, last.y, 200, last);
-              if (!next) break;
-              next.damage(zapDmg * 0.6);
-              g.spawnZap(last.x, last.y, next.x, next.y, true);
-              last = next;
-            }
-          }
-        }
-      }
-    }
+  fireBigGun(force = false) {
+    if (!this.beam && !force) return;
+    const visual = PLAYER_WEAPON_VISUALS.bigGun;
+    const frameDuration = this.triggerWeaponAnimation("bigGun");
+    const damage = 48 + Math.max(1, this.beam) * 18;
+    this.queueWeaponShot(visual.releaseFrames[0] * frameDuration, () => {
+      const scale = this.shipVisualScale();
+      const muzzle = visual.muzzles[0];
+      this.game.spawnProjectile(
+        this.x + muzzle.x * scale,
+        this.y + muzzle.y * scale,
+        -Math.PI / 2,
+        360,
+        damage,
+        "player",
+        "bigGun",
+        visual.projectileKey,
+        { piercing: true, hitRadius: 11, life: 2.4 },
+      );
+      this.game.shake = Math.max(this.game.shake, 2.5);
+    });
+  }
+
+  previewWeaponFire(key) {
+    if (key === "auto") this._fireAuto(0.7);
+    else if (key === "rockets") this._tryFireRockets(true);
+    else if (key === "zapper") this._tryFireZapper(true);
+    else if (key === "bigGun") this.fireBigGun(true);
   }
 
   damage(amount) {
@@ -206,12 +372,20 @@ export class Player {
     return "playerVeryDamaged";
   }
 
-  draw(ctx, img) {
+  draw(ctx, img, options = {}) {
+    const {
+      showWeapon = true,
+      showShield = true,
+      showPassive = true,
+      showKeystone = true,
+      forceEngineLevel = null,
+    } = options;
+
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.bank);
+    ctx.imageSmoothingEnabled = false;
 
-    const tier   = this.shipTier();
     const branch = this.shipBranch();
     const bc     = BRANCH_COLORS[branch];
     const t      = this.game.time;
@@ -220,123 +394,19 @@ export class Player {
 
     const speed = Math.hypot(this.vx, this.vy);
     const speedBoost = clamp(speed / 320, 0, 1);
-    const firePulse  = clamp(1 - this.fireTimer / this.fireRate, 0, 1) * 0.22;
-    const flame      = 0.78 + Math.sin(t * 24) * 0.16 + speedBoost * 0.28 + firePulse;
+    this._drawEngineLayers(ctx, img, t, speedBoost, forceEngineLevel);
 
-    // === T3/T4: side engine nozzles (drawn first, behind everything) ===
-    if (tier >= 3) {
-      this._drawSideEngines(ctx, tier, bc, speedBoost, flame, t);
-    }
-
-    // === Primary thruster cone ===
-    ctx.globalAlpha = 0.78 + speedBoost * 0.14;
-    const engineColor = tier >= 2 ? bc.engine : "rgba(140,240,255,1)";
-    const grad = ctx.createRadialGradient(0, 28, 1, 0, 40 + speedBoost * 10, 26 + speedBoost * 8);
-    grad.addColorStop(0, engineColor);
-    grad.addColorStop(0.38, "rgba(54,140,255,0.65)");
-    grad.addColorStop(1, "rgba(30,80,255,0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(0, 33 + speedBoost * 4, 12 * flame, 24 * flame, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Secondary wider glow
-    ctx.globalAlpha = 0.22 + speedBoost * 0.14;
-    const grad2 = ctx.createRadialGradient(0, 36, 1, 0, 52, 40);
-    grad2.addColorStop(0, "rgba(88,200,255,0.85)");
-    grad2.addColorStop(1, "rgba(30,80,255,0)");
-    ctx.fillStyle = grad2;
-    ctx.beginPath();
-    ctx.ellipse(0, 38, (20 + speedBoost * 7) * flame, (36 + speedBoost * 10) * flame, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Engine module evolves permanently with Engine Boost stacks.
-    const engineKeys = ["playerEngine", "playerEnginePulse", "playerEngineBurst", "playerEngineSuper"];
-    const engine = img.get(engineKeys[Math.min(3, this.speedLevel)]);
-    ctx.globalAlpha = 0.82;
-    if (engine) this.game.drawAsset(ctx, engine, 0, 0, RENDER_CONFIG.player.w, RENDER_CONFIG.player.h);
-
-    // MK-II+ silhouette extensions sit behind the original hull artwork.
-    if (tier >= 2) this._drawEvolutionFrame(ctx, tier, bc);
-
-    // === T3+: side cannon stubs (behind ship body) ===
-    if (tier >= 3) {
-      this._drawSideCannons(ctx, tier, bc);
-    }
-
-    // Ship body
     const ship = img.get(this.damageSprite());
     ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
     if (ship) this.game.drawAsset(ctx, ship, 0, 0, RENDER_CONFIG.player.w, RENDER_CONFIG.player.h);
     else this.game.drawFallbackShip(ctx, 0, 0, 1);
 
-    // Permanent upgrade modules. Weapon layers share the source ship's 48×48
-    // registration, so they stay aligned at every visual tier.
-    this._drawUpgradeModules(ctx, img, tier, bc, t);
+    if (showPassive) this._drawPassiveUpgradeLayers(ctx, bc, t);
+    if (showWeapon) this._drawWeaponLayer(ctx, img, t);
+    if (showKeystone) this._drawKeystoneAura(ctx, t);
+    if (showShield) this._drawShieldLayer(ctx, img, t);
 
-    // === T4: energy core orb (drawn over ship body) ===
-    if (tier >= 4) {
-      this._drawEnergyCore(ctx, bc, t);
-    }
-
-    // Shield ring — branch-colored at T2+
-    if (this.shield > 4) {
-      const shieldFrac = this.shield / this.maxShield;
-      const pulse = Math.sin(t * 5);
-      const shieldColor = tier >= 2 ? bc.glow : CONFIG.colors.cyan;
-      ctx.globalAlpha = (0.18 + 0.1 * pulse) * shieldFrac;
-      ctx.strokeStyle = shieldColor;
-      ctx.lineWidth = (tier >= 3 ? 3 : 2.5) + Math.min(2, this.shieldLevel * 0.35);
-      ctx.shadowColor = shieldColor;
-      ctx.shadowBlur = tier >= 3 ? 14 : 10;
-      ctx.beginPath();
-      const shieldRadius = 44 + Math.min(5, this.shieldLevel);
-      ctx.arc(0, 0, shieldRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 0.04 * shieldFrac;
-      ctx.fillStyle = shieldColor;
-      ctx.beginPath();
-      ctx.arc(0, 0, shieldRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    // Keystone visual aura
-    if (this.keystoneId) {
-      const kPulse = 0.55 + Math.sin(t * 3.5) * 0.2;
-      if (this.keystoneId === "overcharged") {
-        ctx.globalCompositeOperation = "lighter";
-        ctx.globalAlpha = 0.12 * kPulse;
-        ctx.fillStyle = "#cc66ff";
-        ctx.beginPath();
-        ctx.arc(0, 0, 52, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 0.55 * kPulse;
-        ctx.strokeStyle = "#cc66ff";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, 50, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (this.keystoneId === "siege") {
-        ctx.globalCompositeOperation = "lighter";
-        ctx.globalAlpha = 0.14 * kPulse;
-        ctx.fillStyle = "#ff8800";
-        ctx.beginPath();
-        ctx.arc(0, 0, 46, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (this.keystoneId === "reactor") {
-        ctx.globalCompositeOperation = "lighter";
-        ctx.globalAlpha = 0.12 * kPulse;
-        ctx.fillStyle = "#00ffcc";
-        ctx.beginPath();
-        ctx.arc(0, 0, 48, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = 1;
-    }
-
-    // Hit flash
     if (this.hitFlash > 0) {
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = this.hitFlash / 0.14;
@@ -346,6 +416,131 @@ export class Player {
       ctx.fill();
     }
 
+    ctx.restore();
+  }
+
+  _drawEngineLayers(ctx, img, t, speedBoost, forceEngineLevel) {
+    const engineLevel = forceEngineLevel ?? this.speedLevel;
+    const engine = playerEngineVisual(engineLevel);
+    const activeScene = this.game.state === "playing" || this.game.state === "visualTest";
+    const powering = activeScene && (this.game.input.active || speedBoost > 0.08);
+    const effect = powering ? engine.powering : engine.idle;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+
+    // The Foozle effect sheets include glow pixels inside the engine nozzle.
+    // Draw the static module first so Burst/Base effects are not almost fully
+    // hidden; the hull is drawn afterwards and still masks the inner overlap.
+    const module = img.get(engine.moduleKey);
+    if (module) this.game.drawAsset(ctx, module, 0, 0, RENDER_CONFIG.player.w, RENDER_CONFIG.player.h);
+
+    this._drawStripFrame(
+      ctx,
+      img.get(effect.assetKey),
+      PLAYER_MODULE_FRAME,
+      PLAYER_MODULE_FRAME,
+      effect.frameCount,
+      t * PLAYER_ANIMATION_FPS,
+      RENDER_CONFIG.player.w,
+    );
+    ctx.restore();
+  }
+
+  _drawPassiveUpgradeLayers(ctx, bc, t) {
+    if (this.hpLevel > 0) this._drawHullPlates(ctx, bc);
+    if (this.magnet > 0) this._drawMagnetCoils(ctx, t);
+    if (this.pulse > 0 || this.pulseReactor) this._drawPulseReactor(ctx, t);
+  }
+
+  _drawWeaponLayer(ctx, img, t) {
+    let key = this.equippedWeaponVisualKey();
+    let activePriority = -1;
+    for (const [candidate, state] of Object.entries(this.weaponAnimations)) {
+      if (t >= state.activeUntil) continue;
+      if (candidate === "auto" && this.fireLevel === 0 && this.twin === 0) continue;
+      if (candidate === "rockets" && (this.rocket === 0 || this.rocketDisabled)) continue;
+      if (candidate === "zapper" && this.zapper === 0) continue;
+      if (candidate === "bigGun" && this.beam === 0) continue;
+      const priority = PLAYER_WEAPON_VISUALS[candidate]?.activePriority ?? 0;
+      if (priority > activePriority) {
+        key = candidate;
+        activePriority = priority;
+      }
+    }
+    const visual = PLAYER_WEAPON_VISUALS[key];
+    if (!visual) return;
+
+    const state = this.weaponAnimations[key];
+    const active = state && t < state.activeUntil;
+    const frame = active
+      ? Math.floor((t - state.startedAt) / state.frameDuration) % state.frameCount
+      : 0;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    this._drawStripFrame(
+      ctx,
+      img.get(visual.assetKey),
+      PLAYER_MODULE_FRAME,
+      PLAYER_MODULE_FRAME,
+      visual.frameCount,
+      frame,
+      RENDER_CONFIG.player.w,
+    );
+    ctx.restore();
+  }
+
+  _drawShieldLayer(ctx, img, t) {
+    const invincible = this.invuln > 0;
+    if (!invincible && (this.shield <= 0 || this.shieldLevel <= 0)) return;
+
+    const visual = invincible ? PLAYER_INVINCIBILITY_VISUAL : playerShieldVisual(this.shieldLevel - 1);
+    const shieldFraction = this.maxShield > 0 ? clamp(this.shield / this.maxShield, 0, 1) : 0;
+    const targetSize = RENDER_CONFIG.playerShield.w;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = invincible ? 1 : 0.5 + shieldFraction * 0.45;
+    this._drawStripFrame(
+      ctx,
+      img.get(visual.assetKey),
+      PLAYER_SHIELD_FRAME,
+      PLAYER_SHIELD_FRAME,
+      visual.frameCount,
+      t * PLAYER_ANIMATION_FPS,
+      targetSize,
+    );
+    ctx.restore();
+  }
+
+  _drawKeystoneAura(ctx, t) {
+    if (!this.keystoneId) return;
+
+    const colors = {
+      overcharged: "#cc66ff",
+      siege: "#ff8800",
+      reactor: "#00ffcc",
+    };
+    const color = colors[this.keystoneId];
+    if (!color) return;
+
+    const pulse = 0.55 + Math.sin(t * 3.5) * 0.2;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.1 * pulse;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, 0, 48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.42 * pulse;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 50, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -363,93 +558,8 @@ export class Player {
     ctx.drawImage(image, frame * frameW, 0, frameW, frameH, -dw / 2, -dh / 2, dw, dh);
   }
 
-  _drawEvolutionFrame(ctx, tier, bc) {
-    const extension = tier === 2 ? 3 : tier === 3 ? 7 : 11;
-    ctx.save();
-    ctx.globalAlpha = 0.82;
-    ctx.fillStyle = bc.primary;
-    ctx.strokeStyle = bc.glow;
-    ctx.lineWidth = 1.2;
-    ctx.shadowColor = bc.glow;
-    ctx.shadowBlur = tier >= 4 ? 8 : 4;
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(side * 17, -12);
-      ctx.lineTo(side * (27 + extension), -2);
-      ctx.lineTo(side * (25 + extension), 15);
-      ctx.lineTo(side * 15, 11);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      if (tier >= 3) {
-        ctx.fillStyle = "rgba(8,18,40,0.95)";
-        ctx.fillRect(side * (27 + extension) - (side > 0 ? 4 : 0), 2, side * 4, 12);
-        ctx.fillStyle = bc.primary;
-      }
-    }
-    ctx.restore();
-  }
-
-  _drawUpgradeModules(ctx, img, tier, bc, t) {
-    const size = RENDER_CONFIG.player.w;
-    const effectiveRate = this.fireRate * this.getEvolutionFireRateMultiplier();
-    const shotPhase = clamp(1 - this.fireTimer / Math.max(0.001, effectiveRate), 0, 0.999);
-
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-
-    // Auto-cannon animation remains mounted at all times.
-    ctx.globalAlpha = 0.88;
-    this._drawStripFrame(ctx, img.get("weaponAuto"), 48, 48, 7, shotPhase * 7, size);
-
-    // Multi Cannon levels are represented by the same 1–5 hardpoints that fire.
-    const barrelOffsets = [[0], [-10, 10], [-12, 0, 12], [-16, -5, 5, 16], [-18, -9, 0, 9, 18]];
-    const barrels = barrelOffsets[Math.min(4, this.twin)];
-    ctx.fillStyle = CONFIG.colors.cyan;
-    ctx.shadowColor = CONFIG.colors.cyan;
-    ctx.shadowBlur = 5 + Math.min(5, this.fireLevel);
-    ctx.globalAlpha = 0.82;
-    for (const ox of barrels) {
-      ctx.beginPath();
-      ctx.roundRect(ox - 1.5, -31, 3, 10 + Math.min(4, this.fireLevel), 1.5);
-      ctx.fill();
-    }
-
-    // Rocket and zapper modules can coexist; neither hides the other.
-    if (this.rocket > 0 && !this.rocketDisabled) {
-      ctx.globalAlpha = 0.82;
-      this._drawStripFrame(ctx, img.get("weaponRockets"), 48, 48, 17, 0, size);
-      if (this.barrage > 0) this._drawBarrageRacks(ctx, this.barrage);
-    }
-    if (this.zapper > 0) {
-      ctx.globalAlpha = 0.72 + Math.sin(t * 5) * 0.08;
-      this._drawStripFrame(ctx, img.get("weaponZapper"), 48, 48, 14, 0, size);
-    }
-
-    if (this.hpLevel > 0) this._drawHullPlates(ctx, bc);
-    if (this.magnet > 0) this._drawMagnetCoils(ctx, t);
-    if (this.beam > 0) this._drawBeamEmitter(ctx, t);
-    if (this.pulse > 0 || this.pulseReactor) this._drawPulseReactor(ctx, t);
-
-    ctx.restore();
-  }
-
-  _drawBarrageRacks(ctx, level) {
-    ctx.fillStyle = CONFIG.colors.orange;
-    ctx.shadowColor = CONFIG.colors.orange;
-    ctx.shadowBlur = 7;
-    ctx.globalAlpha = 0.9;
-    const rows = Math.min(3, level);
-    for (const side of [-1, 1]) {
-      for (let row = 0; row < rows; row++) {
-        ctx.beginPath();
-        ctx.arc(side * (25 + row * 2), -7 + row * 7, 2.3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  }
-
   _drawHullPlates(ctx, bc) {
+    ctx.save();
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = bc.primary;
     ctx.strokeStyle = "rgba(255,255,255,0.55)";
@@ -466,10 +576,12 @@ export class Player {
       ctx.fill();
       ctx.stroke();
     }
-    ctx.globalCompositeOperation = "lighter";
+    ctx.restore();
   }
 
   _drawMagnetCoils(ctx, t) {
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
     const pulse = 0.65 + Math.sin(t * 4) * 0.2;
     ctx.strokeStyle = CONFIG.colors.pink;
     ctx.shadowColor = CONFIG.colors.pink;
@@ -481,20 +593,12 @@ export class Player {
       ctx.arc(side * 27, 8, 4 + Math.min(3, this.magnet), 0, Math.PI * 2);
       ctx.stroke();
     }
-  }
-
-  _drawBeamEmitter(ctx, t) {
-    const pulse = 0.75 + Math.sin(t * 8) * 0.2;
-    ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = CONFIG.colors.cyan;
-    ctx.shadowBlur = 10 + this.beam * 3;
-    ctx.globalAlpha = pulse;
-    ctx.beginPath();
-    ctx.roundRect(-2.5 - this.beam * 0.35, -36, 5 + this.beam * 0.7, 13, 2.5);
-    ctx.fill();
+    ctx.restore();
   }
 
   _drawPulseReactor(ctx, t) {
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
     const pulse = 0.72 + Math.sin(t * 6) * 0.22;
     const radius = 5 + this.pulse * 1.1;
     ctx.strokeStyle = "#3addc8";
@@ -507,57 +611,6 @@ export class Player {
     ctx.arc(0, -3, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-  }
-
-  // T3/T4: flanking engine nozzles
-  _drawSideEngines(ctx, tier, bc, speedBoost, flame, t) {
-    const offsets = [-22, 22];
-    const nozzleSize = tier >= 4 ? 1.3 : 1.0;
-    for (const ox of offsets) {
-      ctx.globalAlpha = 0.55 + speedBoost * 0.2;
-      const sg = ctx.createRadialGradient(ox, 32, 0, ox, 42, 14 * nozzleSize);
-      sg.addColorStop(0, bc.engine);
-      sg.addColorStop(0.5, "rgba(54,140,255,0.5)");
-      sg.addColorStop(1, "rgba(30,80,255,0)");
-      ctx.fillStyle = sg;
-      ctx.beginPath();
-      ctx.ellipse(ox, 34 + speedBoost * 3, (6 + speedBoost * 2) * flame * nozzleSize, (13 + speedBoost * 4) * flame * nozzleSize, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // T3+: side cannon stubs — small rectangles flanking the ship
-  _drawSideCannons(ctx, tier, bc) {
-    const offsets = [-24, 24];
-    const len = tier >= 4 ? 18 : 13;
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = bc.primary;
-    ctx.shadowColor = bc.glow;
-    ctx.shadowBlur = 6;
-    for (const ox of offsets) {
-      ctx.beginPath();
-      ctx.roundRect(ox - 3, -22, 6, len, 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-  }
-
-  // T4: pulsing energy core at ship center
-  _drawEnergyCore(ctx, bc, t) {
-    const pulse = 0.7 + Math.sin(t * 6.5) * 0.3;
-    // Outer glow
-    ctx.globalAlpha = 0.22 * pulse;
-    ctx.fillStyle = bc.glow;
-    ctx.shadowColor = bc.glow;
-    ctx.shadowBlur = 18;
-    ctx.beginPath();
-    ctx.arc(0, -4, 16 * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    // Bright inner orb
-    ctx.globalAlpha = 0.55 * pulse;
-    ctx.beginPath();
-    ctx.arc(0, -4, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.restore();
   }
 }

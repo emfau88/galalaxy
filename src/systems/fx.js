@@ -12,9 +12,16 @@ const FLEET_COLORS = {
   player:   { primary: "#58e6ff", secondary: "#ffffff", glow: "#58e6ff" },
 };
 
+const PLAYER_PROJECTILE_COLORS = {
+  playerAuto:   { primary: "#58e6ff", secondary: "#eaffff", glow: "#58e6ff" },
+  playerRocket: { primary: "#ff9a35", secondary: "#fff0a8", glow: "#ff6b28" },
+  playerZapper: { primary: "#d878ff", secondary: "#ffe7ff", glow: "#b64cff" },
+  playerBigGun: { primary: "#78ff8d", secondary: "#e8ffe4", glow: "#45e86a" },
+};
+
 // Returns the colour set for a visualKey or owner string.
 function colorsFor(visualKey, owner) {
-  if (owner === "player") return FLEET_COLORS.player;
+  if (owner === "player") return PLAYER_PROJECTILE_COLORS[visualKey] || FLEET_COLORS.player;
   if (!visualKey) return FLEET_COLORS.klaed;
   if (visualKey.startsWith("nairan"))   return FLEET_COLORS.nairan;
   if (visualKey.startsWith("nautolan")) return FLEET_COLORS.nautolan;

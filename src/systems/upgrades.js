@@ -25,7 +25,7 @@ const POOL = [
 
   // --- Zapper Family ---
   { id: "zapper",  name: "Zapper Chain",   desc: "Occasional lightning strike.",         icon: "pickupZapper",      family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
-  { id: "beam",    name: "Beam Cannon",    desc: "Energy beam. Higher levels recharge faster.", icon: "pickupZapper", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
+  { id: "beam",    name: "Big Space Gun",  desc: "Piercing energy orb. Higher levels recharge faster.", icon: "pickupZapper", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Rocket Family ---
   { id: "rocket",  name: "Rocket Burst",   desc: "Chance to launch homing rockets.",     icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
