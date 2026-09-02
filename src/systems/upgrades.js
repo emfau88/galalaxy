@@ -1,4 +1,5 @@
 import { CONFIG } from "../config.js";
+import { PLAYER_ENGINE_VISUALS, PLAYER_SHIELD_VISUALS, PLAYER_WEAPON_VISUALS } from "../data/playerVisuals.js";
 
 // Family color accents for card tinting
 const FAMILY_ACCENT = {
@@ -138,6 +139,77 @@ export class UpgradeSystem {
       case "reactor":     return "Auto pulse every 6s  ·  Speed −80";
       default:             return u.desc;
     }
+  }
+
+  _cardVisualTransition(u) {
+    const p = this.game.player;
+    const component = (assetKey, frameSize = 48) => ({ assetKey, frameSize });
+    const weapon = key => component(PLAYER_WEAPON_VISUALS[key].assetKey);
+    const engine = level => component(PLAYER_ENGINE_VISUALS[Math.min(3, level)].moduleKey);
+    const shield = level => level < 0 ? null : component(PLAYER_SHIELD_VISUALS[Math.min(2, level)].assetKey, 64);
+    switch (u.id) {
+      case "speed": return { label: "ENGINE", previous: engine(p.speedLevel), next: engine(p.speedLevel + 1) };
+      case "shield": return { label: "SHIELD", previous: shield(p.shieldLevel - 1), next: shield(p.shieldLevel) };
+      case "fire":
+      case "twin": return { label: "AUTO CANNON", previous: p.fireLevel || p.twin ? weapon("auto") : null, next: weapon("auto") };
+      case "rocket":
+      case "barrage":
+      case "siege": return { label: "ROCKETS", previous: p.rocket ? weapon("rockets") : null, next: weapon("rockets") };
+      case "zapper":
+      case "overcharged": return { label: "ZAPPER", previous: p.zapper ? weapon("zapper") : null, next: weapon("zapper") };
+      case "beam": return { label: "BIG GUN", previous: p.beam ? weapon("bigGun") : null, next: weapon("bigGun") };
+      default: return { label: "SYSTEM", previous: component(u.icon), next: component(u.icon) };
+    }
+  }
+
+  _drawCardComponent(ctx, img, visual, x, y, size, alpha = 1) {
+    if (!visual) {
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.strokeStyle = "rgba(220,235,255,0.55)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.28, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    const image = img.get(visual.assetKey);
+    if (!image) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = false;
+    const frame = visual.frameSize;
+    const sourceW = image.naturalWidth || image.width;
+    const sourceH = image.naturalHeight || image.height;
+    if (frame && sourceW >= frame && sourceH >= frame) {
+      ctx.drawImage(image, 0, 0, frame, frame, x - size / 2, y - size / 2, size, size);
+    } else {
+      this.game.drawAsset(ctx, image, x, y, size, size);
+    }
+    ctx.restore();
+  }
+
+  _drawVisualTransition(ctx, img, u, c, accent) {
+    const visual = this._cardVisualTransition(u);
+    const left = c.x + 30, right = c.x + 80, center = c.x + 55, y = c.y + 52;
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = accent.shadow;
+    ctx.beginPath();
+    ctx.roundRect(c.x + 12, c.y + 14, 84, 70, 11);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    this._drawCardComponent(ctx, img, visual.previous, left, y, 30, 0.44);
+    this._drawCardComponent(ctx, img, visual.next, right, y, 42, 1);
+    ctx.fillStyle = accent.shadow;
+    ctx.font = "800 13px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("→", center, y + 4);
+    ctx.globalAlpha = 0.8;
+    ctx.font = "800 8px system-ui";
+    ctx.fillText(visual.label, center, c.y + 78);
+    ctx.restore();
   }
 
   _drawLevelProgress(ctx, u, c, accent) {
@@ -367,19 +439,7 @@ export class UpgradeSystem {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Icon area background circle — family tinted
-      const ix = c.x + 56, iy = c.y + c.h / 2;
-      ctx.globalAlpha = 0.22;
-      ctx.fillStyle = accent.shadow;
-      ctx.beginPath();
-      ctx.arc(ix, iy, 28, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // Use the authored pickup art when available; canvas icon remains fallback.
-      const icon = img.get(u.icon);
-      if (icon) this.game.drawAsset(ctx, icon, ix, iy - 3, 48, 48);
-      else this.game.drawUpgradeIcon(ctx, u.id, ix, iy - 3, 22);
+      this._drawVisualTransition(ctx, img, u, c, accent);
 
       this._drawLevelProgress(ctx, u, c, accent);
 
@@ -408,18 +468,18 @@ export class UpgradeSystem {
         : u.maxLevel === null
           ? `STACK ${lvl} → ${lvl + 1}`
           : `LV ${lvl} → ${Math.min(u.maxLevel, lvl + 1)}`;
-      ctx.fillText(levelLabel, c.x + 98, c.y + 18);
+      ctx.fillText(levelLabel, c.x + 108, c.y + 18);
       ctx.globalAlpha = 1;
 
       // Upgrade name, exact effect, then short explanation.
       ctx.textAlign = "left";
       ctx.fillStyle = CONFIG.colors.white;
       ctx.font = "800 17px system-ui";
-      ctx.fillText(u.name, c.x + 98, c.y + 42);
+      ctx.fillText(u.name, c.x + 108, c.y + 42);
 
       ctx.fillStyle = accent.shadow;
       ctx.font = "700 10px system-ui";
-      ctx.fillText(this._effectPreview(u), c.x + 98, c.y + 63);
+      ctx.fillText(this._effectPreview(u), c.x + 108, c.y + 63);
 
       ctx.fillStyle = CONFIG.colors.dim;
       ctx.font = "400 11px system-ui";
@@ -429,8 +489,8 @@ export class UpgradeSystem {
         if ((line1 + wd).length < 31) line1 += (line1 ? " " : "") + wd;
         else line2 += (line2 ? " " : "") + wd;
       }
-      ctx.fillText(line1, c.x + 98, c.y + 84);
-      if (line2) ctx.fillText(line2, c.x + 98, c.y + 99);
+      ctx.fillText(line1, c.x + 108, c.y + 84);
+      if (line2) ctx.fillText(line2, c.x + 108, c.y + 99);
     }
 
     ctx.restore();

@@ -1,6 +1,7 @@
 import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp, dist2 } from "../utils.js";
 import { ENEMY_WEAPON_PROFILES } from "../data/projectiles.js";
+import { enemyVisualFor } from "../data/enemyVisuals.js";
 
 const DEFAULT_WEAPON_PROFILE = {
   speed: 210,
@@ -31,6 +32,14 @@ export class Enemy {
     this.imgKey = def.img;
     this.projVisual = Enemy._projVisual(type, boss);
     this.weaponProfile = ENEMY_WEAPON_PROFILES[this.projVisual] || DEFAULT_WEAPON_PROFILE;
+    this.visual = type.startsWith("nairan") || type.startsWith("nautolan") ? null : enemyVisualFor(type);
+    this.weaponAnimation = null;
+    this.pendingShots = [];
+    // Boss shields add a readable, authored defensive phase without making
+    // ordinary swarm ships visually noisy.
+    this.maxShield = boss ? Math.round(this.maxHp * 0.16) : 0;
+    this.shield = this.maxShield;
+    this.shieldFlash = 0;
     this.hitFlash = 0;
     this.fireTimer = boss ? 1.2 : 2.5 + Math.random() * 2;
     this.wobble = Math.random() * Math.PI * 2;
@@ -75,9 +84,41 @@ export class Enemy {
     );
   }
 
+  _queueWeaponShot(angle, options = {}) {
+    const weapon = this.visual?.weapon;
+    if (!weapon) {
+      this._spawnWeaponShot(angle, options);
+      return;
+    }
+    // A volley shares one authored animation; individual spread shots leave
+    // on its release frame instead of appearing before the gun has fired.
+    if (!this.weaponAnimation || this.game.time >= this.weaponAnimation.until) {
+      this.weaponAnimation = {
+        startedAt: this.game.time,
+        until: this.game.time + weapon.frameCount / weapon.fps,
+      };
+    }
+    this.pendingShots.push({
+      at: this.game.time + weapon.releaseFrame / weapon.fps,
+      angle,
+      options,
+    });
+  }
+
+  _releaseQueuedShots() {
+    for (let i = this.pendingShots.length - 1; i >= 0; i--) {
+      const shot = this.pendingShots[i];
+      if (shot.at > this.game.time) continue;
+      this.pendingShots.splice(i, 1);
+      if (!this.dead) this._spawnWeaponShot(shot.angle, shot.options);
+    }
+  }
+
   update(dt) {
     const p = this.game.player;
     this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.shieldFlash = Math.max(0, this.shieldFlash - dt);
+    this._releaseQueuedShots();
 
     if (this.boss) {
       // Boss enters arena and holds position in upper-middle area
@@ -114,14 +155,14 @@ export class Enemy {
         const spread = 0.18;
         for (let i = -1; i <= 1; i++) {
           const a = ang + i * spread;
-          this._spawnWeaponShot(a, { damageMult: 0.75, lane: i, facingAngle: ang });
+          this._queueWeaponShot(a, { damageMult: 0.75, lane: i, facingAngle: ang });
         }
       } else {
         this.fireTimer = this.weaponProfile.wideCooldown ?? 1.6;
         const spread = 0.30;
         for (let i = -2; i <= 2; i++) {
           const a = ang + i * spread;
-          this._spawnWeaponShot(a, {
+          this._queueWeaponShot(a, {
             speedMult: i === 0 ? 0.85 : 0.72,
             damageMult: i === 0 ? 1 : 0.6,
             lane: i,
@@ -132,7 +173,7 @@ export class Enemy {
     } else if (!this.boss && Enemy._canFire(this.type) && this.fireTimer <= 0) {
       this.fireTimer = this.weaponProfile.cooldown;
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
-      this._spawnWeaponShot(ang);
+      this._queueWeaponShot(ang);
     }
 
     if (dist2(this.x, this.y, p.x, p.y) < (this.r + p.r) ** 2) {
@@ -148,7 +189,10 @@ export class Enemy {
   }
 
   damage(amount) {
-    this.hp -= amount;
+    const absorbed = Math.min(this.shield, amount);
+    this.shield -= absorbed;
+    if (absorbed > 0) this.shieldFlash = 0.72;
+    this.hp -= amount - absorbed;
     this.hitFlash = 0.11;
     this.game.burst(this.x, this.y, CONFIG.colors.cyan, 5);
     if (this.hp <= 0) this.kill();
@@ -157,6 +201,7 @@ export class Enemy {
   kill() {
     if (this.dead) return;
     this.dead = true;
+    this.game.spawnEnemyDestruction(this);
     this.game.score += this.score;
     this.game.kills++;
     this.game.dropXp(this.x, this.y, this.boss ? 12 : 1 + Math.floor(this.score / 70));
@@ -178,6 +223,8 @@ export class Enemy {
     const image = img.get(this.imgKey);
     const rc = RENDER_CONFIG.enemies[this.type] || { w: this.r * 2, h: this.r * 2 };
     const size = this.boss ? rc.w * 1.85 : rc.w;
+
+    this._drawStrip(ctx, img.get(this.visual?.engine?.assetKey), this.visual?.frame, this.visual?.engine, this.game.time, size);
 
     // Boss: tight pulsing aura behind sprite — no big bubble for normal enemies
     if (this.boss) {
@@ -205,6 +252,20 @@ export class Enemy {
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
 
+    const weapon = this.visual?.weapon;
+    if (weapon && this.weaponAnimation && this.game.time < this.weaponAnimation.until) {
+      this._drawStrip(ctx, img.get(weapon.assetKey), this.visual.frame, weapon, this.game.time - this.weaponAnimation.startedAt, size);
+    }
+
+    if (this.visual?.shield && this.shield > 0 && this.shieldFlash > 0) {
+      const shieldAlpha = (0.18 + 0.42 * (this.shield / this.maxShield)) * (this.shieldFlash / 0.72);
+      ctx.save();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = shieldAlpha;
+      this._drawStrip(ctx, img.get(this.visual.shield.assetKey), this.visual.frame, this.visual.shield, this.game.time, size * 1.12);
+      ctx.restore();
+    }
+
     // Hit flash — brightens the sprite on damage
     if (this.hitFlash > 0) {
       ctx.globalCompositeOperation = "screen";
@@ -230,6 +291,17 @@ export class Enemy {
       ctx.shadowBlur = 0;
     }
 
+    ctx.restore();
+  }
+
+  _drawStrip(ctx, image, frameSize, animation, time, targetSize) {
+    if (!image || !frameSize || !animation) return;
+    const frame = Math.min(animation.frameCount - 1, Math.floor(time * animation.fps) % animation.frameCount);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.drawImage(image, frame * frameSize, 0, frameSize, frameSize, -targetSize / 2, -targetSize / 2, targetSize, targetSize);
     ctx.restore();
   }
 }

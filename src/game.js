@@ -13,6 +13,7 @@ import { UpgradeSystem } from "./systems/upgrades.js";
 import { FLEETS, pickFleetEnemy, pickSoloEnemy } from "./data/fleets.js";
 import { emitTrail, spawnHitSparks, spawnDeathBurst, emitSectorDust, spawnBossEntrance } from "./systems/fx.js";
 import { drawPulse } from "./systems/abilities.js";
+import { enemyVisualFor } from "./data/enemyVisuals.js";
 
 const PLAYER_VISUAL_TEST_STAGES = [
   { title: "STARTER SHIP", detail: "Base Engine · integrated starter weapon · no shield module", player: {} },
@@ -43,6 +44,8 @@ export class Game {
     this.time = 0;
     const searchParams = new URLSearchParams(window.location.search);
     this.visualTestMode = searchParams.get("test") === "upgrade-visuals";
+    this.upgradeCardTestMode = searchParams.get("test") === "upgrade-cards";
+    this.klaedTestMode = searchParams.get("test") === "klaed-combat";
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
     this.visualTestStartIndex = Number.isFinite(requestedStage)
       ? Math.max(0, Math.min(PLAYER_VISUAL_TEST_STAGES.length - 1, requestedStage))
@@ -77,6 +80,7 @@ export class Game {
     this.pickups = [];
     this.particles = [];
     this.zaps = [];
+    this.enemyDeaths = [];
     this.stars = [];
     this.asteroids = [];
     this.upgrades = new UpgradeSystem(this);
@@ -100,6 +104,8 @@ export class Game {
     this.loader.load().then(() => {
       if (this.state !== "loading") return;
       if (this.visualTestMode) this.startVisualTest();
+      else if (this.upgradeCardTestMode) this.startUpgradeCardTest();
+      else if (this.klaedTestMode) this.startKlaedCombatTest();
       else this.state = "title";
     });
 
@@ -150,6 +156,7 @@ export class Game {
     this.pickups = [];
     this.particles = [];
     this.zaps = [];
+    this.enemyDeaths = [];
     this.score = 0;
     this.kills = 0;
     this.level = 1;
@@ -174,6 +181,38 @@ export class Game {
     this.state = "visualTest";
     this.visualTestIndex = this.visualTestStartIndex;
     this._applyVisualTestStage();
+  }
+
+  startUpgradeCardTest() {
+    this.player = new Player(this);
+    Object.assign(this.player, { speedLevel: 1, shieldLevel: 1, fireLevel: 1, rocket: 1, zapper: 1 });
+    this.player.speed = 386;
+    this.player.maxShield = 67;
+    this.player.shield = this.player.maxShield;
+    const wanted = new Set(["speed", "shield", "zapper"]);
+    this.upgrades.choices = this.upgrades.pool.filter(upgrade => wanted.has(upgrade.id));
+    const w = 330, h = 112;
+    this.upgrades.cards = this.upgrades.choices.map((_, index) => ({
+      x: (CONFIG.designW - w) / 2, y: 232 + index * 128, w, h,
+    }));
+    this.state = "levelUp";
+  }
+
+  startKlaedCombatTest() {
+    this.startRun();
+    this.bossActive = true; // prevent the normal sector spawner in this QA scene
+    this.player.x = CONFIG.designW / 2;
+    this.player.y = 620;
+    this.player.fireLevel = 1;
+    this.player.shieldLevel = 2;
+    this.player.maxShield = 79;
+    this.player.shield = this.player.maxShield;
+    this.enemies = [
+      new Enemy(this, "frigate", 105, 175),
+      new Enemy(this, "battlecruiser", 315, 200),
+      new Enemy(this, "dreadnought", 210, 105, true),
+    ];
+    for (const enemy of this.enemies) enemy.fireTimer = 0.35;
   }
 
   _applyVisualTestStage() {
@@ -271,6 +310,7 @@ export class Game {
 
     for (const p of this.particles) p.update(dt);
     for (const z of this.zaps) z.life -= dt;
+    for (const death of this.enemyDeaths) death.age += dt;
     this.particles = this.particles.filter(p => !p.dead).slice(-CONFIG.particleCap);
     this.zaps = this.zaps.filter(z => z.life > 0);
 
@@ -569,6 +609,7 @@ export class Game {
     this.enemies = this.enemies.filter(e => !e.dead);
     this.projectiles = this.projectiles.filter(p => !p.dead).slice(-CONFIG.projectileCap);
     this.pickups = this.pickups.filter(p => !p.dead).slice(-CONFIG.pickupCap);
+    this.enemyDeaths = this.enemyDeaths.filter(death => death.age < death.duration);
   }
 
   // Inline dist2 for use within Game (entities import from utils.js directly)
@@ -651,6 +692,21 @@ export class Game {
     const life = secondary ? 0.13 : 0.18;
     this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary });
     this.burst(x2, y2, CONFIG.colors.pink, secondary ? 5 : 14);
+  }
+
+  spawnEnemyDestruction(enemy) {
+    if (enemy.type.startsWith("nairan") || enemy.type.startsWith("nautolan")) return;
+    const visual = enemyVisualFor(enemy.type);
+    if (!visual?.destruction || this.enemyDeaths.length >= 30) return;
+    this.enemyDeaths.push({
+      x: enemy.x,
+      y: enemy.y,
+      angle: enemy._facingAngle() + Math.PI / 2,
+      size: (RENDER_CONFIG.enemies[enemy.type]?.w || enemy.r * 2) * (enemy.boss ? 1.85 : 1),
+      visual,
+      age: 0,
+      duration: visual.destruction.frameCount / visual.destruction.fps,
+    });
   }
 
   deathBurst(enemy) { spawnDeathBurst(this, enemy.x, enemy.y, enemy); }
@@ -860,6 +916,7 @@ export class Game {
     for (const p of this.pickups) p.draw(ctx);
     for (const pr of this.projectiles) pr.draw(ctx, this);
     for (const e of this.enemies) e.draw(ctx, this.loader);
+    this.drawEnemyDestructions(ctx);
     this.player.draw(ctx, this.loader);
     drawPulse(ctx, this.player);
 
@@ -911,6 +968,26 @@ export class Game {
       ctx.font = "700 14px system-ui";
       ctx.fillStyle = CONFIG.colors.dim;
       ctx.fillText("DREADNOUGHT SIGNATURE DETECTED", CONFIG.designW / 2, 122);
+      ctx.restore();
+    }
+  }
+
+  drawEnemyDestructions(ctx) {
+    for (const death of this.enemyDeaths) {
+      const animation = death.visual.destruction;
+      const image = this.loader.get(animation.assetKey);
+      if (!image) continue;
+      const frame = Math.min(animation.frameCount - 1, Math.floor(death.age * animation.fps));
+      ctx.save();
+      ctx.translate(death.x, death.y);
+      ctx.rotate(death.angle);
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = Math.min(1, (death.duration - death.age) * 5);
+      ctx.drawImage(
+        image,
+        frame * death.visual.frame, 0, death.visual.frame, death.visual.frame,
+        -death.size / 2, -death.size / 2, death.size, death.size,
+      );
       ctx.restore();
     }
   }
