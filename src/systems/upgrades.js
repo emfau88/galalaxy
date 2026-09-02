@@ -377,6 +377,7 @@ export class UpgradeSystem {
         break;
     }
     this._pickCount++;
+    this.game.input.cancelMovement();
     this.game.state = "playing";
   }
 

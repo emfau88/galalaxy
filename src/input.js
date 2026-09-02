@@ -21,6 +21,16 @@ export class Input {
     const down = e => {
       e.preventDefault();
       const p = this.getPoint(e);
+      // Upgrade cards are a modal UI: their tap must never become a ship
+      // destination. This avoids a one-frame jump toward the selected card
+      // when the game resumes immediately after the pick.
+      if (this.game.state === "levelUp") {
+        this.cancelMovement();
+        this.justTapped = true;
+        this.tapX = p.wx;
+        this.tapY = p.wy;
+        return;
+      }
       // If tap lands inside a registered exclusion zone, fire as tap-only — no ship movement.
       if (this.exclusionZones.some(z =>
         p.wx >= z.x && p.wx <= z.x + z.w && p.wy >= z.y && p.wy <= z.y + z.h
@@ -44,7 +54,7 @@ export class Input {
     };
 
     const move = e => {
-      if (!this.active) return;
+      if (!this.active || this.game.state !== "playing") return;
       e.preventDefault();
       const p = this.getPoint(e);
       this.x = p.x;
@@ -81,6 +91,12 @@ export class Input {
     // Clamp so ship stays within the same play-area bounds player.update enforces (36, 88 … W-36, H-38)
     this.shipX = Math.max(36, Math.min(CONFIG.designW - 36, this.worldX + ox));
     this.shipY = Math.max(88, Math.min(CONFIG.designH - 38, this.worldY - oy));
+  }
+
+  cancelMovement() {
+    this.active = false;
+    this.pointerId = null;
+    this.isTouch = false;
   }
 
   getPoint(e) {

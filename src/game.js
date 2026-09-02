@@ -664,6 +664,7 @@ export class Game {
       this.level++;
       this.xpNeed = Math.floor(this.xpNeed * 1.28 + 4);
       this.upgrades.roll();
+      this.input.cancelMovement();
       this.state = "levelUp";
     }
   }
