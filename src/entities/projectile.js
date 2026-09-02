@@ -1,6 +1,6 @@
 import { CONFIG } from "../config.js";
 import { clamp } from "../utils.js";
-import { PROJECTILE_VISUALS } from "../data/projectiles.js";
+import { ENEMY_WEAPON_PROFILES, PROJECTILE_VISUALS } from "../data/projectiles.js";
 
 export class Projectile {
   constructor(x, y, a, speed, dmg, owner, kind, visualKey = null) {
@@ -12,24 +12,33 @@ export class Projectile {
     this.owner = owner;
     this.kind = kind;
     this.visualKey = visualKey || (owner === "player" ? kind : "klaedNormal");
-    this.r = kind === "rocket" ? 6 : kind === "enemy" ? 5 : 4;
-    this.life = kind === "rocket" ? 1.9 : (kind === "enemy" && owner === "enemy") ? 2.6 : 1.25;
+    this.weaponProfile = owner === "enemy" ? ENEMY_WEAPON_PROFILES[this.visualKey] : null;
+    this.r = this.weaponProfile?.hitRadius ?? (kind === "rocket" ? 6 : kind === "enemy" ? 5 : 4);
+    this.life = this.weaponProfile?.life ?? (kind === "rocket" ? 1.9 : (kind === "enemy" && owner === "enemy") ? 2.6 : 1.25);
+    this.age = 0;
     this.dead = false;
   }
 
   update(dt, game) {
+    this.age += dt;
+
     if (this.kind === "rocket" && this.owner === "player") {
       const t = game.closestEnemy(this.x, this.y, 220);
       if (t) {
-        const desired = Math.atan2(t.y - this.y, t.x - this.x);
-        const cur = Math.atan2(this.vy, this.vx);
-        let d = desired - cur;
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        const na = cur + clamp(d, -dt * 3.4, dt * 3.4);
-        const sp = Math.hypot(this.vx, this.vy);
-        this.vx = Math.cos(na) * sp;
-        this.vy = Math.sin(na) * sp;
+        this._steerToward(t.x, t.y, 3.4, dt);
+      }
+    } else if (this.owner === "enemy" && this.weaponProfile?.behavior === "homing") {
+      const p = game.player;
+      this._steerToward(p.x, p.y, this.weaponProfile.turnRate ?? 0.5, dt);
+    }
+
+    if (this.weaponProfile?.acceleration) {
+      const speed = Math.hypot(this.vx, this.vy);
+      if (speed > 0) {
+        const nextSpeed = speed + this.weaponProfile.acceleration * dt;
+        const mult = nextSpeed / speed;
+        this.vx *= mult;
+        this.vy *= mult;
       }
     }
 
@@ -39,6 +48,41 @@ export class Projectile {
     if (this.life <= 0 || this.x < -70 || this.x > CONFIG.designW + 70 || this.y < -80 || this.y > CONFIG.designH + 80) {
       this.dead = true;
     }
+  }
+
+  _steerToward(x, y, turnRate, dt) {
+    const desired = Math.atan2(y - this.y, x - this.x);
+    const current = Math.atan2(this.vy, this.vx);
+    let delta = desired - current;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const nextAngle = current + clamp(delta, -dt * turnRate, dt * turnRate);
+    const speed = Math.hypot(this.vx, this.vy);
+    this.vx = Math.cos(nextAngle) * speed;
+    this.vy = Math.sin(nextAngle) * speed;
+  }
+
+  _drawAssetFrame(ctx, img, vis) {
+    const imageW = img.naturalWidth || img.width;
+    const imageH = img.naturalHeight || img.height;
+    const frameW = vis.frameW || imageW;
+    const frameH = vis.frameH || imageH;
+    if (!imageW || !imageH || !frameW || !frameH) return false;
+
+    const availableFrames = Math.max(1, Math.floor(imageW / frameW));
+    const frameCount = Math.min(vis.frameCount || 1, availableFrames);
+    const frameIndex = frameCount > 1
+      ? Math.floor(this.age * (vis.fps || 12)) % frameCount
+      : 0;
+    const scale = Math.min(vis.w / frameW, vis.h / frameH);
+    const drawW = frameW * scale;
+    const drawH = frameH * scale;
+    ctx.drawImage(
+      img,
+      frameIndex * frameW, 0, frameW, frameH,
+      -drawW / 2, -drawH / 2, drawW, drawH
+    );
+    return true;
   }
 
   draw(ctx, game) {
@@ -54,9 +98,10 @@ export class Projectile {
       if (img) {
         ctx.globalCompositeOperation = "lighter";
         ctx.globalAlpha = 0.92;
-        game.drawAsset(ctx, img, 0, 0, vis.w, vis.h);
-        ctx.restore();
-        return;
+        if (this._drawAssetFrame(ctx, img, vis)) {
+          ctx.restore();
+          return;
+        }
       }
     }
 

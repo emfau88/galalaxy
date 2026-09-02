@@ -9,6 +9,8 @@ const BRANCH_COLORS = {
   siege:   { primary: "#ffb060", engine: "rgba(255,160,60,1)",  glow: "#ffaa40" },
 };
 
+const SHIP_TIER_SCALE = [0, 1, 1.06, 1.12, 1.18];
+
 export class Player {
   constructor(game) {
     this.game = game;
@@ -23,6 +25,7 @@ export class Player {
     this.shield = 35;
     this.speed = 360;
     this.fireRate = 0.28;
+    this.fireLevel = 0;
     this.fireTimer = 0;
     this.invuln = 0;
     this.hitFlash = 0;
@@ -31,6 +34,9 @@ export class Player {
     this.zapper = 0;
     this.magnet = 0;
     this.shieldRegen = 2.2;
+    this.speedLevel = 0;
+    this.shieldLevel = 0;
+    this.hpLevel = 0;
     this.bank = 0;
     // Signature abilities (0 = not unlocked)
     this.beam    = 0;
@@ -46,6 +52,10 @@ export class Player {
   // Returns 1–4 based on current sector
   shipTier() {
     return Math.min(4, this.game.currentSectorIndex + 1);
+  }
+
+  shipVisualScale() {
+    return SHIP_TIER_SCALE[this.shipTier()] || 1;
   }
 
   // Movement responsiveness bonus by tier (total, not per-frame stack).
@@ -115,6 +125,7 @@ export class Player {
 
   fire() {
     const g = this.game;
+    const visualScale = this.shipVisualScale();
     // twin 0: single center | 1: two barrels | 2: three | 3: four | 4: five
     const twinOffsets = [
       [0],
@@ -126,7 +137,7 @@ export class Player {
     const shots = twinOffsets[Math.min(this.twin, 4)];
     const twinDmg = 11 + this.twin * 1.5;
     for (const off of shots) {
-      g.spawnProjectile(this.x + off, this.y - 28, -Math.PI / 2, 640, twinDmg, "player", "laser");
+      g.spawnProjectile(this.x + off * visualScale, this.y - 28 * visualScale, -Math.PI / 2, 640, twinDmg, "player", "laser");
     }
 
     if (this.rocket > 0 && !this.rocketDisabled) {
@@ -138,7 +149,7 @@ export class Player {
           const target = g.closestEnemy(this.x + ox, this.y, 420);
           const ang = target ? Math.atan2(target.y - this.y, target.x - this.x) + (i - 1) * 0.08 : -Math.PI / 2 + (i - 1) * 0.08;
           const dmgMult = this.siegePayload ? 2.5 : 1;
-          g.spawnProjectile(this.x + ox, this.y - 25, ang, 420 + i * 12, (22 + this.rocket * 4 + this.barrage * 5) * dmgMult, "player", "rocket");
+          g.spawnProjectile(this.x + ox * visualScale, this.y - 25 * visualScale, ang, 420 + i * 12, (22 + this.rocket * 4 + this.barrage * 5) * dmgMult, "player", "rocket");
         }
       }
     }
@@ -153,7 +164,7 @@ export class Player {
         const primary = g.closestEnemy(this.x, this.y, 300);
         if (primary) {
           primary.damage(zapDmg);
-          g.spawnZap(this.x, this.y - 10, primary.x, primary.y);
+          g.spawnZap(this.x, this.y - 10 * visualScale, primary.x, primary.y);
           // Chain from zapper level 2 (was 3); range 200 (was 140) — visibly useful on mobile.
           const chainCount = overcharged ? 2 : (this.zapper >= 2 ? 1 : 0);
           if (chainCount > 0) {
@@ -204,6 +215,8 @@ export class Player {
     const branch = this.shipBranch();
     const bc     = BRANCH_COLORS[branch];
     const t      = this.game.time;
+    const visualScale = this.shipVisualScale();
+    ctx.scale(visualScale, visualScale);
 
     const speed = Math.hypot(this.vx, this.vy);
     const speedBoost = clamp(speed / 320, 0, 1);
@@ -237,20 +250,14 @@ export class Player {
     ctx.ellipse(0, 38, (20 + speedBoost * 7) * flame, (36 + speedBoost * 10) * flame, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Engine overlay asset
-    const engine = img.get("playerEngine");
-    ctx.globalAlpha = 0.7;
-    if (engine) this.game.drawAsset(ctx, engine, 0, 20, RENDER_CONFIG.playerEngine.w, RENDER_CONFIG.playerEngine.h);
+    // Engine module evolves permanently with Engine Boost stacks.
+    const engineKeys = ["playerEngine", "playerEnginePulse", "playerEngineBurst", "playerEngineSuper"];
+    const engine = img.get(engineKeys[Math.min(3, this.speedLevel)]);
+    ctx.globalAlpha = 0.82;
+    if (engine) this.game.drawAsset(ctx, engine, 0, 0, RENDER_CONFIG.player.w, RENDER_CONFIG.player.h);
 
-    // Weapon canvas icon — behind ship body
-    ctx.globalAlpha = 0.88;
-    if (this.rocket > 0) {
-      this.game.drawWeaponIcon(ctx, "rocket", 0, -18);
-    } else if (this.zapper > 0) {
-      this.game.drawWeaponIcon(ctx, "zapper", 0, -18);
-    } else {
-      this.game.drawWeaponIcon(ctx, "auto", 0, -18);
-    }
+    // MK-II+ silhouette extensions sit behind the original hull artwork.
+    if (tier >= 2) this._drawEvolutionFrame(ctx, tier, bc);
 
     // === T3+: side cannon stubs (behind ship body) ===
     if (tier >= 3) {
@@ -262,6 +269,10 @@ export class Player {
     ctx.globalAlpha = 1;
     if (ship) this.game.drawAsset(ctx, ship, 0, 0, RENDER_CONFIG.player.w, RENDER_CONFIG.player.h);
     else this.game.drawFallbackShip(ctx, 0, 0, 1);
+
+    // Permanent upgrade modules. Weapon layers share the source ship's 48×48
+    // registration, so they stay aligned at every visual tier.
+    this._drawUpgradeModules(ctx, img, tier, bc, t);
 
     // === T4: energy core orb (drawn over ship body) ===
     if (tier >= 4) {
@@ -275,16 +286,17 @@ export class Player {
       const shieldColor = tier >= 2 ? bc.glow : CONFIG.colors.cyan;
       ctx.globalAlpha = (0.18 + 0.1 * pulse) * shieldFrac;
       ctx.strokeStyle = shieldColor;
-      ctx.lineWidth = tier >= 3 ? 3 : 2.5;
+      ctx.lineWidth = (tier >= 3 ? 3 : 2.5) + Math.min(2, this.shieldLevel * 0.35);
       ctx.shadowColor = shieldColor;
       ctx.shadowBlur = tier >= 3 ? 14 : 10;
       ctx.beginPath();
-      ctx.arc(0, 0, 44, 0, Math.PI * 2);
+      const shieldRadius = 44 + Math.min(5, this.shieldLevel);
+      ctx.arc(0, 0, shieldRadius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 0.04 * shieldFrac;
       ctx.fillStyle = shieldColor;
       ctx.beginPath();
-      ctx.arc(0, 0, 44, 0, Math.PI * 2);
+      ctx.arc(0, 0, shieldRadius, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -335,6 +347,166 @@ export class Player {
     }
 
     ctx.restore();
+  }
+
+  _drawStripFrame(ctx, image, frameW, frameH, frameCount, frameIndex, targetSize) {
+    if (!image) return;
+    const imageW = image.naturalWidth || image.width;
+    const imageH = image.naturalHeight || image.height;
+    if (!imageW || !imageH) return;
+    const available = Math.max(1, Math.floor(imageW / frameW));
+    const frame = Math.min(frameCount, available) > 1
+      ? Math.abs(Math.floor(frameIndex)) % Math.min(frameCount, available)
+      : 0;
+    const scale = Math.min(targetSize / frameW, targetSize / frameH);
+    const dw = frameW * scale, dh = frameH * scale;
+    ctx.drawImage(image, frame * frameW, 0, frameW, frameH, -dw / 2, -dh / 2, dw, dh);
+  }
+
+  _drawEvolutionFrame(ctx, tier, bc) {
+    const extension = tier === 2 ? 3 : tier === 3 ? 7 : 11;
+    ctx.save();
+    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = bc.primary;
+    ctx.strokeStyle = bc.glow;
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = bc.glow;
+    ctx.shadowBlur = tier >= 4 ? 8 : 4;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(side * 17, -12);
+      ctx.lineTo(side * (27 + extension), -2);
+      ctx.lineTo(side * (25 + extension), 15);
+      ctx.lineTo(side * 15, 11);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      if (tier >= 3) {
+        ctx.fillStyle = "rgba(8,18,40,0.95)";
+        ctx.fillRect(side * (27 + extension) - (side > 0 ? 4 : 0), 2, side * 4, 12);
+        ctx.fillStyle = bc.primary;
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawUpgradeModules(ctx, img, tier, bc, t) {
+    const size = RENDER_CONFIG.player.w;
+    const effectiveRate = this.fireRate * this.getEvolutionFireRateMultiplier();
+    const shotPhase = clamp(1 - this.fireTimer / Math.max(0.001, effectiveRate), 0, 0.999);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    // Auto-cannon animation remains mounted at all times.
+    ctx.globalAlpha = 0.88;
+    this._drawStripFrame(ctx, img.get("weaponAuto"), 48, 48, 7, shotPhase * 7, size);
+
+    // Multi Cannon levels are represented by the same 1–5 hardpoints that fire.
+    const barrelOffsets = [[0], [-10, 10], [-12, 0, 12], [-16, -5, 5, 16], [-18, -9, 0, 9, 18]];
+    const barrels = barrelOffsets[Math.min(4, this.twin)];
+    ctx.fillStyle = CONFIG.colors.cyan;
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 5 + Math.min(5, this.fireLevel);
+    ctx.globalAlpha = 0.82;
+    for (const ox of barrels) {
+      ctx.beginPath();
+      ctx.roundRect(ox - 1.5, -31, 3, 10 + Math.min(4, this.fireLevel), 1.5);
+      ctx.fill();
+    }
+
+    // Rocket and zapper modules can coexist; neither hides the other.
+    if (this.rocket > 0 && !this.rocketDisabled) {
+      ctx.globalAlpha = 0.82;
+      this._drawStripFrame(ctx, img.get("weaponRockets"), 48, 48, 17, 0, size);
+      if (this.barrage > 0) this._drawBarrageRacks(ctx, this.barrage);
+    }
+    if (this.zapper > 0) {
+      ctx.globalAlpha = 0.72 + Math.sin(t * 5) * 0.08;
+      this._drawStripFrame(ctx, img.get("weaponZapper"), 48, 48, 14, 0, size);
+    }
+
+    if (this.hpLevel > 0) this._drawHullPlates(ctx, bc);
+    if (this.magnet > 0) this._drawMagnetCoils(ctx, t);
+    if (this.beam > 0) this._drawBeamEmitter(ctx, t);
+    if (this.pulse > 0 || this.pulseReactor) this._drawPulseReactor(ctx, t);
+
+    ctx.restore();
+  }
+
+  _drawBarrageRacks(ctx, level) {
+    ctx.fillStyle = CONFIG.colors.orange;
+    ctx.shadowColor = CONFIG.colors.orange;
+    ctx.shadowBlur = 7;
+    ctx.globalAlpha = 0.9;
+    const rows = Math.min(3, level);
+    for (const side of [-1, 1]) {
+      for (let row = 0; row < rows; row++) {
+        ctx.beginPath();
+        ctx.arc(side * (25 + row * 2), -7 + row * 7, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  _drawHullPlates(ctx, bc) {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = bc.primary;
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.55 + Math.min(0.3, this.hpLevel * 0.06);
+    const width = 4 + Math.min(4, this.hpLevel);
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(side * 14, -13);
+      ctx.lineTo(side * (14 + width), -7);
+      ctx.lineTo(side * (14 + width), 13);
+      ctx.lineTo(side * 13, 17);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "lighter";
+  }
+
+  _drawMagnetCoils(ctx, t) {
+    const pulse = 0.65 + Math.sin(t * 4) * 0.2;
+    ctx.strokeStyle = CONFIG.colors.pink;
+    ctx.shadowColor = CONFIG.colors.pink;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 1.4 + Math.min(1.2, this.magnet * 0.2);
+    ctx.globalAlpha = pulse;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(side * 27, 8, 4 + Math.min(3, this.magnet), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  _drawBeamEmitter(ctx, t) {
+    const pulse = 0.75 + Math.sin(t * 8) * 0.2;
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 10 + this.beam * 3;
+    ctx.globalAlpha = pulse;
+    ctx.beginPath();
+    ctx.roundRect(-2.5 - this.beam * 0.35, -36, 5 + this.beam * 0.7, 13, 2.5);
+    ctx.fill();
+  }
+
+  _drawPulseReactor(ctx, t) {
+    const pulse = 0.72 + Math.sin(t * 6) * 0.22;
+    const radius = 5 + this.pulse * 1.1;
+    ctx.strokeStyle = "#3addc8";
+    ctx.fillStyle = "rgba(58,221,200,0.35)";
+    ctx.shadowColor = "#3addc8";
+    ctx.shadowBlur = 10 + this.pulse * 2;
+    ctx.lineWidth = 1.4;
+    ctx.globalAlpha = pulse;
+    ctx.beginPath();
+    ctx.arc(0, -3, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
 
   // T3/T4: flanking engine nozzles

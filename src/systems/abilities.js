@@ -103,22 +103,21 @@ export function updatePulse(player, dt) {
     if (player._pulseLife <= 0) player._pulseActive = false;
   }
   if (player._pulseCooldown <= 0) {
-    // Reactor keystone fires automatically on a fixed 6s rhythm
-    const cd = player.pulseReactor ? 6.0 : PULSE_COOLDOWN;
-    player._pulseCooldown = cd;
     firePulse(player);
   }
 }
 
 function firePulse(player) {
-  player._pulseCooldown = PULSE_COOLDOWN;
+  // Reactor keystone fires automatically on a fixed 6s rhythm.
+  player._pulseCooldown = player.pulseReactor ? 6.0 : PULSE_COOLDOWN;
   player._pulseActive   = true;
   player._pulseLife     = PULSE_DURATION;
   player._pulseR        = 0;
 
   const game = player.game;
   const dmg = PULSE_DAMAGE + player.pulse * 10;
-  const hitR = PULSE_MAX_R + (player.pulse - 1) * 20;
+  const baseHitR = PULSE_MAX_R + (player.pulse - 1) * 20;
+  const hitR = player.pulseReactor ? baseHitR * 1.3 : baseHitR;
 
   for (const e of game.enemies) {
     if (e.dead) continue;

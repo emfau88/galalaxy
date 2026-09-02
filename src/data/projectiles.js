@@ -1,5 +1,8 @@
 // Projectile visual configs keyed by visualKey.
-// w/h: render size in canvas pixels. rotOffset: added to travel angle before drawing.
+// w/h: render bounds in canvas pixels. rotOffset: added to travel angle before drawing.
+// frameW/frameH/frameCount/fps: explicit horizontal sprite-strip metadata exported
+// from the source Aseprite files. Keeping this data explicit avoids mistaking a
+// complete animation strip for one projectile image.
 // color/glowColor: fallback canvas draw when assetKey is null or image fails to load.
 export const PROJECTILE_VISUALS = {
   // --- Player ---
@@ -8,20 +11,44 @@ export const PROJECTILE_VISUALS = {
 
   // --- Kla'ed ---
   // Bomber: deliberate canvas orb — feels like a raw energy shot, no asset needed
-  klaedBomber:       { assetKey: null,          w: 11,  h: 11, rotOffset: 0,            color: "#ff466b", glowColor: "#ff2040" },
-  klaedFrigate:      { assetKey: "klaedBullet", w: 18,  h: 18, rotOffset: Math.PI / 2,  color: "#ff466b", glowColor: "#ff2040" },
-  klaedBattlecruiser:{ assetKey: "klaedRay",    w: 72,  h: 38, rotOffset: Math.PI / 2,  color: "#ff6680", glowColor: "#ff2040" },
-  klaedBoss:         { assetKey: "klaedBigBullet", w: 38, h: 20, rotOffset: Math.PI / 2, color: "#ff8899", glowColor: "#ff2040" },
+  klaedBomber:       { assetKey: null,             w: 11, h: 11, rotOffset: 0,           color: "#ff466b", glowColor: "#ff2040" },
+  klaedFrigate:      { assetKey: "klaedBullet",    w: 10, h: 24, rotOffset: Math.PI / 2, color: "#ff466b", glowColor: "#ff2040", frameW: 4,  frameH: 16, frameCount: 4, fps: 12 },
+  klaedBattlecruiser:{ assetKey: "klaedRay",       w: 18, h: 38, rotOffset: Math.PI / 2, color: "#ff6680", glowColor: "#ff2040", frameW: 18, frameH: 38, frameCount: 4, fps: 12 },
+  klaedBoss:         { assetKey: "klaedBigBullet", w: 14, h: 28, rotOffset: Math.PI / 2, color: "#ff8899", glowColor: "#ff2040", frameW: 8,  frameH: 16, frameCount: 4, fps: 10 },
 
   // --- Nairan ---
-  nairanBomber:       { assetKey: "nairanBolt",    w: 9,   h: 9,  rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff" },
-  nairanFrigate:      { assetKey: "nairanRay",     w: 72,  h: 38, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff" },
-  nairanBattlecruiser:{ assetKey: "nairanRocket",  w: 16,  h: 16, rotOffset: Math.PI / 2, color: "#dd99ff", glowColor: "#aa44ff" },
-  nairanBoss:         { assetKey: "nairanTorpedo", w: 32,  h: 28, rotOffset: Math.PI / 2, color: "#ee99ff", glowColor: "#aa44ff" },
+  nairanBomber:       { assetKey: "nairanBolt",    w: 12, h: 12, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff", frameW: 9, frameH: 9,  frameCount: 5, fps: 14 },
+  nairanFrigate:      { assetKey: "nairanRay",     w: 18, h: 38, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff", frameW: 18, frameH: 38, frameCount: 4, fps: 14 },
+  nairanBattlecruiser:{ assetKey: "nairanRocket",  w: 14, h: 25, rotOffset: Math.PI / 2, color: "#dd99ff", glowColor: "#aa44ff", frameW: 9, frameH: 16, frameCount: 4, fps: 12 },
+  nairanBoss:         { assetKey: "nairanTorpedo", w: 15, h: 34, rotOffset: Math.PI / 2, color: "#ee99ff", glowColor: "#aa44ff", frameW: 9, frameH: 24, frameCount: 3, fps: 10 },
 
   // --- Nautolan ---
-  nautolanBomber:       { assetKey: "nautolanSpinningBullet", w: 16, h: 16, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa" },
-  nautolanFrigate:      { assetKey: "nautolanRay",            w: 72, h: 38, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa" },
-  nautolanBattlecruiser:{ assetKey: "nautolanRocket",         w: 32, h: 32, rotOffset: Math.PI / 2, color: "#66ffdd", glowColor: "#00ddaa" },
-  nautolanBoss:         { assetKey: "nautolanBomb",           w: 24, h: 24, rotOffset: Math.PI / 2, color: "#88ffee", glowColor: "#00ddaa" },
+  nautolanBomber:       { assetKey: "nautolanSpinningBullet", w: 16, h: 16, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa", frameW: 8,  frameH: 8,  frameCount: 8,  fps: 16 },
+  nautolanFrigate:      { assetKey: "nautolanRay",            w: 18, h: 38, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa", frameW: 18, frameH: 38, frameCount: 4,  fps: 10 },
+  nautolanBattlecruiser:{ assetKey: "nautolanRocket",         w: 18, h: 36, rotOffset: Math.PI / 2, color: "#66ffdd", glowColor: "#00ddaa", frameW: 16, frameH: 32, frameCount: 6,  fps: 10 },
+  nautolanBoss:         { assetKey: "nautolanBomb",           w: 24, h: 24, rotOffset: Math.PI / 2, color: "#88ffee", glowColor: "#00ddaa", frameW: 16, frameH: 16, frameCount: 16, fps: 18 },
+};
+
+// Enemy attack profiles deliberately separate threat roles. The projectile
+// renderer owns sprite metadata above; these values own combat behaviour.
+// Boss cadence and spread still live in Enemy so the existing phase rhythm is
+// preserved, while speed/damage/steering come from the fleet weapon profile.
+export const ENEMY_WEAPON_PROFILES = {
+  // Kla'ed: readable baseline fleet.
+  klaedBomber:        { speed: 180, damage: 8,  cooldown: 3.2, hitRadius: 6,   life: 3.4, behavior: "straight" },
+  klaedFrigate:       { speed: 250, damage: 7,  cooldown: 2.5, hitRadius: 4,   life: 2.8, behavior: "straight" },
+  klaedBattlecruiser: { speed: 355, damage: 10, cooldown: 3.1, hitRadius: 4.5, life: 2.2, behavior: "ray" },
+  klaedBoss:          { speed: 275, damage: 12, cooldown: 1.1, wideCooldown: 1.6, hitRadius: 6, life: 3.3, behavior: "straight" },
+
+  // Nairan: fast precision fire and gently tracking missiles.
+  nairanBomber:        { speed: 315, damage: 7,  cooldown: 2.2, hitRadius: 4.5, life: 2.5, behavior: "straight" },
+  nairanFrigate:       { speed: 410, damage: 9,  cooldown: 2.8, hitRadius: 4,   life: 1.9, behavior: "ray" },
+  nairanBattlecruiser: { speed: 225, damage: 12, cooldown: 3.1, hitRadius: 6,   life: 3.8, behavior: "homing", turnRate: 0.72 },
+  nairanBoss:          { speed: 210, damage: 14, cooldown: 1.1, wideCooldown: 1.6, hitRadius: 7, life: 4.2, behavior: "homing", turnRate: 0.42, acceleration: 16 },
+
+  // Nautolan: slower, heavier projectiles with more commitment.
+  nautolanBomber:        { speed: 205, damage: 10, cooldown: 3.0, hitRadius: 6,   life: 3.6, behavior: "straight" },
+  nautolanFrigate:       { speed: 300, damage: 12, cooldown: 3.4, hitRadius: 5,   life: 2.7, behavior: "ray" },
+  nautolanBattlecruiser: { speed: 165, damage: 16, cooldown: 3.8, hitRadius: 7.5, life: 4.8, behavior: "homing", turnRate: 0.38 },
+  nautolanBoss:          { speed: 135, damage: 18, cooldown: 1.2, wideCooldown: 1.8, hitRadius: 9, life: 5.4, behavior: "heavy" },
 };

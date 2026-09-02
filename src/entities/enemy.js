@@ -1,5 +1,16 @@
 import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp, dist2 } from "../utils.js";
+import { ENEMY_WEAPON_PROFILES } from "../data/projectiles.js";
+
+const DEFAULT_WEAPON_PROFILE = {
+  speed: 210,
+  damage: 7,
+  cooldown: 2.8,
+  wideCooldown: 1.6,
+  hitRadius: 5,
+  life: 2.6,
+  behavior: "straight",
+};
 
 export class Enemy {
   // flyby: optional { vx, vy, sineAmp, sineFreq } — if set, enemy uses fixed-velocity movement
@@ -19,6 +30,7 @@ export class Enemy {
     this.score = boss ? def.score * 8 : def.score;
     this.imgKey = def.img;
     this.projVisual = Enemy._projVisual(type, boss);
+    this.weaponProfile = ENEMY_WEAPON_PROFILES[this.projVisual] || DEFAULT_WEAPON_PROFILE;
     this.hitFlash = 0;
     this.fireTimer = boss ? 1.2 : 2.5 + Math.random() * 2;
     this.wobble = Math.random() * Math.PI * 2;
@@ -26,6 +38,41 @@ export class Enemy {
     // flyby stores { vx, vy, sineAmp, sineFreq } — null means normal chase behavior
     this.flyby = flyby || null;
     this._flybyT = 0; // local time accumulator for sine drift
+  }
+
+  _facingAngle() {
+    if (this.flyby) return Math.atan2(this.flyby.vy, this.flyby.vx);
+    const p = this.game.player;
+    return Math.atan2(p.y - this.y, p.x - this.x);
+  }
+
+  _muzzlePosition(facingAngle, lane = 0) {
+    const rc = RENDER_CONFIG.enemies[this.type] || { w: this.r * 2 };
+    const renderedSize = this.boss ? rc.w * 1.85 : rc.w;
+    // The source sprites contain transparent padding, so the visible nose sits
+    // at roughly one third of the rendered square rather than at its edge.
+    const forward = Math.max(12, renderedSize * 0.34);
+    const laneGap = Math.min(7, renderedSize * 0.055);
+    const sideAngle = facingAngle + Math.PI / 2;
+    return {
+      x: this.x + Math.cos(facingAngle) * forward + Math.cos(sideAngle) * lane * laneGap,
+      y: this.y + Math.sin(facingAngle) * forward + Math.sin(sideAngle) * lane * laneGap,
+    };
+  }
+
+  _spawnWeaponShot(angle, { speedMult = 1, damageMult = 1, lane = 0, facingAngle = null } = {}) {
+    const profile = this.weaponProfile;
+    const muzzle = this._muzzlePosition(facingAngle ?? this._facingAngle(), lane);
+    this.game.spawnProjectile(
+      muzzle.x,
+      muzzle.y,
+      angle,
+      profile.speed * speedMult,
+      profile.damage * damageMult,
+      "enemy",
+      "enemy",
+      this.projVisual
+    );
   }
 
   update(dt) {
@@ -63,26 +110,29 @@ export class Enemy {
       const isBurst = this._bossVolley % 3 !== 0; // every 3rd volley is the wide spread
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
       if (isBurst) {
-        this.fireTimer = 1.1;
+        this.fireTimer = this.weaponProfile.cooldown;
         const spread = 0.18;
         for (let i = -1; i <= 1; i++) {
           const a = ang + i * spread;
-          this.game.spawnProjectile(this.x, this.y + 14, a, 280, 10, "enemy", "enemy", this.projVisual);
+          this._spawnWeaponShot(a, { damageMult: 0.75, lane: i, facingAngle: ang });
         }
       } else {
-        this.fireTimer = 1.6; // longer pause after wide spread
+        this.fireTimer = this.weaponProfile.wideCooldown ?? 1.6;
         const spread = 0.30;
         for (let i = -2; i <= 2; i++) {
           const a = ang + i * spread;
-          const spd = i === 0 ? 260 : 220; // centre shot slower — more readable to dodge
-          const dmg = i === 0 ? 14 : 8;
-          this.game.spawnProjectile(this.x, this.y + 14, a, spd, dmg, "enemy", "enemy", this.projVisual);
+          this._spawnWeaponShot(a, {
+            speedMult: i === 0 ? 0.85 : 0.72,
+            damageMult: i === 0 ? 1 : 0.6,
+            lane: i,
+            facingAngle: ang,
+          });
         }
       }
     } else if (!this.boss && Enemy._canFire(this.type) && this.fireTimer <= 0) {
-      this.fireTimer = 2.8;
+      this.fireTimer = this.weaponProfile.cooldown;
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
-      this.game.spawnProjectile(this.x, this.y + 12, ang, 210, 7, "enemy", "enemy", this.projVisual);
+      this._spawnWeaponShot(ang);
     }
 
     if (dist2(this.x, this.y, p.x, p.y) < (this.r + p.r) ** 2) {
@@ -122,9 +172,7 @@ export class Enemy {
     ctx.translate(this.x, this.y);
     const p = this.game.player;
     // Flyby enemies face their travel direction; chase/boss enemies face the player.
-    const drawAngle = this.flyby
-      ? Math.atan2(this.flyby.vy, this.flyby.vx) + Math.PI / 2
-      : Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2;
+    const drawAngle = this._facingAngle() + Math.PI / 2;
     ctx.rotate(drawAngle);
 
     const image = img.get(this.imgKey);
