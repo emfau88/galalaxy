@@ -32,7 +32,7 @@ export class Enemy {
     this.imgKey = def.img;
     this.projVisual = Enemy._projVisual(type, boss);
     this.weaponProfile = ENEMY_WEAPON_PROFILES[this.projVisual] || DEFAULT_WEAPON_PROFILE;
-    this.visual = type.startsWith("nairan") || type.startsWith("nautolan") ? null : enemyVisualFor(type);
+    this.visual = enemyVisualFor(type);
     this.weaponAnimation = null;
     this.pendingShots = [];
     // Boss shields add a readable, authored defensive phase without making
@@ -296,12 +296,13 @@ export class Enemy {
 
   _drawStrip(ctx, image, frameSize, animation, time, targetSize) {
     if (!image || !frameSize || !animation) return;
+    const sourceFrame = animation.frameSize || frameSize;
     const frame = Math.min(animation.frameCount - 1, Math.floor(time * animation.fps) % animation.frameCount);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = 1;
-    ctx.drawImage(image, frame * frameSize, 0, frameSize, frameSize, -targetSize / 2, -targetSize / 2, targetSize, targetSize);
+    ctx.drawImage(image, frame * sourceFrame, 0, sourceFrame, sourceFrame, -targetSize / 2, -targetSize / 2, targetSize, targetSize);
     ctx.restore();
   }
 }

@@ -96,6 +96,7 @@ export class Projectile {
   draw(ctx, game) {
     const vis = PROJECTILE_VISUALS[this.visualKey];
     const angle = Math.atan2(this.vy, this.vx);
+    const glow = amount => game.lowEffects ? 0 : amount;
 
     ctx.save();
     ctx.translate(this.x, this.y);
@@ -110,7 +111,7 @@ export class Projectile {
         ctx.globalCompositeOperation = "source-over";
         ctx.globalAlpha = 1;
         ctx.shadowColor = vis.glowColor;
-        ctx.shadowBlur = 7;
+        ctx.shadowBlur = glow(7);
         if (this._drawAssetFrame(ctx, img, vis)) {
           ctx.restore();
           return;
@@ -124,39 +125,39 @@ export class Projectile {
       if (this.kind === "rocket") {
         ctx.fillStyle = CONFIG.colors.orange;
         ctx.shadowColor = CONFIG.colors.orange;
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = glow(16);
         ctx.beginPath();
         ctx.roundRect(-10, -3.5, 22, 7, 4);
         ctx.fill();
         ctx.fillStyle = "#fff8e0";
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = glow(6);
         ctx.beginPath();
         ctx.roundRect(-6, -1.5, 10, 3, 2);
         ctx.fill();
       } else {
         ctx.fillStyle = CONFIG.colors.cyan;
         ctx.shadowColor = CONFIG.colors.cyan;
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = glow(16);
         ctx.beginPath();
         ctx.roundRect(-9, -3.5, 18, 7, 4);
         ctx.fill();
         ctx.fillStyle = "#e8ffff";
-        ctx.shadowBlur = 4;
+        ctx.shadowBlur = glow(4);
         ctx.beginPath();
         ctx.roundRect(-7, -1.5, 12, 3, 2);
         ctx.fill();
       }
     } else {
       const col = vis ? vis.color : CONFIG.colors.red;
-      const glow = vis ? vis.glowColor : "#ff2040";
+      const glowColor = vis ? vis.glowColor : "#ff2040";
       ctx.fillStyle = col;
-      ctx.shadowColor = glow;
-      ctx.shadowBlur = 18;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = glow(18);
       ctx.beginPath();
       ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#ffaaaa";
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = glow(6);
       ctx.beginPath();
       ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
       ctx.fill();

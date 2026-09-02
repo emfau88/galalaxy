@@ -20,14 +20,14 @@ export class Particle {
     if (this.life <= 0) this.dead = true;
   }
 
-  draw(ctx) {
+  draw(ctx, game) {
     const a = Math.max(0, this.life / this.max);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = a;
     ctx.fillStyle = this.color;
     ctx.shadowColor = this.color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = game?.lowEffects ? 0 : 10;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.size * (0.4 + a), 0, Math.PI * 2);
     ctx.fill();

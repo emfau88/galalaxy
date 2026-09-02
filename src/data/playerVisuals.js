@@ -78,24 +78,3 @@ export function playerEngineVisual(level) {
 export function playerShieldVisual(level) {
   return PLAYER_SHIELD_VISUALS[Math.min(PLAYER_SHIELD_VISUALS.length - 1, Math.max(0, level))];
 }
-
-// The Foozle weapon sprites share one 48x48 mounting space. Choosing one
-// dominant system keeps the silhouette readable instead of stacking sprites.
-export function playerWeaponVisualKey(player) {
-  if (player.keystoneId === "overcharged") return "zapper";
-  if (player.keystoneId === "siege") return "rockets";
-
-  const scores = {
-    auto: player.fireLevel > 0 || player.twin > 0
-      ? 1 + Math.min(4, player.twin) + Math.min(5, player.fireLevel) * 0.35
-      : -1,
-    rockets: player.rocket > 0 && !player.rocketDisabled ? player.rocket + player.barrage * 2 : -1,
-    zapper: player.zapper > 0 ? player.zapper : -1,
-    bigGun: player.beam > 0 ? player.beam * 3 : -1,
-  };
-
-  return Object.entries(scores).reduce(
-    (best, entry) => entry[1] > best[1] ? entry : best,
-    [null, -1],
-  )[0];
-}

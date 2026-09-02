@@ -9,7 +9,6 @@ import {
   PLAYER_WEAPON_VISUALS,
   playerEngineVisual,
   playerShieldVisual,
-  playerWeaponVisualKey,
 } from "../data/playerVisuals.js";
 
 // Branch accent colors
@@ -81,8 +80,16 @@ export class Player {
     return 1 + Math.min(0.1, physicalUpgrades * 0.006);
   }
 
-  equippedWeaponVisualKey() {
-    return playerWeaponVisualKey(this);
+  installedWeaponVisualKeys() {
+    // Every Foozle weapon sheet shares the same 48px registration canvas.
+    // They are authored as overlays, so acquired systems stay mounted instead
+    // of replacing one another when a different weapon happens to fire.
+    return [
+      (this.fireLevel > 0 || this.twin > 0) ? "auto" : null,
+      (this.rocket > 0 && !this.rocketDisabled) ? "rockets" : null,
+      this.zapper > 0 ? "zapper" : null,
+      this.beam > 0 ? "bigGun" : null,
+    ].filter(Boolean);
   }
 
   triggerWeaponAnimation(key, cycleDuration = null, frameCount = null) {
@@ -197,8 +204,8 @@ export class Player {
   _fireAuto(cycleDuration) {
     const visual = PLAYER_WEAPON_VISUALS.auto;
     const frameDuration = this.triggerWeaponAnimation("auto", cycleDuration);
-    const moduleVisible = this.equippedWeaponVisualKey() === "auto";
     const authoredAutoUnlocked = this.fireLevel > 0 || this.twin > 0;
+    const moduleVisible = authoredAutoUnlocked;
 
     // twin 0: alternate the authored two barrels when the Auto Cannon is
     // mounted. Higher levels keep the established multi-shot spread.
@@ -455,42 +462,28 @@ export class Player {
   }
 
   _drawWeaponLayer(ctx, img, t) {
-    let key = this.equippedWeaponVisualKey();
-    let activePriority = -1;
-    for (const [candidate, state] of Object.entries(this.weaponAnimations)) {
-      if (t >= state.activeUntil) continue;
-      if (candidate === "auto" && this.fireLevel === 0 && this.twin === 0) continue;
-      if (candidate === "rockets" && (this.rocket === 0 || this.rocketDisabled)) continue;
-      if (candidate === "zapper" && this.zapper === 0) continue;
-      if (candidate === "bigGun" && this.beam === 0) continue;
-      const priority = PLAYER_WEAPON_VISUALS[candidate]?.activePriority ?? 0;
-      if (priority > activePriority) {
-        key = candidate;
-        activePriority = priority;
-      }
+    for (const key of this.installedWeaponVisualKeys()) {
+      const visual = PLAYER_WEAPON_VISUALS[key];
+      const state = this.weaponAnimations[key];
+      const active = state && t < state.activeUntil;
+      const frame = active
+        ? Math.floor((t - state.startedAt) / state.frameDuration) % state.frameCount
+        : 0;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      this._drawStripFrame(
+        ctx,
+        img.get(visual.assetKey),
+        PLAYER_MODULE_FRAME,
+        PLAYER_MODULE_FRAME,
+        visual.frameCount,
+        frame,
+        RENDER_CONFIG.player.w,
+      );
+      ctx.restore();
     }
-    const visual = PLAYER_WEAPON_VISUALS[key];
-    if (!visual) return;
-
-    const state = this.weaponAnimations[key];
-    const active = state && t < state.activeUntil;
-    const frame = active
-      ? Math.floor((t - state.startedAt) / state.frameDuration) % state.frameCount
-      : 0;
-
-    ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-    this._drawStripFrame(
-      ctx,
-      img.get(visual.assetKey),
-      PLAYER_MODULE_FRAME,
-      PLAYER_MODULE_FRAME,
-      visual.frameCount,
-      frame,
-      RENDER_CONFIG.player.w,
-    );
-    ctx.restore();
   }
 
   _drawShieldLayer(ctx, img, t) {

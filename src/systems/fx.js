@@ -31,7 +31,7 @@ function colorsFor(visualKey, owner) {
 // ─── Lightweight particle push ───────────────────────────────────────────────
 
 function pushParticle(game, x, y, vx, vy, color, life, size) {
-  if (game.particles.length >= CONFIG.particleCap) return;
+  if (game.particles.length >= (game.particleCap ?? CONFIG.particleCap)) return;
   // Inline object — avoids Particle class import and is identical in structure
   game.particles.push({ x, y, vx, vy, color, life, max: life, size, dead: false,
     update(dt) {
@@ -40,14 +40,14 @@ function pushParticle(game, x, y, vx, vy, color, life, size) {
       this.life -= dt;
       if (this.life <= 0) this.dead = true;
     },
-    draw(ctx) {
+    draw(ctx, renderGame) {
       const a = Math.max(0, this.life / this.max);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = a * 0.85;
       ctx.fillStyle = this.color;
       ctx.shadowColor = this.color;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = renderGame?.lowEffects ? 0 : 6;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.size * (0.3 + a * 0.7), 0, Math.PI * 2);
       ctx.fill();
@@ -160,7 +160,7 @@ const SECTOR_DUST = [
 export function emitSectorDust(game, dt) {
   const cfg = SECTOR_DUST[game.currentSectorIndex];
   if (!cfg || Math.random() > cfg.rate * 60 * dt) return; // rate = particles/sec approx
-  if (game.particles.length >= CONFIG.particleCap - 4) return;
+  if (game.particles.length >= (game.particleCap ?? CONFIG.particleCap) - 4) return;
 
   const W = CONFIG.designW;
   const x = Math.random() * W;
@@ -176,7 +176,7 @@ export function emitSectorDust(game, dt) {
 // Ring particles are stored like regular particles but draw as an expanding stroke arc.
 
 function pushRing(game, x, y, color, startR, life) {
-  if (game.particles.length >= CONFIG.particleCap) return;
+  if (game.particles.length >= (game.particleCap ?? CONFIG.particleCap)) return;
   game.particles.push({
     x, y, color, life, max: life, r: startR, dead: false,
     vx: 0, vy: 0,
@@ -185,7 +185,7 @@ function pushRing(game, x, y, color, startR, life) {
       this.life -= dt;
       if (this.life <= 0) this.dead = true;
     },
-    draw(ctx) {
+    draw(ctx, renderGame) {
       const a = Math.max(0, this.life / this.max);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
@@ -193,7 +193,7 @@ function pushRing(game, x, y, color, startR, life) {
       ctx.strokeStyle = this.color;
       ctx.lineWidth = 1.5;
       ctx.shadowColor = this.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = renderGame?.lowEffects ? 0 : 8;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
       ctx.stroke();

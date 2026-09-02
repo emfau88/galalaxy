@@ -46,6 +46,9 @@ export class Game {
     this.visualTestMode = searchParams.get("test") === "upgrade-visuals";
     this.upgradeCardTestMode = searchParams.get("test") === "upgrade-cards";
     this.klaedTestMode = searchParams.get("test") === "klaed-combat";
+    this.nairanTestMode = searchParams.get("test") === "nairan-combat";
+    this.nautolanTestMode = searchParams.get("test") === "nautolan-combat";
+    if (searchParams.has("test")) window.__galalaxyTestGame = this;
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
     this.visualTestStartIndex = Number.isFinite(requestedStage)
       ? Math.max(0, Math.min(PLAYER_VISUAL_TEST_STAGES.length - 1, requestedStage))
@@ -106,6 +109,8 @@ export class Game {
       if (this.visualTestMode) this.startVisualTest();
       else if (this.upgradeCardTestMode) this.startUpgradeCardTest();
       else if (this.klaedTestMode) this.startKlaedCombatTest();
+      else if (this.nairanTestMode) this.startFleetCombatTest("nairan");
+      else if (this.nautolanTestMode) this.startFleetCombatTest("nautolan");
       else this.state = "title";
     });
 
@@ -113,11 +118,18 @@ export class Game {
   }
 
   resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.canvas.width = Math.floor(window.innerWidth * dpr);
-    this.canvas.height = Math.floor(window.innerHeight * dpr);
+    const deviceDpr = window.devicePixelRatio || 1;
+    // On phones the expensive part is not simulation, but compositing many
+    // glow-heavy sprites at a full 2× canvas. Pixel art remains crisp at 1.5×
+    // while this cuts the backing-store work by roughly 44% versus 2×.
+    this.lowEffects = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    this.renderDpr = Math.min(this.lowEffects ? 1.5 : 2, deviceDpr);
+    this.particleCap = this.lowEffects ? 96 : CONFIG.particleCap;
+    this.zapCap = this.lowEffects ? 10 : 28;
+    this.canvas.width = Math.floor(window.innerWidth * this.renderDpr);
+    this.canvas.height = Math.floor(window.innerHeight * this.renderDpr);
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.scale(dpr, dpr);
+    this.ctx.scale(this.renderDpr, this.renderDpr);
 
     const sw = window.innerWidth;
     const sh = window.innerHeight;
@@ -199,18 +211,28 @@ export class Game {
   }
 
   startKlaedCombatTest() {
+    this.startFleetCombatTest("");
+  }
+
+  startFleetCombatTest(fleet) {
     this.startRun();
     this.bossActive = true; // prevent the normal sector spawner in this QA scene
+    this.currentSectorIndex = fleet === "nairan" ? 1 : fleet === "nautolan" ? 2 : 0;
+    this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
     this.player.x = CONFIG.designW / 2;
     this.player.y = 620;
-    this.player.fireLevel = 1;
+    // The QA ship observes rather than clearing the fleet, so the authored
+    // weapon timings and projectile release frames remain visible.
+    this.player.fireTimer = Number.MAX_VALUE;
+    this.player.invuln = Number.POSITIVE_INFINITY;
     this.player.shieldLevel = 2;
     this.player.maxShield = 79;
     this.player.shield = this.player.maxShield;
+    const type = name => `${fleet}${name}`;
     this.enemies = [
-      new Enemy(this, "frigate", 105, 175),
-      new Enemy(this, "battlecruiser", 315, 200),
-      new Enemy(this, "dreadnought", 210, 105, true),
+      new Enemy(this, type("frigate"), 90, 230),
+      new Enemy(this, type("battlecruiser"), 330, 270),
+      new Enemy(this, type("dreadnought"), 210, 105, true),
     ];
     for (const enemy of this.enemies) enemy.fireTimer = 0.35;
   }
@@ -311,8 +333,8 @@ export class Game {
     for (const p of this.particles) p.update(dt);
     for (const z of this.zaps) z.life -= dt;
     for (const death of this.enemyDeaths) death.age += dt;
-    this.particles = this.particles.filter(p => !p.dead).slice(-CONFIG.particleCap);
-    this.zaps = this.zaps.filter(z => z.life > 0);
+    this.particles = this.particles.filter(p => !p.dead).slice(-this.particleCap);
+    this.zaps = this.zaps.filter(z => z.life > 0).slice(-this.zapCap);
 
     this.shake = Math.max(0, this.shake - dt * 20);
     this.bossWarning = Math.max(0, this.bossWarning - dt);
@@ -669,7 +691,8 @@ export class Game {
   }
 
   burst(x, y, color, count) {
-    for (let i = 0; i < count; i++) {
+    const allowed = Math.max(0, this.particleCap - this.particles.length);
+    for (let i = 0; i < Math.min(count, allowed); i++) {
       const a = Math.random() * Math.PI * 2;
       const s = Math.random() * 130 + 35;
       this.particles.push(new Particle(
@@ -690,12 +713,13 @@ export class Game {
 
   spawnZap(x1, y1, x2, y2, secondary = false) {
     const life = secondary ? 0.13 : 0.18;
-    this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary });
+    if (this.zaps.length < this.zapCap) {
+      this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary });
+    }
     this.burst(x2, y2, CONFIG.colors.pink, secondary ? 5 : 14);
   }
 
   spawnEnemyDestruction(enemy) {
-    if (enemy.type.startsWith("nairan") || enemy.type.startsWith("nautolan")) return;
     const visual = enemyVisualFor(enemy.type);
     if (!visual?.destruction || this.enemyDeaths.length >= 30) return;
     this.enemyDeaths.push({
@@ -717,7 +741,7 @@ export class Game {
   draw() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.setTransform(window.devicePixelRatio ? Math.min(2, window.devicePixelRatio) : 1, 0, 0, window.devicePixelRatio ? Math.min(2, window.devicePixelRatio) : 1, 0, 0);
+    ctx.setTransform(this.renderDpr, 0, 0, this.renderDpr, 0, 0);
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     ctx.fillStyle = CONFIG.colors.bg;
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
@@ -933,7 +957,7 @@ export class Game {
       ctx.strokeStyle = CONFIG.colors.pink;
       ctx.lineWidth = sec ? 3 : 6;
       ctx.shadowColor = CONFIG.colors.pink;
-      ctx.shadowBlur = sec ? 12 : 26;
+      ctx.shadowBlur = this.lowEffects ? 0 : (sec ? 12 : 26);
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
       ctx.lineTo(mx, my);
@@ -943,7 +967,7 @@ export class Game {
       ctx.globalAlpha = a * (sec ? 0.6 : 1.0);
       ctx.strokeStyle = sec ? "#ddaaff" : "#ffccff";
       ctx.lineWidth = sec ? 1.2 : 2.2;
-      ctx.shadowBlur = sec ? 5 : 10;
+      ctx.shadowBlur = this.lowEffects ? 0 : (sec ? 5 : 10);
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
       ctx.lineTo(mx, my);
@@ -952,7 +976,7 @@ export class Game {
       ctx.restore();
     }
 
-    for (const p of this.particles) p.draw(ctx);
+    for (const p of this.particles) p.draw(ctx, this);
 
     if (this.bossWarning > 0) {
       ctx.save();
@@ -985,7 +1009,7 @@ export class Game {
       ctx.globalAlpha = Math.min(1, (death.duration - death.age) * 5);
       ctx.drawImage(
         image,
-        frame * death.visual.frame, 0, death.visual.frame, death.visual.frame,
+        frame * (animation.frameSize || death.visual.frame), 0, animation.frameSize || death.visual.frame, animation.frameSize || death.visual.frame,
         -death.size / 2, -death.size / 2, death.size, death.size,
       );
       ctx.restore();
