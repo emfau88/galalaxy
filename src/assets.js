@@ -151,5 +151,6 @@ export const ASSETS = {
   pickupInvincible:"assets/Foozle_2DS0016_Void_PickupsPack/Shield Generators/PNGs/Pickup Icon - Shield Generator - Invincibility Shield.png",
   pickupAuto:      "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Auto Cannons.png",
   pickupRocket:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Rocket.png",
-  pickupZapper:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Zapper.png"
+  pickupZapper:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Zapper.png",
+  pickupBigGun:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Big Space Gun 2000.png"
 };

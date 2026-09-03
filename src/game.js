@@ -48,6 +48,7 @@ export class Game {
     this.klaedTestMode = searchParams.get("test") === "klaed-combat";
     this.nairanTestMode = searchParams.get("test") === "nairan-combat";
     this.nautolanTestMode = searchParams.get("test") === "nautolan-combat";
+    this.hudTestMode = searchParams.get("test") === "hud-layout";
     if (searchParams.has("test")) window.__galalaxyTestGame = this;
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
     this.visualTestStartIndex = Number.isFinite(requestedStage)
@@ -111,6 +112,7 @@ export class Game {
       else if (this.klaedTestMode) this.startKlaedCombatTest();
       else if (this.nairanTestMode) this.startFleetCombatTest("nairan");
       else if (this.nautolanTestMode) this.startFleetCombatTest("nautolan");
+      else if (this.hudTestMode) this.startHudLayoutTest();
       else this.state = "title";
     });
 
@@ -201,7 +203,7 @@ export class Game {
     this.player.speed = 386;
     this.player.maxShield = 67;
     this.player.shield = this.player.maxShield;
-    const wanted = new Set(["speed", "shield", "zapper"]);
+    const wanted = new Set(["speed", "shield", "beam"]);
     this.upgrades.choices = this.upgrades.pool.filter(upgrade => wanted.has(upgrade.id));
     const w = 330, h = 112;
     this.upgrades.cards = this.upgrades.choices.map((_, index) => ({
@@ -235,6 +237,36 @@ export class Game {
       new Enemy(this, type("dreadnought"), 210, 105, true),
     ];
     for (const enemy of this.enemies) enemy.fireTimer = 0.35;
+  }
+
+  startHudLayoutTest() {
+    this.startRun();
+    this.currentSectorIndex = 2;
+    this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
+    Object.assign(this.player, {
+      x: CONFIG.designW / 2,
+      y: 620,
+      speedLevel: 3,
+      shieldLevel: 3,
+      fireLevel: 2,
+      twin: 1,
+      rocket: 2,
+      zapper: 2,
+      beam: 1,
+      pulse: 1,
+      hpLevel: 1,
+      magnet: 1,
+      speed: 438,
+      maxShield: 103,
+      shield: 74,
+      fireTimer: Number.MAX_VALUE,
+      invuln: Number.POSITIVE_INFINITY,
+      _beamCooldown: 2.6,
+      _pulseCooldown: 5.4,
+    });
+    this.bossActive = true;
+    this.enemies = [new Enemy(this, "nautolanDreadnought", CONFIG.designW / 2, 150, true)];
+    this.enemies[0].fireTimer = 0.4;
   }
 
   _applyVisualTestStage() {
@@ -1054,8 +1086,10 @@ export class Game {
     this.bar(ctx, barX, shY, shW, shH, p.shield / p.maxShield, CONFIG.colors.cyan, "");
     ctx.globalAlpha = 1;
 
-    // Shield icon — vertically centered on shield bar, bündig unter Herz
-    this._drawShieldIcon(ctx, iconX, shY + shH / 2, 8, "rgba(88,230,255,0.8)");
+    // Authored pickup icon keeps the defensive system legible at a glance.
+    const shieldIcon = this.loader.get("pickupShield");
+    if (shieldIcon) this.drawAsset(ctx, shieldIcon, iconX, shY + shH / 2, 17, 17);
+    else this._drawShieldIcon(ctx, iconX, shY + shH / 2, 8, "rgba(88,230,255,0.8)");
 
     // Timer — very subtle, bottom-left of panel
     ctx.textAlign = "left";
@@ -1137,12 +1171,12 @@ export class Game {
     // Score — above ring, right-aligned
     ctx.textAlign = "right";
     ctx.fillStyle = CONFIG.colors.white;
-    ctx.font = "800 16px system-ui";
+    ctx.font = "800 11px system-ui";
     ctx.fillText(Math.floor(this.score).toString(), W - 14, 26);
 
     // "SCORE" micro-label
     ctx.fillStyle = "rgba(180,200,230,0.35)";
-    ctx.font = "500 7px system-ui";
+    ctx.font = "500 6px system-ui";
     ctx.fillText("SCORE", W - 14, 15);
 
     // ── Boss HP bar ──────────────────────────────────────────────────
@@ -1291,8 +1325,8 @@ export class Game {
   drawAbilityPips(ctx) {
     const p = this.player;
     const abilities = [];
-    if (p.beam)  abilities.push({ label: "BIG GUN", cd: p._beamCooldown ?? 0, max: 7.0, color: "#7cff91" });
-    if (p.pulse) abilities.push({ label: "PULSE", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan });
+    if (p.beam)  abilities.push({ label: "BIG GUN", icon: "pickupBigGun", cd: p._beamCooldown ?? 0, max: 7.0, color: "#7cff91" });
+    if (p.pulse) abilities.push({ label: "PULSE", icon: "pickupShield", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan });
     if (!abilities.length) return;
 
     // Vertically stacked, left of XP ring — ring center is at (W-36, 46)
@@ -1322,6 +1356,16 @@ export class Game {
         ctx.roundRect(x, y, Math.max(pipH, pipW * fill), pipH, pipH / 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+      }
+
+      // An authored icon reads faster than text on a narrow mobile HUD.
+      const icon = this.loader.get(ab.icon);
+      if (icon) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = ready ? 1 : 0.5;
+        this.drawAsset(ctx, icon, x - 11, y + pipH / 2, 14, 14);
+        ctx.restore();
       }
 
       // Label above bar — right-aligned so it doesn't crowd the ring

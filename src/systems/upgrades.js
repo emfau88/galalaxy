@@ -1,5 +1,4 @@
 import { CONFIG } from "../config.js";
-import { PLAYER_ENGINE_VISUALS, PLAYER_SHIELD_VISUALS, PLAYER_WEAPON_VISUALS } from "../data/playerVisuals.js";
 
 // Family color accents for card tinting
 const FAMILY_ACCENT = {
@@ -21,12 +20,12 @@ const POOL = [
   { id: "twin",    name: "Multi Cannon",   desc: "Adds cannon barrels. Up to 5 shots.", icon: "pickupAuto",        family: "core",   maxLevel: 4,    minLevel: 0, weight: 8  },
   { id: "speed",   name: "Engine Boost",   desc: "Movement becomes sharper.",            icon: "pickupSuper",       family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "shield",  name: "Shield Regen",   desc: "Shield recovers faster.",              icon: "pickupShield",      family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
-  { id: "hp",      name: "Hull Upgrade",   desc: "Max HP increases.",                    icon: "pickupInvincible",  family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
+  { id: "hp",      name: "Hull Upgrade",   desc: "Max HP increases.",                    icon: "playerFull",        family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "magnet",  name: "Pickup Magnet",  desc: "Energy pulls in from farther away.",   icon: "pickupPulse",       family: "core",   maxLevel: null, minLevel: 0, weight: 5  },
 
   // --- Zapper Family ---
   { id: "zapper",  name: "Zapper Chain",   desc: "Occasional lightning strike.",         icon: "pickupZapper",      family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
-  { id: "beam",    name: "Big Space Gun",  desc: "Piercing energy orb. Higher levels recharge faster.", icon: "pickupZapper", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
+  { id: "beam",    name: "Big Space Gun",  desc: "Piercing energy orb. Higher levels recharge faster.", icon: "pickupBigGun", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Rocket Family ---
   { id: "rocket",  name: "Rocket Burst",   desc: "Chance to launch homing rockets.",     icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
@@ -141,58 +140,64 @@ export class UpgradeSystem {
     }
   }
 
-  _cardVisualTransition(u) {
-    const p = this.game.player;
-    const component = (assetKey, frameSize = 48) => ({ assetKey, frameSize });
-    const weapon = key => component(PLAYER_WEAPON_VISUALS[key].assetKey);
-    const engine = level => component(PLAYER_ENGINE_VISUALS[Math.min(3, level)].moduleKey);
-    const shield = level => level < 0 ? null : component(PLAYER_SHIELD_VISUALS[Math.min(2, level)].assetKey, 64);
+  _previewPlayer(u, after) {
+    const current = this.game.player;
+    const preview = Object.assign(Object.create(Object.getPrototypeOf(current)), current);
+    preview.weaponAnimations = Object.create(null);
+    preview.pendingWeaponShots = [];
+    preview.vx = 0;
+    preview.vy = 0;
+    preview.bank = 0;
+    preview.hitFlash = 0;
+    preview.invuln = 0;
+    if (!after) return preview;
+
+    // This mirrors only the player fields that alter visible installed layers.
+    // The real upgrade application remains authoritative in pick().
     switch (u.id) {
-      case "speed": return { label: "ENGINE", previous: engine(p.speedLevel), next: engine(p.speedLevel + 1) };
-      case "shield": return { label: "SHIELD", previous: shield(p.shieldLevel - 1), next: shield(p.shieldLevel) };
-      case "fire":
-      case "twin": return { label: "AUTO CANNON", previous: p.fireLevel || p.twin ? weapon("auto") : null, next: weapon("auto") };
-      case "rocket":
-      case "barrage":
-      case "siege": return { label: "ROCKETS", previous: p.rocket ? weapon("rockets") : null, next: weapon("rockets") };
-      case "zapper":
-      case "overcharged": return { label: "ZAPPER", previous: p.zapper ? weapon("zapper") : null, next: weapon("zapper") };
-      case "beam": return { label: "BIG GUN", previous: p.beam ? weapon("bigGun") : null, next: weapon("bigGun") };
-      default: return { label: "SYSTEM", previous: component(u.icon), next: component(u.icon) };
+      case "fire": preview.fireLevel++; break;
+      case "twin": preview.twin = Math.min(4, preview.twin + 1); break;
+      case "rocket": preview.rocket = Math.min(5, preview.rocket + 1); break;
+      case "zapper": preview.zapper = Math.min(5, preview.zapper + 1); break;
+      case "speed": preview.speed += 26; preview.speedLevel++; break;
+      case "shield": preview.maxShield += 12; preview.shield = preview.maxShield; preview.shieldLevel++; break;
+      case "hp": preview.maxHp += 18; preview.hpLevel++; break;
+      case "magnet": preview.magnet++; break;
+      case "beam": preview.beam = Math.min(3, preview.beam + 1); break;
+      case "pulse": preview.pulse = Math.min(3, preview.pulse + 1); break;
+      case "barrage": preview.barrage = Math.min(3, preview.barrage + 1); if (!preview.rocket) preview.rocket = 1; break;
+      case "overcharged": preview.keystoneId = "overcharged"; preview.rocketDisabled = true; if (!preview.zapper) preview.zapper = 1; break;
+      case "siege": preview.keystoneId = "siege"; preview.siegePayload = true; if (!preview.rocket) preview.rocket = 1; break;
+      case "reactor": preview.keystoneId = "reactor"; preview.pulseReactor = true; if (!preview.pulse) preview.pulse = 1; break;
     }
+    return preview;
   }
 
-  _drawCardComponent(ctx, img, visual, x, y, size, alpha = 1) {
-    if (!visual) {
-      ctx.save();
-      ctx.globalAlpha = alpha * 0.55;
-      ctx.strokeStyle = "rgba(220,235,255,0.55)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.28, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-      return;
-    }
-    const image = img.get(visual.assetKey);
-    if (!image) return;
+  _drawShipPreview(ctx, img, preview, x, y, scale, alpha = 1) {
+    preview.x = x;
+    preview.y = y;
     ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.translate(-x, -y);
     ctx.globalAlpha = alpha;
+    preview.draw(ctx, img);
+    ctx.restore();
+  }
+
+  _drawUpgradeIcon(ctx, img, u, x, y) {
+    const icon = img.get(u.icon);
+    if (!icon) return;
+    ctx.save();
     ctx.imageSmoothingEnabled = false;
-    const frame = visual.frameSize;
-    const sourceW = image.naturalWidth || image.width;
-    const sourceH = image.naturalHeight || image.height;
-    if (frame && sourceW >= frame && sourceH >= frame) {
-      ctx.drawImage(image, 0, 0, frame, frame, x - size / 2, y - size / 2, size, size);
-    } else {
-      this.game.drawAsset(ctx, image, x, y, size, size);
-    }
+    this.game.drawAsset(ctx, icon, x, y, 17, 17);
     ctx.restore();
   }
 
   _drawVisualTransition(ctx, img, u, c, accent) {
-    const visual = this._cardVisualTransition(u);
-    const left = c.x + 30, right = c.x + 80, center = c.x + 55, y = c.y + 52;
+    const left = c.x + 31, right = c.x + 78, center = c.x + 54, y = c.y + 52;
+    const before = this._previewPlayer(u, false);
+    const after = this._previewPlayer(u, true);
     ctx.save();
     ctx.globalAlpha = 0.18;
     ctx.fillStyle = accent.shadow;
@@ -200,15 +205,16 @@ export class UpgradeSystem {
     ctx.roundRect(c.x + 12, c.y + 14, 84, 70, 11);
     ctx.fill();
     ctx.globalAlpha = 1;
-    this._drawCardComponent(ctx, img, visual.previous, left, y, 30, 0.44);
-    this._drawCardComponent(ctx, img, visual.next, right, y, 42, 1);
+    this._drawShipPreview(ctx, img, before, left, y, 0.37, 0.48);
+    this._drawShipPreview(ctx, img, after, right, y, 0.44, 1);
     ctx.fillStyle = accent.shadow;
     ctx.font = "800 13px system-ui";
     ctx.textAlign = "center";
     ctx.fillText("→", center, y + 4);
-    ctx.globalAlpha = 0.8;
-    ctx.font = "800 8px system-ui";
-    ctx.fillText(visual.label, center, c.y + 78);
+    ctx.globalAlpha = 0.7;
+    ctx.font = "800 7px system-ui";
+    ctx.fillText("CURRENT", left, c.y + 79);
+    ctx.fillText("NEXT", right, c.y + 79);
     ctx.restore();
   }
 
@@ -473,10 +479,11 @@ export class UpgradeSystem {
       ctx.globalAlpha = 1;
 
       // Upgrade name, exact effect, then short explanation.
+      this._drawUpgradeIcon(ctx, img, u, c.x + 116, c.y + 35);
       ctx.textAlign = "left";
       ctx.fillStyle = CONFIG.colors.white;
       ctx.font = "800 17px system-ui";
-      ctx.fillText(u.name, c.x + 108, c.y + 42);
+      ctx.fillText(u.name, c.x + 128, c.y + 42);
 
       ctx.fillStyle = accent.shadow;
       ctx.font = "700 10px system-ui";
