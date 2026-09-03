@@ -152,5 +152,12 @@ export const ASSETS = {
   pickupAuto:      "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Auto Cannons.png",
   pickupRocket:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Rocket.png",
   pickupZapper:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Zapper.png",
-  pickupBigGun:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Big Space Gun 2000.png"
+  pickupBigGun:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Big Space Gun 2000.png",
+
+  // Original UI overlays generated for Galalaxy. They remain text-free so the
+  // canvas can keep all gameplay labels sharp and localizable.
+  uiUpgradeCardFrame: "assets/ui/upgrade-card-frame-v1.png",
+  uiBossAlertFrame:  "assets/ui/boss-alert-frame-v1.png",
+  uiTitleCommandPanel: "assets/ui/title-command-panel-v1.png",
+  uiStartRunButtonFrame: "assets/ui/start-run-button-frame-v1.png"
 };

@@ -1184,6 +1184,24 @@ export class Game {
       const boss = this.enemies.find(e => e.boss && !e.dead);
       if (boss) {
         const bx = 18, by = 90, bw = W - 36, bh = 7;
+
+        // Three-slice treatment: preserve the detailed alert end-caps while
+        // stretching only the central rail to the current viewport width.
+        const bossFrame = this.loader.get("uiBossAlertFrame");
+        if (bossFrame) {
+          const sx = 24, sy = 170, sw = 2123, sh = 369;
+          const capSrc = 250, capDst = 30;
+          const fx = bx - 7, fy = by - 17, fw = bw + 14, fh = 42;
+          const middleSrc = sw - capSrc * 2;
+          const middleDst = Math.max(1, fw - capDst * 2);
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+          ctx.globalAlpha = 0.76;
+          ctx.drawImage(bossFrame, sx, sy, capSrc, sh, fx, fy, capDst, fh);
+          ctx.drawImage(bossFrame, sx + capSrc, sy, middleSrc, sh, fx + capDst, fy, middleDst, fh);
+          ctx.drawImage(bossFrame, sx + sw - capSrc, sy, capSrc, sh, fx + fw - capDst, fy, capDst, fh);
+          ctx.restore();
+        }
         ctx.fillStyle = "rgba(2,6,20,0.82)";
         ctx.beginPath();
         ctx.roundRect(bx - 4, by - 11, bw + 8, bh + 17, 7);
@@ -1694,6 +1712,17 @@ export class Game {
     ctx.globalAlpha = 1;
     ctx.restore();
 
+    // Text-free title console: title and sector copy stay canvas-rendered so
+    // they remain crisp, localizable, and independent from generated art.
+    const titlePanel = this.loader.get("uiTitleCommandPanel");
+    if (titlePanel) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.88;
+      ctx.drawImage(titlePanel, 16, 12, 1743, 853, 16, 118, W - 32, 242);
+      ctx.restore();
+    }
+
     const shipPreviewY = 400 + Math.sin(t * 1.6) * 5;
 
     // ── Ship preview — parallax tilt from cursor/touch ──
@@ -1714,23 +1743,6 @@ export class Game {
     this.player.x = _px; this.player.y = _py; this.player.bank = _pb;
 
     // ── Title block ──
-    ctx.font = "500 13px system-ui";
-    ctx.fillStyle = "#b8d4f0";
-    ctx.globalAlpha = 0.7;
-    const oldLine = "VOID DRIFT · GALAXY SURVIVOR";
-    ctx.fillText(oldLine, cx, 164);
-    // Strikethrough only GALAXY
-    const prefixW  = ctx.measureText("VOID DRIFT · ").width;
-    const galaxyW  = ctx.measureText("GALAXY").width;
-    const lineLeft = cx - ctx.measureText(oldLine).width / 2;
-    ctx.strokeStyle = CONFIG.colors.white;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(lineLeft + prefixW, 160);
-    ctx.lineTo(lineLeft + prefixW + galaxyW, 160);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
     // GALALAXY — "LA" in cyan
     const glowPulse = 18 + Math.sin(t * 2.1) * 10;
     ctx.font = "900 52px system-ui";
@@ -1742,41 +1754,35 @@ export class Game {
     ctx.textAlign = "left";
     ctx.fillStyle = CONFIG.colors.white;
     ctx.shadowBlur = glowPulse;
-    ctx.fillText("GALA", tleft, 210);
+    ctx.fillText("GALA", tleft, 198);
     ctx.fillStyle = CONFIG.colors.cyan;
     ctx.shadowBlur = glowPulse * 1.4;
-    ctx.fillText("LA", tleft + galaW, 210);
+    ctx.fillText("LA", tleft + galaW, 198);
     ctx.fillStyle = CONFIG.colors.white;
     ctx.shadowBlur = glowPulse;
-    ctx.fillText("XY", tleft + galaW + laW, 210);
+    ctx.fillText("XY", tleft + galaW + laW, 198);
     ctx.shadowBlur = 0;
     ctx.textAlign = "center";
-
-    // VOID DRIFT subtitle
-    ctx.font = "700 16px system-ui";
-    ctx.fillStyle = CONFIG.colors.cyan;
-    ctx.shadowColor = CONFIG.colors.cyan;
-    ctx.shadowBlur = 8;
-    ctx.fillText("VOID DRIFT", cx, 232);
-    ctx.shadowBlur = 0;
 
     // Flavor text
     ctx.font = "400 11px system-ui";
     ctx.fillStyle = "#b8d4f0";
     ctx.globalAlpha = 0.75;
-    ctx.fillText("Kla'ed Fleet wants to know your location", cx, 248);
+    ctx.fillText("Kla'ed Fleet wants to know your location", cx, 235);
     ctx.globalAlpha = 1;
 
     // ── Sector names — staggered reveal ──
     const SECTOR_NAMES = ["I · Kla'ed Frontier", "II · Nairan Expanse", "III · Nautolan Depths", "IV · Void Core"];
-    ctx.font = "500 11px system-ui";
+    ctx.font = "500 10px system-ui";
     for (let i = 0; i < SECTOR_NAMES.length; i++) {
       const elapsed = t - (0.8 + i * 0.45);
       if (elapsed <= 0) break;
       const alpha = Math.min(1, elapsed / 0.35) * 0.55;
       ctx.globalAlpha = alpha;
       ctx.fillStyle = "#b8d4f0";
-      ctx.fillText(SECTOR_NAMES[i], cx, 272 + i * 20);
+      // Fit all four entries in the lower console bay: clear of both the
+      // central divider and the lower rail.
+      ctx.fillText(SECTOR_NAMES[i], cx, 294 + i * 12);
     }
     ctx.globalAlpha = 1;
 
@@ -1810,23 +1816,21 @@ export class Game {
       ctx.globalAlpha = 1;
     }
 
-    // Button bg
-    ctx.fillStyle = "rgba(88,230,255,0.08)";
+    // Button interior stays intentionally quiet; the generated frame carries
+    // the visual weight while the live label remains clear.
+    ctx.fillStyle = "rgba(5,17,36,0.78)";
     ctx.beginPath();
     ctx.roundRect(btnX, btnY, btnW, btnH, btnR);
     ctx.fill();
-    // Pulsing border
-    const btnPulse = 0.55 + Math.sin(t * 2.8) * 0.28;
-    ctx.strokeStyle = CONFIG.colors.cyan;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = CONFIG.colors.cyan;
-    ctx.shadowBlur = 14 + btnPulse * 18;
-    ctx.globalAlpha = 0.6 + btnPulse * 0.4;
-    ctx.beginPath();
-    ctx.roundRect(btnX, btnY, btnW, btnH, btnR);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
+    const startFrame = this.loader.get("uiStartRunButtonFrame");
+    if (startFrame) {
+      const btnPulse = 0.78 + Math.sin(t * 2.8) * 0.14;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = btnPulse;
+      ctx.drawImage(startFrame, 28, 110, 2117, 475, btnX - 4, btnY - 4, btnW + 8, btnH + 8);
+      ctx.restore();
+    }
     // Label
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "900 20px system-ui";

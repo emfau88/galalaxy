@@ -8,6 +8,10 @@ const FAMILY_ACCENT = {
   core:    { border: "rgba(88,230,255,{a})",  shadow: "#58e6ff", bg0: "rgba(28,58,110,0.96)", bg1: "rgba(14,16,44,0.96)" },
 };
 
+// The generated panel has deliberately transparent padding. Drawing only its
+// authored silhouette keeps the frame crisp at the game's fixed card size.
+const UPGRADE_CARD_FRAME_SOURCE = { x: 40, y: 82, w: 1865, h: 611 };
+
 // pool entry shape:
 //   id, name, desc, icon
 //   family: "zapper"|"rocket"|"pulse"|"core"
@@ -445,6 +449,18 @@ export class UpgradeSystem {
       ctx.roundRect(c.x, c.y, c.w, c.h, 16);
       ctx.stroke();
       ctx.shadowBlur = 0;
+
+      // The custom frame is an overlay, leaving the semantic family tint and
+      // every text/detail layer authored in canvas and therefore readable.
+      const cardFrame = img.get("uiUpgradeCardFrame");
+      if (cardFrame) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = u.keystone ? 1 : 0.82;
+        const f = UPGRADE_CARD_FRAME_SOURCE;
+        ctx.drawImage(cardFrame, f.x, f.y, f.w, f.h, c.x - 2, c.y - 3, c.w + 4, c.h + 6);
+        ctx.restore();
+      }
 
       this._drawVisualTransition(ctx, img, u, c, accent);
 

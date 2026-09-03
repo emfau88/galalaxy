@@ -4,6 +4,15 @@ A mobile-first arcade space-survivor built with vanilla JavaScript and HTML5 Can
 
 ## [▶ Play Galalaxy](https://emfau88.github.io/galalaxy/)
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/start-screen.png" alt="Galalaxy start screen" width="220" />
+  <img src="docs/screenshots/upgrade-cards.png" alt="Upgrade choice with current and next ship configuration" width="220" />
+  <img src="docs/screenshots/hud-boss.png" alt="Boss fight with the mobile HUD" width="220" />
+  <img src="docs/screenshots/ship-evolution.png" alt="Ship module progression preview" width="220" />
+</p>
+
 ## Features
 
 - Four escalating sectors with Kla'ed, Nairan and Nautolan fleets
