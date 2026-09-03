@@ -49,6 +49,7 @@ export class Game {
     this.nairanTestMode = searchParams.get("test") === "nairan-combat";
     this.nautolanTestMode = searchParams.get("test") === "nautolan-combat";
     this.hudTestMode = searchParams.get("test") === "hud-layout";
+    this.upgradeCardTestRocketMode = searchParams.get("upgradeFamily") === "rocket";
     if (searchParams.has("test")) window.__galalaxyTestGame = this;
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
     this.visualTestStartIndex = Number.isFinite(requestedStage)
@@ -203,11 +204,13 @@ export class Game {
     this.player.speed = 386;
     this.player.maxShield = 67;
     this.player.shield = this.player.maxShield;
-    const wanted = new Set(["speed", "shield", "beam"]);
+    const wanted = new Set(this.upgradeCardTestRocketMode
+      ? ["rocket", "hp", "magnet"]
+      : ["speed", "shield", "beam"]);
     this.upgrades.choices = this.upgrades.pool.filter(upgrade => wanted.has(upgrade.id));
-    const w = 330, h = 112;
+    const w = 370, h = 142;
     this.upgrades.cards = this.upgrades.choices.map((_, index) => ({
-      x: (CONFIG.designW - w) / 2, y: 232 + index * 128, w, h,
+      x: (CONFIG.designW - w) / 2, y: 190 + index * 155, w, h,
     }));
     this.state = "levelUp";
   }

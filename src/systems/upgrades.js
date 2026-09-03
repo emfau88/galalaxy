@@ -8,9 +8,10 @@ const FAMILY_ACCENT = {
   core:    { border: "rgba(88,230,255,{a})",  shadow: "#58e6ff", bg0: "rgba(28,58,110,0.96)", bg1: "rgba(14,16,44,0.96)" },
 };
 
-// The generated panel has deliberately transparent padding. Drawing only its
-// authored silhouette keeps the frame crisp at the game's fixed card size.
-const UPGRADE_CARD_FRAME_SOURCE = { x: 40, y: 82, w: 1865, h: 611 };
+// The v2 panel has a deliberately empty center: the gameplay canvas owns the
+// comparison and all text, so neither gets buried in decorative art.
+const UPGRADE_CARD_FRAME_SOURCE = { x: 38, y: 46, w: 1909, h: 683 };
+const ROCKET_CARD_FRAME_SOURCE = { x: 10, y: 4, w: 1963, h: 781 };
 
 // pool entry shape:
 //   id, name, desc, icon
@@ -199,26 +200,34 @@ export class UpgradeSystem {
   }
 
   _drawVisualTransition(ctx, img, u, c, accent) {
-    const left = c.x + 31, right = c.x + 78, center = c.x + 54, y = c.y + 52;
+    const bayX = c.x + 16, bayY = c.y + 31, bayW = 144, bayH = 90;
+    const left = bayX + 39, right = bayX + 105, center = bayX + 72, y = bayY + 38;
     const before = this._previewPlayer(u, false);
     const after = this._previewPlayer(u, true);
     ctx.save();
-    ctx.globalAlpha = 0.18;
+    ctx.globalAlpha = 0.2;
     ctx.fillStyle = accent.shadow;
     ctx.beginPath();
-    ctx.roundRect(c.x + 12, c.y + 14, 84, 70, 11);
+    ctx.roundRect(bayX, bayY, bayW, bayH, 10);
     ctx.fill();
+    ctx.globalAlpha = 0.42;
+    ctx.strokeStyle = accent.shadow;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(center, bayY + 12);
+    ctx.lineTo(center, bayY + bayH - 12);
+    ctx.stroke();
     ctx.globalAlpha = 1;
-    this._drawShipPreview(ctx, img, before, left, y, 0.37, 0.48);
-    this._drawShipPreview(ctx, img, after, right, y, 0.44, 1);
+    this._drawShipPreview(ctx, img, before, left, y, 0.62, 0.55);
+    this._drawShipPreview(ctx, img, after, right, y, 0.74, 1);
     ctx.fillStyle = accent.shadow;
-    ctx.font = "800 13px system-ui";
+    ctx.font = "800 12px system-ui";
     ctx.textAlign = "center";
     ctx.fillText("→", center, y + 4);
     ctx.globalAlpha = 0.7;
-    ctx.font = "800 7px system-ui";
-    ctx.fillText("CURRENT", left, c.y + 79);
-    ctx.fillText("NEXT", right, c.y + 79);
+    ctx.font = "800 8px system-ui";
+    ctx.fillText("NOW", left, bayY + bayH - 8);
+    ctx.fillText("AFTER", right, bayY + bayH - 8);
     ctx.restore();
   }
 
@@ -327,9 +336,9 @@ export class UpgradeSystem {
 
     this.choices = picked;
     this.cards = [];
-    const w = 330, h = 112;
+    const w = 370, h = 142;
     for (let i = 0; i < 3; i++) {
-      this.cards.push({ x: (CONFIG.designW - w) / 2, y: 232 + i * 128, w, h });
+      this.cards.push({ x: (CONFIG.designW - w) / 2, y: 190 + i * 155, w, h });
     }
   }
 
@@ -452,19 +461,18 @@ export class UpgradeSystem {
 
       // The custom frame is an overlay, leaving the semantic family tint and
       // every text/detail layer authored in canvas and therefore readable.
-      const cardFrame = img.get("uiUpgradeCardFrame");
+      const rocketFrame = u.family === "rocket";
+      const cardFrame = img.get(rocketFrame ? "uiUpgradeCardFrameRocket" : "uiUpgradeCardFrame");
       if (cardFrame) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = u.keystone ? 1 : 0.82;
-        const f = UPGRADE_CARD_FRAME_SOURCE;
+        ctx.globalAlpha = u.keystone || rocketFrame ? 0.94 : 0.82;
+        const f = rocketFrame ? ROCKET_CARD_FRAME_SOURCE : UPGRADE_CARD_FRAME_SOURCE;
         ctx.drawImage(cardFrame, f.x, f.y, f.w, f.h, c.x - 2, c.y - 3, c.w + 4, c.h + 6);
         ctx.restore();
       }
 
       this._drawVisualTransition(ctx, img, u, c, accent);
-
-      this._drawLevelProgress(ctx, u, c, accent);
 
       // Tag — KEYSTONE in gold, or family label
       ctx.textAlign = "right";
@@ -472,11 +480,11 @@ export class UpgradeSystem {
       if (u.keystone) {
         ctx.fillStyle = "#ffcc44";
         ctx.globalAlpha = 0.95;
-        ctx.fillText("✦ KEYSTONE", c.x + c.w - 14, c.y + 18);
+        ctx.fillText("✦ KEYSTONE", c.x + c.w - 16, c.y + 21);
       } else if (u.family !== "core") {
         ctx.fillStyle = accent.shadow;
         ctx.globalAlpha = 0.7;
-        ctx.fillText(u.family.toUpperCase(), c.x + c.w - 14, c.y + 18);
+        ctx.fillText(u.family.toUpperCase(), c.x + c.w - 16, c.y + 21);
       }
       ctx.globalAlpha = 1;
 
@@ -491,19 +499,19 @@ export class UpgradeSystem {
         : u.maxLevel === null
           ? `STACK ${lvl} → ${lvl + 1}`
           : `LV ${lvl} → ${Math.min(u.maxLevel, lvl + 1)}`;
-      ctx.fillText(levelLabel, c.x + 108, c.y + 18);
+      ctx.fillText(levelLabel, c.x + 174, c.y + 21);
       ctx.globalAlpha = 1;
 
       // Upgrade name, exact effect, then short explanation.
-      this._drawUpgradeIcon(ctx, img, u, c.x + 116, c.y + 35);
+      this._drawUpgradeIcon(ctx, img, u, c.x + 184, c.y + 47);
       ctx.textAlign = "left";
       ctx.fillStyle = CONFIG.colors.white;
-      ctx.font = "800 17px system-ui";
-      ctx.fillText(u.name, c.x + 128, c.y + 42);
+      ctx.font = "800 16px system-ui";
+      ctx.fillText(u.name, c.x + 198, c.y + 53);
 
       ctx.fillStyle = accent.shadow;
       ctx.font = "700 10px system-ui";
-      ctx.fillText(this._effectPreview(u), c.x + 108, c.y + 63);
+      ctx.fillText(this._effectPreview(u), c.x + 174, c.y + 76);
 
       ctx.fillStyle = CONFIG.colors.dim;
       ctx.font = "400 11px system-ui";
@@ -513,8 +521,8 @@ export class UpgradeSystem {
         if ((line1 + wd).length < 31) line1 += (line1 ? " " : "") + wd;
         else line2 += (line2 ? " " : "") + wd;
       }
-      ctx.fillText(line1, c.x + 108, c.y + 84);
-      if (line2) ctx.fillText(line2, c.x + 108, c.y + 99);
+      ctx.fillText(line1, c.x + 174, c.y + 101);
+      if (line2) ctx.fillText(line2, c.x + 174, c.y + 117);
     }
 
     ctx.restore();

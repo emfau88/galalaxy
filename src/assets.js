@@ -156,7 +156,8 @@ export const ASSETS = {
 
   // Original UI overlays generated for Galalaxy. They remain text-free so the
   // canvas can keep all gameplay labels sharp and localizable.
-  uiUpgradeCardFrame: "assets/ui/upgrade-card-frame-v1.png",
+  uiUpgradeCardFrame: "assets/ui/upgrade-card-frame-v2.png",
+  uiUpgradeCardFrameRocket: "assets/ui/upgrade-card-frame-rocket-v1.png",
   uiBossAlertFrame:  "assets/ui/boss-alert-frame-v1.png",
   uiTitleCommandPanel: "assets/ui/title-command-panel-v1.png",
   uiStartRunButtonFrame: "assets/ui/start-run-button-frame-v1.png"
