@@ -1660,7 +1660,7 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "900 30px system-ui";
-    ctx.fillText("VOID DRIFT", CONFIG.designW / 2, 300);
+    ctx.fillText("GALALAXY", CONFIG.designW / 2, 300);
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "600 14px system-ui";
     ctx.fillText("Loading combat systems...", CONFIG.designW / 2, 330);

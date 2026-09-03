@@ -11,7 +11,7 @@ export const PROJECTILE_VISUALS = {
   // attachments: cannon rounds stay nimble while rockets read as the heavier
   // payload at a glance.
   playerAuto:   { assetKey: "projectileAuto",   w: 42, h: 42, rotOffset: Math.PI / 2, color: "#58e6ff", glowColor: "#58e6ff", frameW: 32, frameH: 32, frameCount: 4,  fps: 10 },
-  playerRocket: { assetKey: "projectileRocket", w: 62, h: 62, scaleX: 1.45, rotOffset: Math.PI / 2, color: "#ffb347", glowColor: "#ff8a32", frameW: 32, frameH: 32, frameCount: 3,  fps: 10 },
+  playerRocket: { assetKey: "projectileRocket", w: 74, h: 74, scaleX: 1.45, rotOffset: Math.PI / 2, color: "#ffb347", glowColor: "#ff8a32", frameW: 32, frameH: 32, frameCount: 3,  fps: 10 },
   playerZapper: { assetKey: "projectileZapper", w: 51, h: 51, rotOffset: Math.PI / 2, color: "#dc78ff", glowColor: "#bd55ff", frameW: 32, frameH: 32, frameCount: 8,  fps: 10 },
   playerBigGun: { assetKey: "projectileBigGun", w: 51, h: 51, rotOffset: 0,           color: "#85ff8e", glowColor: "#4cff72", frameW: 32, frameH: 32, frameCount: 10, fps: 10 },
 

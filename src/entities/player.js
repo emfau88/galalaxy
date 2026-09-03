@@ -421,10 +421,13 @@ export class Player {
     else this.game.drawFallbackShip(ctx, 0, 0, 1);
 
     if (showPassive) this._drawPassiveUpgradeLayers(ctx, bc, t);
-    if (showWeapon) this._drawWeaponLayer(ctx, img, t);
     if (showKeystone) this._drawKeystoneAura(ctx, t);
     if (showShield) this._drawShieldLayer(ctx, img, t);
 
+    // Damage sprites, the hit flash and the temporary invulnerability shield
+    // must never make permanently installed weapons appear to detach. Weapon
+    // modules are physical exterior attachments, so they are the final ship
+    // layer regardless of the hull's health state.
     if (this.hitFlash > 0) {
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = this.hitFlash / 0.14;
@@ -433,6 +436,8 @@ export class Player {
       ctx.arc(0, 0, 38, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    if (showWeapon) this._drawWeaponLayer(ctx, img, t);
 
     ctx.restore();
   }

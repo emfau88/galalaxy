@@ -33,7 +33,7 @@ const POOL = [
   { id: "beam",    name: "Big Space Gun",  desc: "Piercing energy orb. Higher levels recharge faster.", icon: "pickupBigGun", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Rocket Family ---
-  { id: "rocket",  name: "Rocket Burst",   desc: "Chance to launch homing rockets.",     icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
+  { id: "rocket",  name: "Homing Rockets", desc: "Raises the chance to launch a homing rocket.", icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
   { id: "barrage", name: "Rocket Barrage", desc: "Rockets launch in rapid 3-shot bursts.", icon: "pickupRocket",   family: "rocket", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Pulse Family ---
