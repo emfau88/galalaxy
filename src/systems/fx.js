@@ -67,14 +67,16 @@ export function emitTrail(game, pr) {
   const cols = colorsFor(pr.visualKey, pr.owner);
   const isBoss = pr.visualKey && pr.visualKey.endsWith("Boss");
   const isPlayer = pr.owner === "player";
+  const isPlayerRocket = pr.visualKey === "playerRocket";
 
   // Trail length / brightness by type
-  const life = isBoss ? 0.22 : isPlayer ? 0.12 : 0.15;
-  const size = isBoss ? 2.8 : isPlayer ? 2.2 : 1.8;
-  const spread = 12;
+  const life = isBoss ? 0.22 : isPlayerRocket ? 0.19 : isPlayer ? 0.12 : 0.15;
+  const size = isBoss ? 2.8 : isPlayerRocket ? 3.35 : isPlayer ? 2.2 : 1.8;
+  const spread = isPlayerRocket ? 16 : 12;
 
-  // Emit 1 trail particle (2 for boss)
-  const count = isBoss ? 2 : 1;
+  // Rockets receive a brighter two-particle exhaust; other player shots stay
+  // light enough for mobile performance.
+  const count = isBoss || isPlayerRocket ? 2 : 1;
   for (let i = 0; i < count; i++) {
     const ox = (Math.random() - 0.5) * spread * 0.3;
     const oy = (Math.random() - 0.5) * spread * 0.3;
@@ -86,6 +88,23 @@ export function emitTrail(game, pr) {
       Math.cos(ang) * spd, Math.sin(ang) * spd,
       i === 0 ? cols.primary : cols.secondary,
       life, size
+    );
+  }
+}
+
+export function emitRocketLaunch(game, x, y, angle) {
+  if (game.lowEffects) return;
+  const exhaustAngle = angle + Math.PI;
+  for (let i = 0; i < 4; i++) {
+    const spread = (i - 1.5) * 0.18;
+    const speed = 95 + i * 22;
+    pushParticle(
+      game, x, y,
+      Math.cos(exhaustAngle + spread) * speed,
+      Math.sin(exhaustAngle + spread) * speed,
+      i === 0 ? "#fff1af" : "#ff7b2f",
+      0.18 + i * 0.018,
+      2.8 - i * 0.22,
     );
   }
 }

@@ -1,6 +1,7 @@
 import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp } from "../utils.js";
 import { updateBeam, updatePulse } from "../systems/abilities.js";
+import { emitRocketLaunch } from "../systems/fx.js";
 import {
   PLAYER_ANIMATION_FPS,
   PLAYER_INVINCIBILITY_VISUAL,
@@ -224,13 +225,21 @@ export class Player {
 
     const twinDmg = 11 + this.twin * 1.5;
     const delay = moduleVisible ? visual.releaseFrames[0] * frameDuration : 0;
-    for (const offset of offsets) {
-      this.queueWeaponShot(delay, () => {
+    const volleySize = offsets.length;
+    for (let shotIndex = 0; shotIndex < volleySize; shotIndex++) {
+      const offset = offsets[shotIndex];
+      // A two-barrel burst remains perfectly parallel. Extra barrels form a
+      // subtle fan and fire a few milliseconds apart, so a five-shot upgrade
+      // reads as a physical salvo rather than a flat laser wall.
+      const spreadRank = volleySize > 1 ? (shotIndex / (volleySize - 1)) * 2 - 1 : 0;
+      const salvoDelay = volleySize > 2 ? Math.abs(spreadRank) * 0.044 : 0;
+      const angle = -Math.PI / 2 + (volleySize > 2 ? spreadRank * 0.06 : 0);
+      this.queueWeaponShot(delay + salvoDelay, () => {
         const scale = this.shipVisualScale();
         this.game.spawnProjectile(
           this.x + offset * scale,
           this.y + visual.muzzles[0].y * scale,
-          -Math.PI / 2,
+          angle,
           640,
           twinDmg,
           "player",
@@ -266,6 +275,8 @@ export class Player {
         const spread = count > 1 ? (i - 1) * 0.08 : 0;
         const angle = target ? Math.atan2(target.y - y, target.x - x) + spread : -Math.PI / 2 + spread;
         this.game.spawnProjectile(x, y, angle, 420 + i * 12, damage, "player", "rocket", visual.projectileKey);
+        emitRocketLaunch(this.game, x, y, angle);
+        this.game.shake = Math.max(this.game.shake, 0.55);
       });
     }
     this._rocketBarrel = (this._rocketBarrel + count) % visual.muzzles.length;

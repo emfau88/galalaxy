@@ -83,8 +83,8 @@ export class Projectile {
       ? Math.floor(this.age * (vis.fps || 12)) % frameCount
       : 0;
     const scale = Math.min(vis.w / frameW, vis.h / frameH);
-    const drawW = frameW * scale;
-    const drawH = frameH * scale;
+    const drawW = frameW * scale * (vis.scaleX || 1);
+    const drawH = frameH * scale * (vis.scaleY || 1);
     ctx.drawImage(
       img,
       frameIndex * frameW, 0, frameW, frameH,
