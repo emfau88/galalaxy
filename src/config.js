@@ -59,6 +59,10 @@ export const STRIP_RATIO = 2.2;
 // Engine level 0–3: each upgrade has a tangible increase in top speed.
 export const PLAYER_ENGINE_SPEEDS = [260, 300, 345, 395];
 
+// Delay before a damaged shield may begin recovering. Higher shield stages
+// recover more quickly and resume sooner, so they remain a meaningful choice.
+export const PLAYER_SHIELD_RECHARGE_DELAYS = [6, 4, 2, 1];
+
 // Passive weapons supplement the auto cannon. Their values account for the
 // authored firing animations, which impose a practical cadence limit.
 export const PLAYER_WEAPON_BALANCE = {

@@ -114,13 +114,12 @@ export class Game {
       }
     });
 
-    // Bottom-corner utility buttons remain tap-only, never movement targets.
+    // Utility controls remain tap-only and sit away from the steering corner.
     const MBX = CONFIG.designW - 52, MBY = CONFIG.designH - 52;
     this._muteBtnZone = { x: MBX, y: MBY, w: 48, h: 48 };
     this.input.exclusionZones.push(this._muteBtnZone);
-    this._fullscreenBtnZone = { x: 4, y: CONFIG.designH - 52, w: 48, h: 48 };
+    this._fullscreenBtnZone = this._fullscreenButtonZone();
     this.fullscreenAvailable = Boolean(document.fullscreenEnabled && this.canvas.requestFullscreen);
-    if (this.fullscreenAvailable) this.input.exclusionZones.push(this._fullscreenBtnZone);
 
     this.initStars();
     this.loader.load().then(() => {
@@ -165,6 +164,18 @@ export class Game {
     this.offsetX = (sw - CONFIG.designW * this.scale) / 2;
     this.offsetY = (sh - CONFIG.designH * this.scale) / 2;
     this.safeTopPx = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
+    if (this._fullscreenBtnZone) this._fullscreenBtnZone = this._fullscreenButtonZone();
+  }
+
+  hudHeaderOffsetY() {
+    const hudHeight = 74;
+    const topPadding = this.safeTopPx + 4;
+    if (this.offsetY < topPadding + hudHeight * this.scale) return 0;
+    return (topPadding - this.offsetY) / this.scale - 8;
+  }
+
+  _fullscreenButtonZone() {
+    return { x: CONFIG.designW - 72, y: 59 + this.hudHeaderOffsetY(), w: 28, h: 22 };
   }
 
   initStars() {
@@ -967,7 +978,7 @@ export class Game {
   drawFullscreenButton(ctx) {
     if (!this.fullscreenAvailable) return;
     const fz = this._fullscreenBtnZone;
-    const x = fz.x + fz.w / 2, y = fz.y + fz.h / 2, r = 14;
+    const x = fz.x + fz.w / 2, y = fz.y + fz.h / 2, r = 10;
     ctx.save();
     ctx.globalAlpha = 0.62;
     ctx.fillStyle = "rgba(2,6,20,0.82)";
@@ -980,8 +991,8 @@ export class Game {
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.strokeStyle = this.fullscreenActive ? CONFIG.colors.pink : CONFIG.colors.cyan;
-    ctx.lineWidth = 1.5;
-    const d = 6, s = 4;
+    ctx.lineWidth = 1.35;
+    const d = 4.5, s = 2.5;
     ctx.beginPath();
     if (this.fullscreenActive) {
       ctx.moveTo(x - d, y - s); ctx.lineTo(x - s, y - s); ctx.lineTo(x - s, y - d);
@@ -1181,14 +1192,9 @@ export class Game {
     // Portrait displays can have a genuine letterbox area above the 420×760
     // playfield. Use it only when the entire compact HUD fits there; shorter
     // displays and desktop retain the in-world placement.
-    const hudHeight = 74;
-    const topPadding = this.safeTopPx + 4;
-    const canUseTopLetterbox = this.offsetY >= topPadding + hudHeight * this.scale;
+    const headerOffsetY = this.hudHeaderOffsetY();
     ctx.save();
-    if (canUseTopLetterbox) {
-      const designOffset = (topPadding - this.offsetY) / this.scale - 8;
-      ctx.translate(0, designOffset);
-    }
+    if (headerOffsetY) ctx.translate(0, headerOffsetY);
     const W = CONFIG.designW;
     const p = this.player;
     const sector = SECTORS[this.currentSectorIndex];

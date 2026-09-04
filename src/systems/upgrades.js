@@ -1,4 +1,4 @@
-import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_WEAPON_BALANCE } from "../config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_SHIELD_RECHARGE_DELAYS, PLAYER_WEAPON_BALANCE } from "../config.js";
 
 // Family color accents for card tinting
 const FAMILY_ACCENT = {
@@ -39,7 +39,7 @@ const POOL = [
   { id: "fire",    name: "Fire Rate",      desc: "Auto cannon fires faster.",           icon: "pickupAuto",        family: "core",   maxLevel: null, minLevel: 0, weight: 10 },
   { id: "twin",    name: "Multi Cannon",   desc: "Adds cannon barrels. Up to 5 shots.", icon: "pickupAuto",        family: "core",   maxLevel: 4,    minLevel: 0, weight: 8  },
   { id: "speed",   name: "Engine Boost",   desc: "Raises maximum ship speed.",          icon: "pickupSuper",       family: "core",   maxLevel: 3,    minLevel: 0, weight: 7  },
-  { id: "shield",  name: "Shield Array",   desc: "More shield capacity and faster recharge.", icon: "pickupShield",    family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
+  { id: "shield",  name: "Shield Array",   desc: "More capacity, faster recharge and shorter recovery.", icon: "pickupShield", family: "core", maxLevel: null, minLevel: 0, weight: 7  },
   { id: "hp",      name: "Hull Upgrade",   desc: "Max HP increases.",                    icon: "playerFull",        family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "magnet",  name: "Pickup Magnet",  desc: "Energy pulls in from farther away.",   icon: "pickupPulse",       family: "core",   maxLevel: null, minLevel: 0, weight: 5  },
 
@@ -107,8 +107,11 @@ export class UpgradeSystem {
         const next = Math.round(nextBaseSpeed * p.getEvolutionMoveMultiplier());
         return `Max speed  ${current}${arrow}${next}`;
       }
-      case "shield":
-        return `Shield  ${p.maxShield}${arrow}${p.maxShield + 12}  ·  Regen +1.25/s`;
+      case "shield": {
+        const nextLevel = p.shieldLevel + 1;
+        const nextDelay = PLAYER_SHIELD_RECHARGE_DELAYS[Math.min(PLAYER_SHIELD_RECHARGE_DELAYS.length - 1, nextLevel)];
+        return `Shield  ${p.maxShield}${arrow}${p.maxShield + 12}  ·  Delay ${nextDelay}s`;
+      }
       case "hp":
         return `Hull  ${p.maxHp}${arrow}${p.maxHp + 18}`;
       case "magnet": {

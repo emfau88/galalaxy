@@ -1,4 +1,4 @@
-import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_WEAPON_BALANCE, RENDER_CONFIG } from "../config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_SHIELD_RECHARGE_DELAYS, PLAYER_WEAPON_BALANCE, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp } from "../utils.js";
 import { updateBeam, updatePulse } from "../systems/abilities.js";
 import { emitRocketLaunch } from "../systems/fx.js";
@@ -42,6 +42,7 @@ export class Player {
     this.zapper = 0;
     this.magnet = 0;
     this.shieldRegen = 2.2;
+    this.shieldRechargeDelay = 0;
     this.speedLevel = 0;
     this.shieldLevel = 0;
     this.hpLevel = 0;
@@ -155,6 +156,10 @@ export class Player {
     return 1.0;
   }
 
+  shieldRechargeDelayDuration() {
+    return PLAYER_SHIELD_RECHARGE_DELAYS[Math.min(PLAYER_SHIELD_RECHARGE_DELAYS.length - 1, this.shieldLevel)];
+  }
+
   // Returns "assault"|"energy"|"siege" based on build affinity
   shipBranch() {
     const zapScore    = this.zapper + this.beam * 2;
@@ -197,7 +202,10 @@ export class Player {
     this.aegisCooldown = Math.max(0, this.aegisCooldown - dt);
     this.aegisReadyFlash = Math.max(0, this.aegisReadyFlash - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
-    this.shield = clamp(this.shield + this.shieldRegen * dt, 0, this.maxShield);
+    this.shieldRechargeDelay = Math.max(0, this.shieldRechargeDelay - dt);
+    if (this.shieldRechargeDelay <= 0) {
+      this.shield = clamp(this.shield + this.shieldRegen * dt, 0, this.maxShield);
+    }
     this.updatePendingWeaponShots(dt);
 
     this.fireTimer -= dt;
@@ -403,6 +411,7 @@ export class Player {
       const used = Math.min(this.shield, left);
       this.shield -= used;
       left -= used;
+      this.shieldRechargeDelay = this.shieldRechargeDelayDuration();
     }
     if (left > 0 && this.emergencyAegis && this.aegisCooldown <= 0) {
       // The triggering hull hit is fully blocked, then the authored
