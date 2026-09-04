@@ -59,6 +59,25 @@ export const STRIP_RATIO = 2.2;
 // Engine level 0–3: each upgrade has a tangible increase in top speed.
 export const PLAYER_ENGINE_SPEEDS = [260, 300, 345, 395];
 
+// Passive weapons supplement the auto cannon. Their values account for the
+// authored firing animations, which impose a practical cadence limit.
+export const PLAYER_WEAPON_BALANCE = {
+  rocket: {
+    baseChance: 0.28,
+    chancePerLevel: 0.08,
+    baseDamage: 28,
+    damagePerLevel: 6,
+    barrageDamagePerLevel: 6,
+  },
+  zapper: {
+    baseChance: 0.40,
+    chancePerLevel: 0.08,
+    baseDamage: 28,
+    damagePerLevel: 7,
+    chainDamageMultiplier: 0.65,
+  },
+};
+
 export const CONTROL_CONFIG = {
   // Applied only on touch input: ship leads the finger by this many design-pixels upward.
   // Keeps the ship visible above the thumb. Clamped so ship can't leave the play area.

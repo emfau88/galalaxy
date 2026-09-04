@@ -1,4 +1,4 @@
-import { CONFIG, PLAYER_ENGINE_SPEEDS } from "../config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_WEAPON_BALANCE } from "../config.js";
 
 // Family color accents for card tinting
 const FAMILY_ACCENT = {
@@ -44,11 +44,11 @@ const POOL = [
   { id: "magnet",  name: "Pickup Magnet",  desc: "Energy pulls in from farther away.",   icon: "pickupPulse",       family: "core",   maxLevel: null, minLevel: 0, weight: 5  },
 
   // --- Zapper Family ---
-  { id: "zapper",  name: "Zapper Chain",   desc: "Direct lightning grows brighter and chains farther.", icon: "pickupZapper", family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
+  { id: "zapper",  name: "Zapper Chain",   desc: "Frequent lightning one-shots small ships and chains.", icon: "pickupZapper", family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
   { id: "beam",    name: "Big Space Gun",  desc: "Piercing energy orb. Higher levels recharge faster.", icon: "pickupBigGun", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Rocket Family ---
-  { id: "rocket",  name: "Homing Rockets", desc: "Launches a homing rocket more often.", icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
+  { id: "rocket",  name: "Homing Rockets", desc: "Launches tougher homing rockets more often.", icon: "pickupRocket", family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
   { id: "barrage", name: "Rocket Barrage", desc: "Each rocket launch fires a 3-rocket volley.", icon: "pickupRocket", family: "rocket", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Pulse Family ---
@@ -116,20 +116,22 @@ export class UpgradeSystem {
         return `Pickup radius  ${current}${arrow}${current + 48}`;
       }
       case "rocket": {
+        const balance = PLAYER_WEAPON_BALANCE.rocket;
         const damageMult = p.siegePayload ? 2.5 : 1;
-        const currentChance = p.rocket > 0 ? Math.round((0.18 + p.rocket * 0.04) * 100) : 0;
+        const currentChance = p.rocket > 0 ? Math.round((balance.baseChance + p.rocket * balance.chancePerLevel) * 100) : 0;
         const nextLevel = Math.min(5, p.rocket + 1);
-        const nextChance = Math.round((0.18 + nextLevel * 0.04) * 100);
-        const currentDamage = p.rocket > 0 ? Math.round((22 + p.rocket * 4 + p.barrage * 5) * damageMult) : 0;
-        const nextDamage = Math.round((22 + nextLevel * 4 + p.barrage * 5) * damageMult);
+        const nextChance = Math.round((balance.baseChance + nextLevel * balance.chancePerLevel) * 100);
+        const currentDamage = p.rocket > 0 ? Math.round((balance.baseDamage + p.rocket * balance.damagePerLevel + p.barrage * balance.barrageDamagePerLevel) * damageMult) : 0;
+        const nextDamage = Math.round((balance.baseDamage + nextLevel * balance.damagePerLevel + p.barrage * balance.barrageDamagePerLevel) * damageMult);
         return `Chance ${currentChance}%${arrow}${nextChance}%  ·  DMG ${currentDamage}${arrow}${nextDamage}`;
       }
       case "zapper": {
+        const balance = PLAYER_WEAPON_BALANCE.zapper;
         const overcharged = p.keystoneId === "overcharged";
         const nextLevel = Math.min(5, p.zapper + 1);
         const damageMult = overcharged ? 2.2 : 1;
-        const currentDamage = p.zapper > 0 ? Math.round((20 + p.zapper * 5) * damageMult) : 0;
-        const nextDamage = Math.round((20 + nextLevel * 5) * damageMult);
+        const currentDamage = p.zapper > 0 ? Math.round((balance.baseDamage + p.zapper * balance.damagePerLevel) * damageMult) : 0;
+        const nextDamage = Math.round((balance.baseDamage + nextLevel * balance.damagePerLevel) * damageMult);
         const currentChains = overcharged ? 3 : Math.floor(p.zapper / 2);
         const nextChains = overcharged ? 3 : Math.floor(nextLevel / 2);
         return `DMG ${currentDamage}${arrow}${nextDamage}  ·  ARC ${currentChains}${arrow}${nextChains}`;
@@ -152,9 +154,10 @@ export class UpgradeSystem {
         return `Radius ${currentRadius}${arrow}${nextRadius}  ·  DMG ${currentDamage}${arrow}${nextDamage}`;
       }
       case "barrage": {
+        const balance = PLAYER_WEAPON_BALANCE.rocket;
         const damageMult = p.siegePayload ? 2.5 : 1;
-        const currentDamage = Math.round((22 + p.rocket * 4 + p.barrage * 5) * damageMult);
-        const nextDamage = Math.round((22 + p.rocket * 4 + (p.barrage + 1) * 5) * damageMult);
+        const currentDamage = Math.round((balance.baseDamage + p.rocket * balance.damagePerLevel + p.barrage * balance.barrageDamagePerLevel) * damageMult);
+        const nextDamage = Math.round((balance.baseDamage + p.rocket * balance.damagePerLevel + (p.barrage + 1) * balance.barrageDamagePerLevel) * damageMult);
         return p.barrage === 0
           ? `Rockets  1${arrow}3  ·  DMG ${currentDamage}${arrow}${nextDamage}`
           : `3-rockets burst  ·  DMG ${currentDamage}${arrow}${nextDamage}`;

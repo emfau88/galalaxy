@@ -1,4 +1,4 @@
-import { CONFIG, PLAYER_ENGINE_SPEEDS, RENDER_CONFIG } from "../config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_WEAPON_BALANCE, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp } from "../utils.js";
 import { updateBeam, updatePulse } from "../systems/abilities.js";
 import { emitRocketLaunch } from "../systems/fx.js";
@@ -267,7 +267,8 @@ export class Player {
 
   _tryFireRockets(force = false) {
     if ((!this.rocket && !force) || this.rocketDisabled || this.isWeaponAnimationActive("rockets")) return;
-    const chance = 0.18 + this.rocket * 0.04;
+    const balance = PLAYER_WEAPON_BALANCE.rocket;
+    const chance = balance.baseChance + this.rocket * balance.chancePerLevel;
     if (!force && Math.random() >= chance) return;
 
     const visual = PLAYER_WEAPON_VISUALS.rockets;
@@ -277,7 +278,11 @@ export class Player {
     const animationFrames = count > 1 ? visual.frameCount : 7;
     const frameDuration = this.triggerWeaponAnimation("rockets", null, animationFrames);
     const dmgMult = this.siegePayload ? 2.5 : 1;
-    const damage = (22 + Math.max(1, this.rocket) * 4 + this.barrage * 5) * dmgMult;
+    const damage = (
+      balance.baseDamage +
+      Math.max(1, this.rocket) * balance.damagePerLevel +
+      this.barrage * balance.barrageDamagePerLevel
+    ) * dmgMult;
 
     for (let i = 0; i < count; i++) {
       const muzzle = visual.muzzles[(this._rocketBarrel + i) % visual.muzzles.length];
@@ -300,10 +305,10 @@ export class Player {
   _tryFireZapper(force = false) {
     if ((!this.zapper && !force) || this.isWeaponAnimationActive("zapper")) return;
     const overcharged = this.keystoneId === "overcharged";
-    // A level-one Zapper must read as a real weapon, not as a rare flicker.
-    // Higher ranks still improve its frequency, while Overcharged remains the
-    // always-on keystone version.
-    const chance = overcharged ? 1 : 0.28 + this.zapper * 0.04;
+    const balance = PLAYER_WEAPON_BALANCE.zapper;
+    // The full firing strip sets the practical cadence, so the ordinary
+    // chance needs to be high enough for a level-one Zapper to feel reliable.
+    const chance = overcharged ? 1 : balance.baseChance + this.zapper * balance.chancePerLevel;
     if (!force && Math.random() >= chance) return;
 
     const target = this.game.closestEnemy(this.x, this.y, 300);
@@ -311,13 +316,15 @@ export class Player {
 
     const visual = PLAYER_WEAPON_VISUALS.zapper;
     const frameDuration = this.triggerWeaponAnimation("zapper");
-    const zapDmg = (20 + Math.max(1, this.zapper) * 5) * (overcharged ? 2.2 : 1);
+    const zapDmg = (
+      balance.baseDamage + Math.max(1, this.zapper) * balance.damagePerLevel
+    ) * (overcharged ? 2.2 : 1);
     // Level 2 unlocks the first jump; levels 4–5 earn a second. The
     // Overcharged Core extends that pattern once more for a true lightning
     // build, rather than merely raising a hidden damage value.
     const chainCount = overcharged ? 3 : Math.floor(this.zapper / 2);
     const chainRange = 180 + Math.max(0, this.zapper - 1) * 25;
-    const zapIntensity = 1 + Math.max(0, this.zapper - 1) * 0.15 + (overcharged ? 0.25 : 0);
+    const zapIntensity = 1.16 + Math.max(0, this.zapper - 1) * 0.18 + (overcharged ? 0.28 : 0);
 
     this.queueWeaponShot(visual.releaseFrames[0] * frameDuration, () => {
       const scale = this.shipVisualScale();
@@ -352,7 +359,7 @@ export class Player {
         }
       }
       if (!next) break;
-      next.damage(damage * 0.6);
+      next.damage(damage * PLAYER_WEAPON_BALANCE.zapper.chainDamageMultiplier);
       this.game.spawnZap(last.x, last.y, next.x, next.y, true, intensity * 0.78);
       visited.add(next);
       last = next;
