@@ -273,12 +273,12 @@ export class Enemy {
     this.game.spawnEnemyDestruction(this);
     this.game.score += this.score;
     this.game.kills++;
-    this.game.dropXp(this.x, this.y, this.boss ? 12 : 1 + Math.floor(this.score / 70));
     const wasBoss = this.boss;
+    if (wasBoss) this.game.onBossKilled(this.x, this.y, 12);
+    else this.game.dropXp(this.x, this.y, 1 + Math.floor(this.score / 70));
     this.game.explosion(this.x, this.y, wasBoss ? 42 : 22);
     this.game.deathBurst(this);
     this.game.shake = Math.max(this.game.shake, wasBoss ? 10 : 3);
-    if (wasBoss) this.game.onBossKilled();
   }
 
   draw(ctx, img) {

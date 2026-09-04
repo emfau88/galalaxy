@@ -431,7 +431,8 @@ export class UpgradeSystem {
     }
     this._pickCount++;
     this.game.input.cancelMovement();
-    this.game.state = "playing";
+    this.game.state = this.game.resumeAfterUpgradeState || "playing";
+    this.game.resumeAfterUpgradeState = null;
   }
 
   handleTap(x, y) {

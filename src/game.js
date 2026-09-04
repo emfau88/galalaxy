@@ -31,6 +31,9 @@ const PLAYER_VISUAL_TEST_STAGES = [
   { title: "EMERGENCY AEGIS", detail: "Keystone: hull hit protection ready", player: { speedLevel: 3, shieldLevel: 2, emergencyAegis: true, invuln: 999 } },
 ];
 
+const VICTORY_PLAY_BUTTON = { x: 72, y: 482, w: 276, h: 66 };
+const VICTORY_HANGAR_BUTTON = { x: 88, y: 574, w: 244, h: 50 };
+
 export class Game {
   constructor() {
     this.canvas = $("game");
@@ -77,6 +80,7 @@ export class Game {
     this.sectorTransition = 0;
     this.bossRewardTimer = 0;
     this.bossRewardData = null;
+    this.resumeAfterUpgradeState = null;
     this.titleTime = 0;
     this.musicMuted = false;
     this.fullscreenActive = Boolean(document.fullscreenElement);
@@ -207,6 +211,7 @@ export class Game {
     this.evolutionFlash = 0;
     this.bossRewardTimer = 0;
     this.bossRewardData = null;
+    this.resumeAfterUpgradeState = null;
     this.shake = 0;
     this.upgrades._pickCount = 0;
     this.state = "playing";
@@ -452,16 +457,19 @@ export class Game {
     if (this.state === "title") {
       if (y > 500 && y < 610) this.startRun();
     } else if (this.state === "gameOver") {
-      if (y > 510 && y < 610) this.startRun();
+      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRun();
+      else if (this._hitRect(x, y, VICTORY_HANGAR_BUTTON)) this.returnToHangar();
     } else if (this.state === "victory") {
-      if (y > 510 && y < 610) this.startRun();
+      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRun();
+      else if (this._hitRect(x, y, VICTORY_HANGAR_BUTTON)) this.returnToHangar();
     } else if (this.state === "levelUp") {
       this.upgrades.handleTap(x, y);
     } else if (this.state === "paused") {
       this.state = "playing";
     } else if (this.state === "bossReward") {
-      // Tap-to-dismiss: only allow after first 0.8s so accidental taps don't skip the reveal
-      if (this.bossRewardTimer < 2.4) this._endBossReward();
+      // The final shard lands before the hint appears, so an impatient tap
+      // cannot cut off the reward's visual payoff.
+      if (this.bossRewardTimer < 2.0) this._endBossReward();
     } else if (this.state === "visualTest") {
       this.nextVisualTestStage();
     }
@@ -519,20 +527,35 @@ export class Game {
     }
   }
 
-  onBossKilled() {
-    this.bossActive = false;
-    if (this.currentSectorIndex >= SECTORS.length - 1) {
-      // Final boss — go straight to victory, no evolution reward
-      SaveSystem.setBest(this.score);
-      this.best = SaveSystem.best();
-      this.state = "victory";
-      return;
-    }
+  _hitRect(x, y, rect) {
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+  }
 
-    // Advance sector immediately so shipTier() already reflects the new tier
-    // when the reward overlay renders the ship.
-    this.currentSectorIndex++;
-    this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
+  returnToHangar() {
+    this.player = new Player(this);
+    this.enemies = [];
+    this.projectiles = [];
+    this.pickups = [];
+    this.particles = [];
+    this.zaps = [];
+    this.enemyDeaths = [];
+    this.bossRewardData = null;
+    this.resumeAfterUpgradeState = null;
+    this.input.cancelMovement();
+    this.titleTime = 0;
+    this.state = "title";
+  }
+
+  onBossKilled(bossX, bossY, bossXp = 12) {
+    this.bossActive = false;
+    const finalBoss = this.currentSectorIndex >= SECTORS.length - 1;
+
+    if (!finalBoss) {
+      // Advance sector immediately so shipTier() already reflects the new tier
+      // when the reward overlay renders the ship.
+      this.currentSectorIndex++;
+      this.sectorTimer = SECTORS[this.currentSectorIndex].duration;
+    }
 
     // Build reward data snapshot for the overlay
     const tier   = this.player.shipTier();   // now the new tier
@@ -553,6 +576,10 @@ export class Game {
       branchColor:  BRANCH_COLORS_HEX[branch] || CONFIG.colors.cyan,
       moveBonusStr: MOVE_BONUS[tier]  || "",
       fireBonusStr: FIRE_BONUS[tier]  || "",
+      bossX,
+      bossY,
+      bossXp,
+      finalBoss,
     };
 
     this.bossRewardTimer = 3.2; // total display time in seconds
@@ -560,9 +587,27 @@ export class Game {
   }
 
   _endBossReward() {
-    this.state = "playing";
-    this.sectorTransition = 2.2;
+    const reward = this.bossRewardData;
+    if (!reward) return;
     this.bossRewardData = null;
+
+    const nextState = reward.finalBoss ? "victory" : "playing";
+    if (reward.finalBoss) {
+      SaveSystem.setBest(this.score);
+      this.best = SaveSystem.best();
+    } else {
+      this.sectorTransition = 2.2;
+    }
+
+    // Award the exact former boss-drop total only after every visible shard
+    // has reached the ship. If it earns a level, the upgrade picker naturally
+    // follows the reward screen before the run continues (or reaches victory).
+    this.resumeAfterUpgradeState = nextState;
+    this.gainXp(reward.bossXp);
+    if (this.state === "bossReward") {
+      this.state = nextState;
+      this.resumeAfterUpgradeState = null;
+    }
   }
 
   spawnEnemy(type, boss, speedMult = 1.0, flyby = null) {
@@ -1648,6 +1693,11 @@ export class Game {
     ctx.fill();
     ctx.shadowBlur = 0;
 
+    // The former boss XP drop is now a frozen, tangible reward: twelve
+    // prismatic core shards arc from the destroyed boss into the ship before
+    // their value is actually awarded when the screen is dismissed.
+    this.drawBossXpShards(ctx, d, elapsed, alpha);
+
     // ── Text block — centred vertically in upper half ──
     ctx.globalAlpha = alpha;
     ctx.textAlign = "center";
@@ -1658,7 +1708,7 @@ export class Game {
     ctx.font = "700 11px system-ui";
     ctx.shadowColor = CONFIG.colors.red;
     ctx.shadowBlur = 10;
-    ctx.fillText("BOSS DEFEATED", cx, 188);
+    ctx.fillText(d.finalBoss ? "FINAL BOSS DEFEATED" : "BOSS DEFEATED", cx, 188);
     ctx.shadowBlur = 0;
 
     // Tier name — big headline
@@ -1666,18 +1716,18 @@ export class Game {
     ctx.font = "900 28px system-ui";
     ctx.shadowColor = d.branchColor;
     ctx.shadowBlur = 22;
-    ctx.fillText("SHIP EVOLUTION", cx, 228);
+    ctx.fillText(d.finalBoss ? "VOID CORE SECURED" : "SHIP EVOLUTION", cx, 228);
     ctx.shadowBlur = 0;
 
     // Subtitle: MK-II FRAME etc.
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "800 18px system-ui";
-    ctx.fillText(d.tierName, cx, 258);
+    ctx.fillText(d.finalBoss ? "RUN COMPLETE" : d.tierName, cx, 258);
 
     // Branch label
     ctx.fillStyle = d.branchColor;
     ctx.font = "600 12px system-ui";
-    ctx.fillText(d.branchLabel + " Online", cx, 280);
+    ctx.fillText(d.finalBoss ? "Galalaxy secured" : d.branchLabel + " Online", cx, 280);
 
     // ── Divider ──
     ctx.globalAlpha = alpha * 0.35;
@@ -1694,13 +1744,16 @@ export class Game {
       ctx.fillStyle = CONFIG.colors.dim;
       ctx.font = "500 12px system-ui";
       const lineH = 22;
-      const lines = [
+      const lines = d.finalBoss ? [
+        `+ ${d.bossXp} Core XP recovered`,
+        "+ Final sector cleared",
+      ] : [
         `+ Movement Response  ${d.moveBonusStr}`,
         `+ Auto-Fire Efficiency  ${d.fireBonusStr}`,
         `+ Hull Systems Reinforced`,
       ];
       // Only show bonus lines that have real values for this tier
-      const visibleLines = d.tier >= 2 ? lines : [];
+      const visibleLines = d.finalBoss || d.tier >= 2 ? lines : [];
       visibleLines.forEach((txt, i) => {
         ctx.fillStyle = i < 2 ? d.branchColor : CONFIG.colors.dim;
         ctx.font = i < 2 ? "600 12px system-ui" : "500 11px system-ui";
@@ -1722,6 +1775,80 @@ export class Game {
       ctx.shadowBlur = 0;
     }
 
+    ctx.restore();
+  }
+
+  drawBossXpShards(ctx, reward, elapsed, alpha) {
+    const travelStart = 0.14;
+    const travelDuration = 0.72;
+    const destination = { x: this.player.x, y: this.player.y - 12 };
+    const colors = ["#67ff9a", "#58e6ff", "#bd72ff", "#ffe17a"];
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < reward.bossXp; i++) {
+      const delay = (i % 4) * 0.055 + Math.floor(i / 4) * 0.035;
+      const raw = clamp((elapsed - travelStart - delay) / travelDuration, 0, 1);
+      if (raw <= 0) continue;
+
+      const p = raw * raw * (3 - 2 * raw);
+      const angle = i * 2.39996;
+      const sourceX = reward.bossX + Math.cos(angle) * (14 + (i % 3) * 8);
+      const sourceY = reward.bossY + Math.sin(angle) * (14 + (i % 4) * 6);
+      const dx = destination.x - sourceX;
+      const dy = destination.y - sourceY;
+      const length = Math.max(1, Math.hypot(dx, dy));
+      const curve = Math.sin(p * Math.PI) * (26 + (i % 4) * 9) * (i % 2 ? 1 : -1);
+      const x = sourceX + dx * p + (-dy / length) * curve;
+      const y = sourceY + dy * p + (dx / length) * curve;
+      const color = colors[i % colors.length];
+      const shardAlpha = alpha * (raw < 0.12 ? raw / 0.12 : 1) * (raw > 0.92 ? (1 - raw) / 0.08 : 1);
+
+      const trail = ctx.createLinearGradient(sourceX, sourceY, x, y);
+      trail.addColorStop(0, "rgba(110,255,205,0)");
+      trail.addColorStop(0.55, color + "55");
+      trail.addColorStop(1, color);
+      ctx.globalAlpha = Math.max(0, shardAlpha) * 0.76;
+      ctx.strokeStyle = trail;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(sourceX + dx * Math.max(0, p - 0.16), sourceY + dy * Math.max(0, p - 0.16));
+      ctx.lineTo(x, y);
+      ctx.stroke();
+
+      ctx.globalAlpha = Math.max(0, shardAlpha);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = this.lowEffects ? 0 : 14;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle + this.time * 3);
+      ctx.beginPath();
+      ctx.moveTo(0, -7);
+      ctx.lineTo(4.5, 0);
+      ctx.lineTo(0, 7);
+      ctx.lineTo(-4.5, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    if (elapsed > travelStart + travelDuration + 0.15) {
+      const pulse = 0.75 + Math.sin(this.time * 8) * 0.2;
+      ctx.globalAlpha = alpha * pulse;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#b9fff3";
+      ctx.shadowColor = "#58e6ff";
+      ctx.shadowBlur = this.lowEffects ? 0 : 12;
+      ctx.font = "800 12px system-ui";
+      ctx.fillText(`+${reward.bossXp} CORE XP`, destination.x, Math.min(CONFIG.designH - 120, this.player.y + 82));
+      ctx.shadowBlur = 0;
+    }
     ctx.restore();
   }
 
@@ -1769,11 +1896,12 @@ export class Game {
     ctx.fillText("★ ★ ★ ★", CONFIG.designW / 2, 408);
     ctx.globalAlpha = 1;
 
-    this.drawVictoryButton(ctx, 72, 528, 276, 66, "PLAY AGAIN");
+    this.drawVictoryButton(ctx, VICTORY_PLAY_BUTTON, "PLAY AGAIN");
+    this.drawHangarButton(ctx, VICTORY_HANGAR_BUTTON, "RETURN TO HANGAR");
     ctx.restore();
   }
 
-  drawVictoryButton(ctx, x, y, w, h, text) {
+  drawVictoryButton(ctx, { x, y, w, h }, text) {
     ctx.save();
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(5,17,36,0.9)";
@@ -1781,6 +1909,7 @@ export class Game {
     ctx.roundRect(x, y, w, h, 24);
     ctx.fill();
 
+    // Exact same authored command frame as START RUN on the title screen.
     const frame = this.loader.get("uiStartRunButtonFrame");
     if (frame) {
       ctx.imageSmoothingEnabled = false;
@@ -1794,6 +1923,36 @@ export class Game {
     ctx.shadowColor = CONFIG.colors.cyan;
     ctx.shadowBlur = 8;
     ctx.fillText(text, x + w / 2, y + 42);
+    ctx.restore();
+  }
+
+  drawHangarButton(ctx, { x, y, w, h }, text) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(5,17,36,0.78)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 18);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(88,230,255,0.62)";
+    ctx.lineWidth = 1.25;
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 18);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.lineWidth = 1;
+    const notch = 15;
+    ctx.beginPath();
+    ctx.moveTo(x + notch, y + 8); ctx.lineTo(x + 8, y + 8); ctx.lineTo(x + 8, y + notch);
+    ctx.moveTo(x + w - notch, y + 8); ctx.lineTo(x + w - 8, y + 8); ctx.lineTo(x + w - 8, y + notch);
+    ctx.moveTo(x + notch, y + h - 8); ctx.lineTo(x + 8, y + h - 8); ctx.lineTo(x + 8, y + h - notch);
+    ctx.moveTo(x + w - notch, y + h - 8); ctx.lineTo(x + w - 8, y + h - 8); ctx.lineTo(x + w - 8, y + h - notch);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(220,240,255,0.82)";
+    ctx.font = "800 13px system-ui";
+    ctx.fillText(text, x + w / 2, y + 31);
     ctx.restore();
   }
 
@@ -2017,7 +2176,8 @@ export class Game {
     ctx.font = "700 14px system-ui";
     ctx.fillText(`Best: ${Math.floor(this.best)} · Kills: ${this.kills} · Time: ${fmtTime(this.runTime)}`, CONFIG.designW / 2, 350);
 
-    this.drawButton(ctx, 72, 528, 276, 66, "RESTART");
+    this.drawVictoryButton(ctx, VICTORY_PLAY_BUTTON, "PLAY AGAIN");
+    this.drawHangarButton(ctx, VICTORY_HANGAR_BUTTON, "RETURN TO HANGAR");
     ctx.restore();
   }
 
@@ -2033,23 +2193,6 @@ export class Game {
     ctx.font = "700 14px system-ui";
     ctx.fillText("Tap to resume", CONFIG.designW / 2, 376);
     ctx.restore();
-  }
-
-  drawButton(ctx, x, y, w, h, text) {
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, "rgba(88,230,255,0.95)");
-    g.addColorStop(1, "rgba(255,79,216,0.85)");
-    ctx.fillStyle = g;
-    ctx.shadowColor = CONFIG.colors.cyan;
-    ctx.shadowBlur = 24;
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 24);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#06101d";
-    ctx.font = "900 20px system-ui";
-    ctx.textAlign = "center";
-    ctx.fillText(text, x + w / 2, y + 42);
   }
 
   // ── Rendering helpers (used by entities via this.game.*) ───────────────────
