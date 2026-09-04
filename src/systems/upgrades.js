@@ -1,4 +1,4 @@
-import { CONFIG } from "../config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS } from "../config.js";
 
 // Family color accents for card tinting
 const FAMILY_ACCENT = {
@@ -31,14 +31,14 @@ export function createUpgradeCards(count = 3) {
 // pool entry shape:
 //   id, name, desc, icon
 //   family: "zapper"|"rocket"|"pulse"|"core"
-//   maxLevel: null = unlimited stacks (fire/speed/shield/hp/magnet), number = hard cap
+//   maxLevel: null = unlimited stacks (fire/shield/hp/magnet), number = hard cap
 //   minLevel: minimum upgrade-pick count before this can appear (0 = always)
 //   weight: base draw weight (higher = more common baseline)
 const POOL = [
   // --- Core / Utility ---
   { id: "fire",    name: "Fire Rate",      desc: "Auto cannon fires faster.",           icon: "pickupAuto",        family: "core",   maxLevel: null, minLevel: 0, weight: 10 },
   { id: "twin",    name: "Multi Cannon",   desc: "Adds cannon barrels. Up to 5 shots.", icon: "pickupAuto",        family: "core",   maxLevel: 4,    minLevel: 0, weight: 8  },
-  { id: "speed",   name: "Engine Boost",   desc: "Movement becomes sharper.",            icon: "pickupSuper",       family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
+  { id: "speed",   name: "Engine Boost",   desc: "Raises maximum ship speed.",          icon: "pickupSuper",       family: "core",   maxLevel: 3,    minLevel: 0, weight: 7  },
   { id: "shield",  name: "Shield Array",   desc: "More shield capacity and faster recharge.", icon: "pickupShield",    family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "hp",      name: "Hull Upgrade",   desc: "Max HP increases.",                    icon: "playerFull",        family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "magnet",  name: "Pickup Magnet",  desc: "Energy pulls in from farther away.",   icon: "pickupPulse",       family: "core",   maxLevel: null, minLevel: 0, weight: 5  },
@@ -100,8 +100,13 @@ export class UpgradeSystem {
       }
       case "twin":
         return `Cannons  ${p.twin + 1}${arrow}${Math.min(5, p.twin + 2)}`;
-      case "speed":
-        return `Response  ${Math.min(18, 12 * (p.speed / 360) * p.getEvolutionMoveMultiplier()).toFixed(1)}${arrow}${Math.min(18, 12 * ((p.speed + 26) / 360) * p.getEvolutionMoveMultiplier()).toFixed(1)}`;
+      case "speed": {
+        const current = Math.round(p.speed * p.getEvolutionMoveMultiplier());
+        const nextLevel = Math.min(3, p.speedLevel + 1);
+        const nextBaseSpeed = Math.max(180, PLAYER_ENGINE_SPEEDS[nextLevel] - (p.pulseReactor ? 80 : 0));
+        const next = Math.round(nextBaseSpeed * p.getEvolutionMoveMultiplier());
+        return `Max speed  ${current}${arrow}${next}`;
+      }
       case "shield":
         return `Shield  ${p.maxShield}${arrow}${p.maxShield + 12}  ·  Regen +1.25/s`;
       case "hp":
@@ -181,7 +186,10 @@ export class UpgradeSystem {
       case "twin": preview.twin = Math.min(4, preview.twin + 1); break;
       case "rocket": preview.rocket = Math.min(5, preview.rocket + 1); break;
       case "zapper": preview.zapper = Math.min(5, preview.zapper + 1); break;
-      case "speed": preview.speed += 26; preview.speedLevel++; break;
+      case "speed":
+        preview.speedLevel = Math.min(3, preview.speedLevel + 1);
+        preview.speed = Math.max(180, PLAYER_ENGINE_SPEEDS[preview.speedLevel] - (preview.pulseReactor ? 80 : 0));
+        break;
       case "shield": preview.maxShield += 12; preview.shield = preview.maxShield; preview.shieldLevel++; break;
       case "hp": preview.maxHp += 18; preview.hpLevel++; break;
       case "magnet": preview.magnet++; break;
@@ -328,7 +336,6 @@ export class UpgradeSystem {
       if (u.minLevel > this._pickCount) return false;
       if (u.maxLevel !== null && this._playerLevel(u) >= u.maxLevel) return false;
       if (u.id === "fire" && p.fireRate <= 0.10501) return false;
-      if (u.id === "speed" && 12 * (p.speed / 360) * p.getEvolutionMoveMultiplier() >= 18) return false;
       if (p.rocketDisabled && u.family === "rocket") return false;
       if (u.id === "barrage" && p.rocket === 0 && p.barrage === 0) return false;
       // Only one keystone per run
@@ -386,7 +393,10 @@ export class UpgradeSystem {
                       // Prime the auto-fire timer so the first zap fires within one shot cycle.
                       p.fireTimer = Math.min(p.fireTimer, 0.05);
                       break;
-      case "speed":   p.speed += 26; p.speedLevel++; break;
+      case "speed":
+        p.speedLevel = Math.min(3, p.speedLevel + 1);
+        p.speed = Math.max(180, PLAYER_ENGINE_SPEEDS[p.speedLevel] - (p.pulseReactor ? 80 : 0));
+        break;
       case "shield":  p.maxShield += 12; p.shieldRegen += 1.25; p.shield = p.maxShield; p.shieldLevel++; break;
       case "magnet":  p.magnet += 1; break;
       case "hp":      p.maxHp += 18; p.hp = Math.min(p.maxHp, p.hp + 28); p.hpLevel++; break;

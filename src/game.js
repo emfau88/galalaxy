@@ -1,4 +1,4 @@
-import { CONFIG, RENDER_CONFIG, STRIP_RATIO, SECTORS } from "./config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS, RENDER_CONFIG, STRIP_RATIO, SECTORS } from "./config.js";
 import { ASSETS } from "./assets.js";
 import { $, clamp, fmtTime } from "./utils.js";
 import { AssetLoader } from "./assetLoader.js";
@@ -235,7 +235,7 @@ export class Game {
   startUpgradeCardTest() {
     this.player = new Player(this);
     Object.assign(this.player, { speedLevel: 1, shieldLevel: 1, fireLevel: 1, rocket: 1, zapper: 1 });
-    this.player.speed = 386;
+    this.player.speed = PLAYER_ENGINE_SPEEDS[1];
     this.player.maxShield = 67;
     this.player.shield = this.player.maxShield;
     if (this.upgradeCardTestAegisMode) {
@@ -296,7 +296,7 @@ export class Game {
       pulse: 1,
       hpLevel: 1,
       magnet: 1,
-      speed: 438,
+      speed: PLAYER_ENGINE_SPEEDS[3],
       maxShield: 103,
       shield: 74,
       fireTimer: Number.MAX_VALUE,
@@ -317,7 +317,7 @@ export class Game {
     this.player.x = CONFIG.designW / 2;
     this.player.y = 430;
     Object.assign(this.player, stage.player);
-    this.player.speed = 360 + this.player.speedLevel * 26;
+    this.player.speed = PLAYER_ENGINE_SPEEDS[Math.min(3, this.player.speedLevel)];
     this.player.maxShield = 55 + this.player.shieldLevel * 12;
     this.player.shield = this.player.maxShield;
     this.player.vx = 120;
@@ -1748,7 +1748,7 @@ export class Game {
         `+ ${d.bossXp} Core XP recovered`,
         "+ Final sector cleared",
       ] : [
-        `+ Movement Response  ${d.moveBonusStr}`,
+        `+ Movement Speed  ${d.moveBonusStr}`,
         `+ Auto-Fire Efficiency  ${d.fireBonusStr}`,
         `+ Hull Systems Reinforced`,
       ];

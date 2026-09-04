@@ -56,10 +56,13 @@ export const RENDER_CONFIG = {
 
 export const STRIP_RATIO = 2.2;
 
+// Engine level 0–3: each upgrade has a tangible increase in top speed.
+export const PLAYER_ENGINE_SPEEDS = [260, 300, 345, 395];
+
 export const CONTROL_CONFIG = {
   // Applied only on touch input: ship leads the finger by this many design-pixels upward.
   // Keeps the ship visible above the thumb. Clamped so ship can't leave the play area.
-  touchOffsetY: 110,
+  touchOffsetY: 70,
   // No horizontal offset — lateral precision matters more than thumb coverage.
   touchOffsetX: 0,
   // Mouse/desktop: zero offset, ship follows cursor directly.

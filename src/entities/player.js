@@ -1,4 +1,4 @@
-import { CONFIG, RENDER_CONFIG } from "../config.js";
+import { CONFIG, PLAYER_ENGINE_SPEEDS, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp } from "../utils.js";
 import { updateBeam, updatePulse } from "../systems/abilities.js";
 import { emitRocketLaunch } from "../systems/fx.js";
@@ -31,7 +31,7 @@ export class Player {
     this.hp = 100;
     this.maxShield = 55;
     this.shield = 35;
-    this.speed = 360;
+    this.speed = PLAYER_ENGINE_SPEEDS[0];
     this.fireRate = 0.28;
     this.fireLevel = 0;
     this.fireTimer = 0;
@@ -135,7 +135,7 @@ export class Player {
     }
   }
 
-  // Movement responsiveness bonus by tier (total, not per-frame stack).
+  // True movement-speed bonus by tier (total, not per-frame stack).
   // T1: ×1.00, T2: ×1.05, T3: ×1.08, T4: ×1.10
   getEvolutionMoveMultiplier() {
     const t = this.shipTier();
@@ -178,11 +178,19 @@ export class Player {
     }
 
     const oldX = this.x;
-    // speed 360 (base) → followRate 12. Evolution adds a small tier bonus on top.
-    const followRate = clamp(12 * (this.speed / 360) * this.getEvolutionMoveMultiplier(), 8, 18);
-    this.x = lerp(this.x, tx, clamp(dt * followRate, 0, 1));
-    this.y = lerp(this.y, ty, clamp(dt * followRate, 0, 1));
+    const oldY = this.y;
+    // Keep direction changes immediate; top speed is the only movement limit.
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const distance = Math.hypot(dx, dy);
+    const maxStep = this.speed * this.getEvolutionMoveMultiplier() * dt;
+    if (distance > 0.001) {
+      const step = Math.min(distance, maxStep);
+      this.x += (dx / distance) * step;
+      this.y += (dy / distance) * step;
+    }
     this.vx = (this.x - oldX) / Math.max(dt, 0.001);
+    this.vy = (this.y - oldY) / Math.max(dt, 0.001);
     this.bank = lerp(this.bank, clamp(this.vx / 520, -0.35, 0.35), clamp(dt * 9, 0, 1));
 
     this.invuln = Math.max(0, this.invuln - dt);
