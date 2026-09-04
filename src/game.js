@@ -1188,91 +1188,79 @@ export class Game {
     ctx.save();
     const W = CONFIG.designW;
     const p = this.player;
+    const sector = SECTORS[this.currentSectorIndex];
+    const [tr, tg, tb] = sector.tint;
+    const sectorAccent = `rgb(${Math.min(255, tr + 140)},${Math.min(255, tg + 140)},${Math.min(255, tb + 170)})`;
 
-    // ── Panel background ─────────────────────────────────────────────
-    ctx.fillStyle = "rgba(2,6,20,0.76)";
-    ctx.strokeStyle = "rgba(88,180,255,0.09)";
+    // A single compact rail preserves the playfield; information is grouped
+    // by alignment instead of adding heavy nested panels.
+    const panel = ctx.createLinearGradient(0, 8, 0, 82);
+    panel.addColorStop(0, "rgba(6,16,42,0.88)");
+    panel.addColorStop(1, "rgba(2,7,22,0.82)");
+    ctx.fillStyle = panel;
+    ctx.strokeStyle = "rgba(112,212,255,0.24)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(10, 10, W - 20, 74, 14);
+    ctx.roundRect(10, 8, W - 20, 74, 11);
     ctx.fill();
     ctx.stroke();
 
-    // ── LEFT: HP + Shield ────────────────────────────────────────────
-    const iconX = 22;   // icon center x — enough room for 9px icons
-    const barX  = 40;   // bar starts after icon + gap
-
-    // HP bar
-    const hpW = 110, hpH = 12, hpY = 28;
+    // ── LEFT: Hull / shield ──────────────────────────────────────────
+    const iconX = 23;
+    const barX = 36;
+    const hpW = 94, hpH = 8, hpY = 22;
     this.bar(ctx, barX, hpY, hpW, hpH, p.hp / p.maxHp, CONFIG.colors.red, "");
-
-    // Heart icon — vertically centered on HP bar
-    this._drawHeartIcon(ctx, iconX, hpY + hpH / 2, 9, "rgba(255,80,105,0.9)");
-
-    // HP value — right-aligned to bar end
+    this._drawHeartIcon(ctx, iconX, hpY + hpH / 2, 7, "rgba(255,80,105,0.94)");
     ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(255,180,180,0.5)";
-    ctx.font = "500 8px system-ui";
-    ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, barX + hpW, 26);
+    ctx.fillStyle = "rgba(255,220,225,0.86)";
+    ctx.font = "800 8px ui-monospace, monospace";
+    ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, barX + hpW, 19);
 
-    // Shield bar
-    const shW = 110, shH = 6, shY = 46;
-    ctx.globalAlpha = 0.78;
+    const shW = 94, shH = 6, shY = 42;
+    ctx.globalAlpha = 0.9;
     this.bar(ctx, barX, shY, shW, shH, p.shield / p.maxShield, CONFIG.colors.cyan, "");
     ctx.globalAlpha = 1;
 
-    // Authored pickup icon keeps the defensive system legible at a glance.
     const shieldIcon = this.loader.get("pickupShield");
-    if (shieldIcon) this.drawAsset(ctx, shieldIcon, iconX, shY + shH / 2, 17, 17);
-    else this._drawShieldIcon(ctx, iconX, shY + shH / 2, 8, "rgba(88,230,255,0.8)");
+    if (shieldIcon) this.drawAsset(ctx, shieldIcon, iconX, shY + shH / 2, 15, 15);
+    else this._drawShieldIcon(ctx, iconX, shY + shH / 2, 7, "rgba(88,230,255,0.85)");
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(195,245,255,0.86)";
+    ctx.font = "800 8px ui-monospace, monospace";
+    ctx.fillText(`${Math.ceil(p.shield)} / ${p.maxShield}`, barX + shW, 39);
 
     if (p.emergencyAegis) {
-      const aegisX = 165, aegisY = 48;
+      const aegisX = 143, aegisY = 45;
       const ready = p.aegisCooldown <= 0;
       const aegisIcon = this.loader.get("pickupInvincible");
       ctx.save();
-      if (aegisIcon) this.drawAsset(ctx, aegisIcon, aegisX, aegisY, 19, 19);
+      if (aegisIcon) this.drawAsset(ctx, aegisIcon, aegisX, aegisY, 15, 15);
       ctx.strokeStyle = ready ? "#cf8cff" : "rgba(190,120,255,0.48)";
       ctx.shadowColor = "#b95cff";
       ctx.shadowBlur = ready && !this.lowEffects ? 7 : 0;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1;
       ctx.beginPath();
       const remaining = ready ? 1 : 1 - p.aegisCooldown / 18;
-      ctx.arc(aegisX, aegisY, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
+      ctx.arc(aegisX, aegisY, 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
       ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.textAlign = "left";
-      ctx.font = "800 6px system-ui";
-      ctx.fillStyle = ready ? "#dcb6ff" : "rgba(205,180,235,0.62)";
-      ctx.fillText(ready ? "AEGIS READY" : `AEGIS ${Math.ceil(p.aegisCooldown)}s`, 180, 50);
       ctx.restore();
     }
 
-    // Timer — very subtle, bottom-left of panel
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(180,200,230,0.3)";
-    ctx.font = "500 8px system-ui";
-    ctx.fillText(fmtTime(this.runTime), 14, 66);
+    ctx.fillStyle = "rgba(180,210,240,0.48)";
+    ctx.font = "700 8px ui-monospace, monospace";
+    ctx.fillText(fmtTime(this.runTime), 18, 68);
 
-    // ── CENTER: Sector info ──────────────────────────────────────────
-    const sector = SECTORS[this.currentSectorIndex];
-    const [tr, tg, tb] = sector.tint;
-    const sectorAccent = `rgb(${Math.min(255,tr+140)},${Math.min(255,tg+140)},${Math.min(255,tb+170)})`;
+    // ── CENTER: Sector / level / energy ──────────────────────────────
     const cx = W / 2;
 
-    // Sector number — prominent
     ctx.textAlign = "center";
     ctx.fillStyle = sectorAccent;
-    ctx.font = "800 11px system-ui";
-    ctx.fillText(sector.shortName, cx, 27);
+    ctx.font = "900 11px ui-monospace, monospace";
+    ctx.fillText(`${sector.shortName}  ·  LV ${this.level}`, cx, 26);
 
-    // Sector name — subdued
-    ctx.fillStyle = "rgba(200,215,240,0.5)";
-    ctx.font = "500 8px system-ui";
-    ctx.fillText(sector.name.toUpperCase(), cx, 38);
-
-    // Sector progress dots — 4 dots, one per sector
-    const dotY = 52, dotR = 3, dotGap = 10;
+    const dotY = 38, dotR = 2.2, dotGap = 10;
     const dotStartX = cx - (SECTORS.length - 1) * dotGap / 2;
     for (let s = 0; s < SECTORS.length; s++) {
       const dx = dotStartX + s * dotGap;
@@ -1297,18 +1285,23 @@ export class Game {
       ctx.globalAlpha = 1;
     }
 
-    // Boss state — replaces dots row when active
     if (this.bossActive) {
-      // Overdraw the dot row area
-      ctx.fillStyle = "rgba(2,6,20,0.0)"; // transparent — just alpha reset
       const pulse = 0.8 + 0.2 * Math.abs(Math.sin(this.time * 4));
       ctx.globalAlpha = pulse;
       ctx.fillStyle = CONFIG.colors.red;
-      ctx.font = "700 9px system-ui";
+      ctx.font = "800 8px ui-monospace, monospace";
       ctx.textAlign = "center";
-      ctx.fillText("▸  BOSS", cx, 55);
+      ctx.fillText("▸  BOSS  ◂", cx, 39);
       ctx.globalAlpha = 1;
     }
+
+    const xpFrac = clamp(this.xp / this.xpNeed, 0, 1);
+    const xpX = 165, xpY = 53, xpW = 90, xpH = 6;
+    this.bar(ctx, xpX, xpY, xpW, xpH, xpFrac, xpFrac >= 0.85 ? "#aaffcc" : CONFIG.colors.green, "");
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(190,255,215,0.82)";
+    ctx.font = "800 8px ui-monospace, monospace";
+    ctx.fillText(`${this.xp} / ${this.xpNeed}`, xpX + xpW, 68);
 
     // Boss warning — below panel
     if (this.bossWarning > 0) {
@@ -1317,24 +1310,24 @@ export class Game {
       ctx.fillStyle = CONFIG.colors.red;
       ctx.font = "600 10px system-ui";
       ctx.textAlign = "center";
-      ctx.fillText("⚠  BOSS INCOMING", W / 2, 96);
+      ctx.fillText("⚠  BOSS INCOMING", W / 2, 94);
       ctx.globalAlpha = 1;
     }
 
-    // ── RIGHT: XP Ring + Score ───────────────────────────────────────
-    const ringX = W - 36, ringY = 46, ringR = 22;
-    this._drawXpRing(ctx, ringX, ringY, ringR);
-
-    // Score — above ring, right-aligned
+    // ── RIGHT: Score ─────────────────────────────────────────────────
     ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(185,240,255,0.66)";
+    ctx.font = "800 8px ui-monospace, monospace";
+    ctx.fillText("SCORE", W - 18, 20);
     ctx.fillStyle = CONFIG.colors.white;
-    ctx.font = "800 11px system-ui";
-    ctx.fillText(Math.floor(this.score).toString(), W - 14, 26);
-
-    // "SCORE" micro-label
-    ctx.fillStyle = "rgba(180,200,230,0.35)";
-    ctx.font = "500 6px system-ui";
-    ctx.fillText("SCORE", W - 14, 15);
+    ctx.font = "900 17px ui-monospace, monospace";
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = this.lowEffects ? 0 : 7;
+    ctx.fillText(Math.floor(this.score).toString(), W - 18, 40);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(180,210,240,0.5)";
+    ctx.font = "700 8px ui-monospace, monospace";
+    ctx.fillText(`BEST  ${Math.floor(this.best)}`, W - 18, 57);
 
     // ── Boss HP bar ──────────────────────────────────────────────────
     if (this.bossActive && this.bossWarning <= 0) {
@@ -1395,52 +1388,6 @@ export class Game {
     this.drawAbilityPips(ctx);
 
     ctx.restore();
-  }
-
-  _drawXpRing(ctx, cx, cy, r) {
-    const frac = clamp(this.xp / this.xpNeed, 0, 1);
-    const nearFull = frac >= 0.85;
-
-    // Outer track
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    // XP fill arc — clockwise from top
-    if (frac > 0) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
-      ctx.strokeStyle = nearFull ? "#aaffcc" : CONFIG.colors.green;
-      ctx.shadowColor  = nearFull ? "#aaffcc" : CONFIG.colors.green;
-      ctx.shadowBlur   = nearFull ? 12 : 4;
-      ctx.lineWidth    = 4;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    // Inner dark fill so level number reads cleanly
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(2,6,20,0.7)";
-    ctx.fill();
-
-    // "XP" micro-label above number
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(180,200,230,0.4)";
-    ctx.font = "500 6px system-ui";
-    ctx.fillText("XP", cx, cy - 5);
-
-    // Level number
-    ctx.fillStyle = nearFull ? "#aaffcc" : CONFIG.colors.white;
-    ctx.font = `800 ${this.level >= 10 ? 10 : 12}px system-ui`;
-    ctx.fillText(this.level.toString(), cx, cy + 4);
-
-    // "SHIP LV" micro-label below number
-    ctx.fillStyle = "rgba(180,200,230,0.32)";
-    ctx.font = "500 5px system-ui";
-    ctx.fillText("SHIP LV", cx, cy + 11);
   }
 
   // Heart icon — two circular arcs meeting at a bottom point
@@ -1504,11 +1451,11 @@ export class Game {
     if (p.pulse) abilities.push({ label: "PULSE", icon: "pickupShield", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan });
     if (!abilities.length) return;
 
-    // Vertically stacked, left of XP ring — ring center is at (W-36, 46)
-    const pipW = 48, pipH = 6, gap = 8;
+    // Contextual cooldowns live at the lower edge, out of the status rail.
+    const pipW = 80, pipH = 7, gap = 10;
     const totalH = abilities.length * pipH + (abilities.length - 1) * gap;
-    const startY = 46 - totalH / 2;  // vertically centered on ring
-    const x = CONFIG.designW - 36 - 22 - 10 - pipW; // ring left edge minus gap minus pipW
+    const startY = CONFIG.designH - 42 - totalH;
+    const x = CONFIG.designW - 18 - pipW;
 
     for (let i = 0; i < abilities.length; i++) {
       const ab = abilities[i];
@@ -1539,15 +1486,16 @@ export class Game {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
         ctx.globalAlpha = ready ? 1 : 0.5;
-        this.drawAsset(ctx, icon, x - 11, y + pipH / 2, 14, 14);
+        this.drawAsset(ctx, icon, x - 13, y + pipH / 2, 16, 16);
         ctx.restore();
       }
 
-      // Label above bar — right-aligned so it doesn't crowd the ring
+      // Label stays adjacent to its contextual cooldown instead of competing
+      // with score, level and ship survivability in the header.
       ctx.fillStyle = ready ? CONFIG.colors.white : "rgba(180,200,230,0.38)";
-      ctx.font = "600 7px system-ui";
-      ctx.textAlign = "right";
-      ctx.fillText(ab.label, x + pipW, y - 2);
+      ctx.font = "700 7px system-ui";
+      ctx.textAlign = "left";
+      ctx.fillText(ab.label, x, y - 3);
     }
   }
 
