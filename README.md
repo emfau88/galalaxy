@@ -39,6 +39,14 @@ python -m http.server 8765
 
 Then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/).
 
+## QA
+
+Open [the accelerated full-run check](http://127.0.0.1:8765/?test=full-run)
+while the local server is running. It verifies staged asset loading, all four
+sector transitions, the shared Nautolan fleet group, victory, replay and
+return-to-hangar. A successful run changes the page title to
+`Galalaxy QA PASS`; failures are reported in the browser console.
+
 ## Technology
 
 HTML5 Canvas, CSS and native JavaScript modules.

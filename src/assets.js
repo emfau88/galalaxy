@@ -166,3 +166,35 @@ export const ASSETS = {
   uiStartRunButtonFrame: "assets/ui/start-run-button-frame-v1.png",
   uiVictoryCommandFrame: "assets/ui/victory-command-frame-v1.png"
 };
+
+const BOOT_KEYS = new Set([
+  "playerFull",
+  "playerEngine",
+  "engineBaseIdle",
+  "engineBasePower",
+  "asteroid",
+  "planet",
+  "uiTitleCommandPanel",
+  "uiStartRunButtonFrame",
+]);
+
+const groups = {
+  boot: {},
+  shared: {},
+  klaed: {},
+  nairan: {},
+  nautolan: {},
+  victory: {},
+};
+
+for (const [key, path] of Object.entries(ASSETS)) {
+  if (BOOT_KEYS.has(key)) groups.boot[key] = path;
+  else if (key === "uiVictoryCommandFrame") groups.victory[key] = path;
+  else if (key.startsWith("nairan")) groups.nairan[key] = path;
+  else if (key.startsWith("nautolan")) groups.nautolan[key] = path;
+  else if (key.startsWith("enemy") || key.startsWith("klaed")) groups.klaed[key] = path;
+  else groups.shared[key] = path;
+}
+
+export const ASSET_GROUPS = Object.freeze(groups);
+export const SECTOR_ASSET_GROUPS = Object.freeze(["klaed", "nairan", "nautolan", "nautolan"]);
