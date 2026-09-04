@@ -14,11 +14,12 @@ const UPGRADE_CARD_FRAME_SOURCE = { x: 38, y: 46, w: 1909, h: 683 };
 const ROCKET_CARD_FRAME_SOURCE = { x: 10, y: 4, w: 1963, h: 781 };
 const PURPLE_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 1908, h: 809 };
 
-// Leave a generous lower safe area for mobile browsers whose visible height
-// changes while their address bars appear or collapse. The cards remain large
-// enough for touch, while the third option no longer lives near the edge.
+// Preserve the roomy original card interior, but shift the whole selector up
+// to leave a generous lower safe area when a mobile browser toolbar appears.
+const UPGRADE_CARD_LAYOUT = { w: 370, h: 142, startY: 160, gap: 155, titleY: 118, subtitleY: 142 };
+
 export function createUpgradeCards(count = 3) {
-  const w = 370, h = 130, startY = 174, gap = 140;
+  const { w, h, startY, gap } = UPGRADE_CARD_LAYOUT;
   return Array.from({ length: count }, (_, index) => ({
     x: (CONFIG.designW - w) / 2,
     y: startY + index * gap,
@@ -455,11 +456,11 @@ export class UpgradeSystem {
     ctx.shadowColor = CONFIG.colors.cyan;
     ctx.shadowBlur = 18;
     ctx.font = "800 22px system-ui";
-    ctx.fillText("UPGRADE SYSTEM ONLINE", CONFIG.designW / 2, 148);
+    ctx.fillText("UPGRADE SYSTEM ONLINE", CONFIG.designW / 2, UPGRADE_CARD_LAYOUT.titleY);
     ctx.shadowBlur = 0;
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "500 13px system-ui";
-    ctx.fillText("Choose one module", CONFIG.designW / 2, 172);
+    ctx.fillText("Choose one module", CONFIG.designW / 2, UPGRADE_CARD_LAYOUT.subtitleY);
 
     for (let i = 0; i < this.choices.length; i++) {
       const u = this.choices[i], c = this.cards[i];
