@@ -14,6 +14,19 @@ const UPGRADE_CARD_FRAME_SOURCE = { x: 38, y: 46, w: 1909, h: 683 };
 const ROCKET_CARD_FRAME_SOURCE = { x: 10, y: 4, w: 1963, h: 781 };
 const PURPLE_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 1908, h: 809 };
 
+// Leave a generous lower safe area for mobile browsers whose visible height
+// changes while their address bars appear or collapse. The cards remain large
+// enough for touch, while the third option no longer lives near the edge.
+export function createUpgradeCards(count = 3) {
+  const w = 370, h = 130, startY = 174, gap = 140;
+  return Array.from({ length: count }, (_, index) => ({
+    x: (CONFIG.designW - w) / 2,
+    y: startY + index * gap,
+    w,
+    h,
+  }));
+}
+
 // pool entry shape:
 //   id, name, desc, icon
 //   family: "zapper"|"rocket"|"pulse"|"core"
@@ -354,11 +367,7 @@ export class UpgradeSystem {
     }
 
     this.choices = picked;
-    this.cards = [];
-    const w = 370, h = 142;
-    for (let i = 0; i < 3; i++) {
-      this.cards.push({ x: (CONFIG.designW - w) / 2, y: 190 + i * 155, w, h });
-    }
+    this.cards = createUpgradeCards(3);
   }
 
   pick(index) {

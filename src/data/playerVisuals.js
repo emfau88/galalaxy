@@ -58,7 +58,9 @@ export const PLAYER_WEAPON_VISUALS = {
     projectileKey: "playerZapper",
     activePriority: 3,
     frameCount: 14,
-    releaseFrames: [8],
+    // Release early: the ship may keep moving, so a long wind-up made a
+    // close-range lightning cast feel detached from the player's action.
+    releaseFrames: [3],
     muzzles: [{ x: 0, y: -30 }],
   },
   bigGun: {

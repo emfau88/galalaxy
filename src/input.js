@@ -21,6 +21,17 @@ export class Input {
     const down = e => {
       e.preventDefault();
       const p = this.getPoint(e);
+      // Fullscreen APIs require the request to be made inside the original
+      // user gesture. Unlike ordinary game taps, this cannot wait until the
+      // next animation frame where consumeTap() is processed.
+      const fullscreenZone = this.game._fullscreenBtnZone;
+      if (this.game.fullscreenAvailable && fullscreenZone &&
+          p.wx >= fullscreenZone.x && p.wx <= fullscreenZone.x + fullscreenZone.w &&
+          p.wy >= fullscreenZone.y && p.wy <= fullscreenZone.y + fullscreenZone.h) {
+        this.cancelMovement();
+        this.game.toggleFullscreen();
+        return;
+      }
       // Upgrade cards are a modal UI: their tap must never become a ship
       // destination. This avoids a one-frame jump toward the selected card
       // when the game resumes immediately after the pick.

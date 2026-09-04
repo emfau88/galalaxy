@@ -292,7 +292,10 @@ export class Player {
   _tryFireZapper(force = false) {
     if ((!this.zapper && !force) || this.isWeaponAnimationActive("zapper")) return;
     const overcharged = this.keystoneId === "overcharged";
-    const chance = overcharged ? 1 : 0.15 + this.zapper * 0.025;
+    // A level-one Zapper must read as a real weapon, not as a rare flicker.
+    // Higher ranks still improve its frequency, while Overcharged remains the
+    // always-on keystone version.
+    const chance = overcharged ? 1 : 0.28 + this.zapper * 0.04;
     if (!force && Math.random() >= chance) return;
 
     const target = this.game.closestEnemy(this.x, this.y, 300);
@@ -536,11 +539,11 @@ export class Player {
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = 0.3 + level * 0.08;
+    ctx.globalAlpha = 0.42 + level * 0.08;
     ctx.strokeStyle = "#e477ff";
     ctx.shadowColor = "#bd55ff";
     ctx.shadowBlur = this.game.lowEffects ? 0 : 7 + level * 2;
-    ctx.lineWidth = 1 + level * 0.22;
+    ctx.lineWidth = 1.45 + level * 0.24;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     for (let i = 0; i < prongs; i++) {

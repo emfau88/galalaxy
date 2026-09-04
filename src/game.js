@@ -9,7 +9,7 @@ import { Enemy } from "./entities/enemy.js";
 import { Projectile } from "./entities/projectile.js";
 import { XpPickup } from "./entities/pickup.js";
 import { Particle } from "./entities/particle.js";
-import { UpgradeSystem } from "./systems/upgrades.js";
+import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
 import { FLEETS, pickFleetEnemy, pickSoloEnemy } from "./data/fleets.js";
 import { emitTrail, spawnHitSparks, spawnDeathBurst, emitSectorDust, spawnBossEntrance } from "./systems/fx.js";
 import { drawPulse } from "./systems/abilities.js";
@@ -79,6 +79,7 @@ export class Game {
     this.bossRewardData = null;
     this.titleTime = 0;
     this.musicMuted = false;
+    this.fullscreenActive = Boolean(document.fullscreenElement);
     this._music = new Audio("assets/music/track1.ogg");
     this._music.loop = true;
     this._music.volume = 0.28;
@@ -96,6 +97,11 @@ export class Game {
 
     this.resize();
     window.addEventListener("resize", () => this.resize());
+    window.visualViewport?.addEventListener("resize", () => this.resize());
+    document.addEventListener("fullscreenchange", () => {
+      this.fullscreenActive = Boolean(document.fullscreenElement);
+      this.resize();
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && this.state === "playing") {
         this.prevState = this.state;
@@ -103,10 +109,13 @@ export class Game {
       }
     });
 
-    // Mute button exclusion zone — bottom-right, 48×48 design-px hit area
+    // Bottom-corner utility buttons remain tap-only, never movement targets.
     const MBX = CONFIG.designW - 52, MBY = CONFIG.designH - 52;
     this._muteBtnZone = { x: MBX, y: MBY, w: 48, h: 48 };
     this.input.exclusionZones.push(this._muteBtnZone);
+    this._fullscreenBtnZone = { x: 4, y: CONFIG.designH - 52, w: 48, h: 48 };
+    this.fullscreenAvailable = Boolean(document.fullscreenEnabled && this.canvas.requestFullscreen);
+    if (this.fullscreenAvailable) this.input.exclusionZones.push(this._fullscreenBtnZone);
 
     this.initStars();
     this.loader.load().then(() => {
@@ -125,6 +134,13 @@ export class Game {
   }
 
   resize() {
+    const viewport = window.visualViewport;
+    this.viewportW = Math.max(1, viewport?.width || window.innerWidth);
+    this.viewportH = Math.max(1, viewport?.height || window.innerHeight);
+    // Keep the backing store aligned with the actually visible mobile area,
+    // including browser toolbar transitions that do not change window.innerHeight.
+    this.canvas.style.width = `${this.viewportW}px`;
+    this.canvas.style.height = `${this.viewportH}px`;
     const deviceDpr = window.devicePixelRatio || 1;
     // On phones the expensive part is not simulation, but compositing many
     // glow-heavy sprites at a full 2× canvas. Pixel art remains crisp at 1.5×
@@ -133,13 +149,13 @@ export class Game {
     this.renderDpr = Math.min(this.lowEffects ? 1.5 : 2, deviceDpr);
     this.particleCap = this.lowEffects ? 96 : CONFIG.particleCap;
     this.zapCap = this.lowEffects ? 10 : 28;
-    this.canvas.width = Math.floor(window.innerWidth * this.renderDpr);
-    this.canvas.height = Math.floor(window.innerHeight * this.renderDpr);
+    this.canvas.width = Math.floor(this.viewportW * this.renderDpr);
+    this.canvas.height = Math.floor(this.viewportH * this.renderDpr);
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(this.renderDpr, this.renderDpr);
 
-    const sw = window.innerWidth;
-    const sh = window.innerHeight;
+    const sw = this.viewportW;
+    const sh = this.viewportH;
     this.scale = Math.min(sw / CONFIG.designW, sh / CONFIG.designH);
     this.offsetX = (sw - CONFIG.designW * this.scale) / 2;
     this.offsetY = (sh - CONFIG.designH * this.scale) / 2;
@@ -227,10 +243,7 @@ export class Game {
         ? ["aegis", "shield", "hp"]
         : ["speed", "shield", "beam"]);
     this.upgrades.choices = this.upgrades.pool.filter(upgrade => wanted.has(upgrade.id));
-    const w = 370, h = 142;
-    this.upgrades.cards = this.upgrades.choices.map((_, index) => ({
-      x: (CONFIG.designW - w) / 2, y: 190 + index * 155, w, h,
-    }));
+    this.upgrades.cards = createUpgradeCards(this.upgrades.choices.length);
     this.state = "levelUp";
   }
 
@@ -413,7 +426,21 @@ export class Game {
     }
   }
 
+  toggleFullscreen() {
+    if (!this.fullscreenAvailable) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+      return;
+    }
+    this.canvas.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+  }
+
   handleTap(x, y) {
+    const fz = this._fullscreenBtnZone;
+    if (this.fullscreenAvailable && x >= fz.x && x <= fz.x + fz.w && y >= fz.y && y <= fz.y + fz.h) {
+      this.toggleFullscreen();
+      return;
+    }
     // Mute button — bottom-right, matches exclusion zone
     const mz = this._muteBtnZone;
     if (x >= mz.x && x <= mz.x + mz.w && y >= mz.y && y <= mz.y + mz.h) {
@@ -770,11 +797,13 @@ export class Game {
 
   spawnZap(x1, y1, x2, y2, secondary = false, intensity = 1) {
     const power = Math.max(0.65, Math.min(1.9, intensity));
-    const life = (secondary ? 0.13 : 0.18) * (0.92 + power * 0.08);
+    // The primary arc needs enough screen time to remain readable while the
+    // player is dragging quickly on a phone. Chain arcs stay short and crisp.
+    const life = (secondary ? 0.13 : 0.24) * (0.92 + power * 0.08);
     if (this.zaps.length < this.zapCap) {
       this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary, power });
     }
-    this.burst(x2, y2, CONFIG.colors.pink, Math.round((secondary ? 5 : 14) * Math.min(1.25, power)));
+    this.burst(x2, y2, CONFIG.colors.pink, Math.round((secondary ? 5 : 18) * Math.min(1.25, power)));
   }
 
   spawnEnemyDestruction(enemy) {
@@ -800,9 +829,9 @@ export class Game {
     const ctx = this.ctx;
     ctx.save();
     ctx.setTransform(this.renderDpr, 0, 0, this.renderDpr, 0, 0);
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    ctx.clearRect(0, 0, this.viewportW, this.viewportH);
     ctx.fillStyle = CONFIG.colors.bg;
-    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+    ctx.fillRect(0, 0, this.viewportW, this.viewportH);
     ctx.translate(this.offsetX, this.offsetY);
     ctx.scale(this.scale, this.scale);
 
@@ -825,6 +854,7 @@ export class Game {
     if (this.evolutionFlash > 0 && this.state !== "bossReward") this.drawEvolutionFlash(ctx);
     if (this.state === "playing") this.drawHud(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
+    this.drawFullscreenButton(ctx);
     this.drawMuteButton(ctx);
 
     ctx.restore();
@@ -894,6 +924,40 @@ export class Game {
     ctx.fillText(this.musicMuted ? "🔇" : "🔊", x, y);
     ctx.textBaseline = "alphabetic";
     ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawFullscreenButton(ctx) {
+    if (!this.fullscreenAvailable) return;
+    const fz = this._fullscreenBtnZone;
+    const x = fz.x + fz.w / 2, y = fz.y + fz.h / 2, r = 14;
+    ctx.save();
+    ctx.globalAlpha = 0.62;
+    ctx.fillStyle = "rgba(2,6,20,0.82)";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = this.fullscreenActive ? CONFIG.colors.pink : CONFIG.colors.cyan;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = this.fullscreenActive ? CONFIG.colors.pink : CONFIG.colors.cyan;
+    ctx.lineWidth = 1.5;
+    const d = 6, s = 4;
+    ctx.beginPath();
+    if (this.fullscreenActive) {
+      ctx.moveTo(x - d, y - s); ctx.lineTo(x - s, y - s); ctx.lineTo(x - s, y - d);
+      ctx.moveTo(x + d, y - s); ctx.lineTo(x + s, y - s); ctx.lineTo(x + s, y - d);
+      ctx.moveTo(x - d, y + s); ctx.lineTo(x - s, y + s); ctx.lineTo(x - s, y + d);
+      ctx.moveTo(x + d, y + s); ctx.lineTo(x + s, y + s); ctx.lineTo(x + s, y + d);
+    } else {
+      ctx.moveTo(x - s, y - d); ctx.lineTo(x - d, y - d); ctx.lineTo(x - d, y - s);
+      ctx.moveTo(x + s, y - d); ctx.lineTo(x + d, y - d); ctx.lineTo(x + d, y - s);
+      ctx.moveTo(x - s, y + d); ctx.lineTo(x - d, y + d); ctx.lineTo(x - d, y + s);
+      ctx.moveTo(x + s, y + d); ctx.lineTo(x + d, y + d); ctx.lineTo(x + d, y + s);
+    }
+    ctx.stroke();
     ctx.restore();
   }
 
