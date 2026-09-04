@@ -42,6 +42,7 @@ export class Game {
     this.scale = 1;
     this.offsetX = 0;
     this.offsetY = 0;
+    this.safeTopPx = 0;
     this.state = "loading";
     this.prevState = "title";
     this.last = performance.now();
@@ -163,6 +164,7 @@ export class Game {
     this.scale = Math.min(sw / CONFIG.designW, sh / CONFIG.designH);
     this.offsetX = (sw - CONFIG.designW * this.scale) / 2;
     this.offsetY = (sh - CONFIG.designH * this.scale) / 2;
+    this.safeTopPx = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
   }
 
   initStars() {
@@ -208,7 +210,6 @@ export class Game {
     this.bossActive = false;
     this.bossWarning = 0;
     this.sectorTransition = 0;
-    this.evolutionFlash = 0;
     this.bossRewardTimer = 0;
     this.bossRewardData = null;
     this.resumeAfterUpgradeState = null;
@@ -413,7 +414,6 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 20);
     this.bossWarning = Math.max(0, this.bossWarning - dt);
     this.sectorTransition = Math.max(0, this.sectorTransition - dt);
-    this.evolutionFlash = Math.max(0, this.evolutionFlash - dt);
   }
 
   _tryStartMusic() {
@@ -560,9 +560,6 @@ export class Game {
     // Build reward data snapshot for the overlay
     const tier   = this.player.shipTier();   // now the new tier
     const branch = this.player.shipBranch();
-    const TIER_NAMES   = ["", "MK-I FRAME", "MK-II FRAME", "MK-III FRAME", "MK-IV FRAME"];
-    const TIER_SUBTITLES = ["", "Scout Hull", "Combat Frame", "Warship Online", "Flagship Ascended"];
-    const BRANCH_LABELS = { assault: "Assault Systems", energy: "Energy Systems", siege: "Siege Systems" };
     const BRANCH_COLORS_HEX = { assault: "#c8d8ff", energy: "#88ccff", siege: "#ffaa40" };
     const MOVE_BONUS  = ["", "+0%", "+5%", "+8%", "+10%"];
     const FIRE_BONUS  = ["", "+0%", "+6%", "+10%", "+14%"];
@@ -570,9 +567,6 @@ export class Game {
     this.bossRewardData = {
       tier,
       branch,
-      tierName:     TIER_NAMES[tier]    || `MK-${tier} FRAME`,
-      tierSubtitle: TIER_SUBTITLES[tier] || `Tier ${tier}`,
-      branchLabel:  BRANCH_LABELS[branch] || "Systems",
       branchColor:  BRANCH_COLORS_HEX[branch] || CONFIG.colors.cyan,
       moveBonusStr: MOVE_BONUS[tier]  || "",
       fireBonusStr: FIRE_BONUS[tier]  || "",
@@ -895,8 +889,6 @@ export class Game {
     if (this.state === "paused") this.drawPaused(ctx);
     if (this.state === "bossReward") this.drawBossReward(ctx);
     if (this.state === "visualTest") this.drawVisualTest(ctx);
-    // evolutionFlash suppressed during/after bossReward (bossReward owns that moment now)
-    if (this.evolutionFlash > 0 && this.state !== "bossReward") this.drawEvolutionFlash(ctx);
     if (this.state === "playing") this.drawHud(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
     this.drawFullscreenButton(ctx);
@@ -1186,6 +1178,17 @@ export class Game {
 
   drawHud(ctx) {
     ctx.save();
+    // Portrait displays can have a genuine letterbox area above the 420×760
+    // playfield. Use it only when the entire compact HUD fits there; shorter
+    // displays and desktop retain the in-world placement.
+    const hudHeight = 74;
+    const topPadding = this.safeTopPx + 4;
+    const canUseTopLetterbox = this.offsetY >= topPadding + hudHeight * this.scale;
+    ctx.save();
+    if (canUseTopLetterbox) {
+      const designOffset = (topPadding - this.offsetY) / this.scale - 8;
+      ctx.translate(0, designOffset);
+    }
     const W = CONFIG.designW;
     const p = this.player;
     const sector = SECTORS[this.currentSectorIndex];
@@ -1328,6 +1331,10 @@ export class Game {
     ctx.fillStyle = "rgba(180,210,240,0.5)";
     ctx.font = "700 8px ui-monospace, monospace";
     ctx.fillText(`BEST  ${Math.floor(this.best)}`, W - 18, 57);
+
+    // Keep boss telemetry and contextual abilities anchored to the playfield;
+    // only the compact header moves into a sufficiently large letterbox.
+    ctx.restore();
 
     // ── Boss HP bar ──────────────────────────────────────────────────
     if (this.bossActive && this.bossWarning <= 0) {
@@ -1550,62 +1557,6 @@ export class Game {
     ctx.font = "600 13px system-ui";
     ctx.fillText(sector.name, CONFIG.designW / 2, 374);
 
-    // Evolution badge — show new ship tier
-    const tier = this.player.shipTier();
-    const branch = this.player.shipBranch();
-    if (tier >= 2) {
-      const TIER_NAMES  = ["", "", "COMBAT FRAME", "WARSHIP ONLINE", "FLAGSHIP ASCENDED"];
-      const BRANCH_GLOWS = { assault: "#c8d8ff", energy: "#88ccff", siege: "#ffaa40" };
-      const badgeGlow = BRANCH_GLOWS[branch] || CONFIG.colors.cyan;
-      const tierLabel = TIER_NAMES[tier] || `TIER ${tier}`;
-      ctx.globalAlpha = alpha * 0.85;
-      ctx.fillStyle = badgeGlow;
-      ctx.shadowColor = badgeGlow;
-      ctx.shadowBlur = 14;
-      ctx.font = "800 14px system-ui";
-      ctx.fillText("▲  " + tierLabel + "  ▲", CONFIG.designW / 2, 420);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = CONFIG.colors.dim;
-      ctx.font = "500 11px system-ui";
-      ctx.fillText(branch.toUpperCase() + " FRAME", CONFIG.designW / 2, 440);
-    }
-
-    ctx.restore();
-  }
-
-  drawEvolutionFlash(ctx) {
-    // Flash lifetime: 0.7s — sharp white punch fades to nothing
-    // Shape: instant-on at 0.7, fast decay curve so it feels like a hit, not a fade
-    const raw = this.evolutionFlash / 0.7; // 1.0 → 0.0
-    const alpha = raw * raw;               // quadratic decay — snappy
-
-    const tier   = this.player.shipTier();
-    const branch = this.player.shipBranch();
-    const BRANCH_GLOWS = { assault: "255,240,255", energy: "160,220,255", siege: "255,190,80" };
-    const rgb = BRANCH_GLOWS[branch] || "180,220,255";
-
-    ctx.save();
-
-    // Full-screen white punch
-    ctx.globalAlpha = alpha * 0.72;
-    ctx.fillStyle = `rgb(${rgb})`;
-    ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH);
-
-    // Centered tier text — only visible in first half of flash
-    if (raw > 0.45) {
-      const textAlpha = (raw - 0.45) / 0.55;
-      const TIER_NAMES = ["", "", "COMBAT FRAME", "WARSHIP ONLINE", "FLAGSHIP ASCENDED"];
-      const label = TIER_NAMES[tier] || `TIER ${tier} UNLOCKED`;
-      ctx.globalAlpha = textAlpha;
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#fff";
-      ctx.shadowColor = `rgb(${rgb})`;
-      ctx.shadowBlur = 28;
-      ctx.font = "900 26px system-ui";
-      ctx.fillText(label, CONFIG.designW / 2, CONFIG.designH / 2);
-      ctx.shadowBlur = 0;
-    }
-
     ctx.restore();
   }
 
@@ -1659,23 +1610,22 @@ export class Game {
     ctx.fillText(d.finalBoss ? "FINAL BOSS DEFEATED" : "BOSS DEFEATED", cx, 188);
     ctx.shadowBlur = 0;
 
-    // Tier name — big headline
+    // The bonuses are real and explicit; no fictional ship frame is claimed
+    // while the ship retains its actual visible modules.
     ctx.fillStyle = d.branchColor;
     ctx.font = "900 28px system-ui";
     ctx.shadowColor = d.branchColor;
     ctx.shadowBlur = 22;
-    ctx.fillText(d.finalBoss ? "VOID CORE SECURED" : "SHIP EVOLUTION", cx, 228);
+    ctx.fillText(d.finalBoss ? "VOID CORE SECURED" : "SECTOR CLEARANCE", cx, 228);
     ctx.shadowBlur = 0;
 
-    // Subtitle: MK-II FRAME etc.
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "800 18px system-ui";
-    ctx.fillText(d.finalBoss ? "RUN COMPLETE" : d.tierName, cx, 258);
+    ctx.fillText(d.finalBoss ? "RUN COMPLETE" : SECTORS[this.currentSectorIndex].shortName, cx, 258);
 
-    // Branch label
     ctx.fillStyle = d.branchColor;
     ctx.font = "600 12px system-ui";
-    ctx.fillText(d.finalBoss ? "Galalaxy secured" : d.branchLabel + " Online", cx, 280);
+    ctx.fillText(d.finalBoss ? "Galalaxy secured" : "SECTOR BONUSES ONLINE", cx, 280);
 
     // ── Divider ──
     ctx.globalAlpha = alpha * 0.35;
@@ -1698,14 +1648,13 @@ export class Game {
       ] : [
         `+ Movement Speed  ${d.moveBonusStr}`,
         `+ Auto-Fire Efficiency  ${d.fireBonusStr}`,
-        `+ Hull Systems Reinforced`,
+        `+ ${d.bossXp} Core XP recovered`,
       ];
-      // Only show bonus lines that have real values for this tier
-      const visibleLines = d.finalBoss || d.tier >= 2 ? lines : [];
+      const visibleLines = lines;
       visibleLines.forEach((txt, i) => {
         ctx.fillStyle = i < 2 ? d.branchColor : CONFIG.colors.dim;
         ctx.font = i < 2 ? "600 12px system-ui" : "500 11px system-ui";
-        ctx.globalAlpha = alpha * bonusAlpha * (i < 2 ? 0.9 : 0.55);
+        ctx.globalAlpha = alpha * bonusAlpha * (i < 2 ? 0.9 : 0.72);
         ctx.fillText(txt, cx, 316 + i * lineH);
       });
     }
