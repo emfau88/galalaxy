@@ -12,6 +12,7 @@ const FAMILY_ACCENT = {
 // comparison and all text, so neither gets buried in decorative art.
 const UPGRADE_CARD_FRAME_SOURCE = { x: 38, y: 46, w: 1909, h: 683 };
 const ROCKET_CARD_FRAME_SOURCE = { x: 10, y: 4, w: 1963, h: 781 };
+const PURPLE_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 1908, h: 809 };
 
 // pool entry shape:
 //   id, name, desc, icon
@@ -462,12 +463,19 @@ export class UpgradeSystem {
       // The custom frame is an overlay, leaving the semantic family tint and
       // every text/detail layer authored in canvas and therefore readable.
       const rocketFrame = u.family === "rocket";
-      const cardFrame = img.get(rocketFrame ? "uiUpgradeCardFrameRocket" : "uiUpgradeCardFrame");
+      const purpleFrame = u.family === "zapper";
+      const cardFrame = img.get(
+        rocketFrame ? "uiUpgradeCardFrameRocket"
+          : purpleFrame ? "uiUpgradeCardFramePurple"
+            : "uiUpgradeCardFrame"
+      );
       if (cardFrame) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = u.keystone || rocketFrame ? 0.94 : 0.82;
-        const f = rocketFrame ? ROCKET_CARD_FRAME_SOURCE : UPGRADE_CARD_FRAME_SOURCE;
+        ctx.globalAlpha = u.keystone || rocketFrame || purpleFrame ? 0.94 : 0.82;
+        const f = rocketFrame
+          ? ROCKET_CARD_FRAME_SOURCE
+          : purpleFrame ? PURPLE_CARD_FRAME_SOURCE : UPGRADE_CARD_FRAME_SOURCE;
         ctx.drawImage(cardFrame, f.x, f.y, f.w, f.h, c.x - 2, c.y - 3, c.w + 4, c.h + 6);
         ctx.restore();
       }
@@ -499,7 +507,9 @@ export class UpgradeSystem {
         : u.maxLevel === null
           ? `STACK ${lvl} → ${lvl + 1}`
           : `LV ${lvl} → ${Math.min(u.maxLevel, lvl + 1)}`;
-      ctx.fillText(levelLabel, c.x + 174, c.y + 21);
+      // The purple quality frame carries a central crest. Keep the compact
+      // level readout directly below it instead of drawing through the jewel.
+      ctx.fillText(levelLabel, c.x + 174, c.y + (purpleFrame ? 38 : 21));
       ctx.globalAlpha = 1;
 
       // Upgrade name, exact effect, then short explanation.

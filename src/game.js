@@ -49,6 +49,7 @@ export class Game {
     this.nairanTestMode = searchParams.get("test") === "nairan-combat";
     this.nautolanTestMode = searchParams.get("test") === "nautolan-combat";
     this.hudTestMode = searchParams.get("test") === "hud-layout";
+    this.victoryTestMode = searchParams.get("test") === "victory-screen";
     this.upgradeCardTestRocketMode = searchParams.get("upgradeFamily") === "rocket";
     if (searchParams.has("test")) window.__galalaxyTestGame = this;
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
@@ -114,6 +115,7 @@ export class Game {
       else if (this.nairanTestMode) this.startFleetCombatTest("nairan");
       else if (this.nautolanTestMode) this.startFleetCombatTest("nautolan");
       else if (this.hudTestMode) this.startHudLayoutTest();
+      else if (this.victoryTestMode) this.startVictoryTest();
       else this.state = "title";
     });
 
@@ -190,6 +192,15 @@ export class Game {
     this.shake = 0;
     this.upgrades._pickCount = 0;
     this.state = "playing";
+  }
+
+  startVictoryTest() {
+    this.player = new Player(this);
+    this.score = 18420;
+    this.kills = 147;
+    this.runTime = 735;
+    this.best = Math.max(this.best, this.score);
+    this.state = "victory";
   }
 
   startVisualTest() {
@@ -1621,35 +1632,70 @@ export class Game {
     ctx.fillStyle = "rgba(2,6,22,0.88)";
     ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH);
 
+    // Text remains canvas-rendered for crisp, localizable stats while the
+    // generated console gives the completed run a proper ceremonial frame.
+    const victoryFrame = this.loader.get("uiVictoryCommandFrame");
+    if (victoryFrame) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(victoryFrame, 0, 0, 1292, 1217, 36, 150, 348, 328);
+      ctx.restore();
+    }
+
     ctx.textAlign = "center";
     ctx.fillStyle = CONFIG.colors.cyan;
     ctx.font = "700 15px system-ui";
     ctx.shadowColor = CONFIG.colors.cyan;
     ctx.shadowBlur = 14;
-    ctx.fillText("RUN COMPLETE", CONFIG.designW / 2, 200);
+    ctx.fillText("RUN COMPLETE", CONFIG.designW / 2, 232);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "900 44px system-ui";
     ctx.shadowColor = CONFIG.colors.cyan;
     ctx.shadowBlur = 28;
-    ctx.fillText(Math.floor(this.score).toString(), CONFIG.designW / 2, 278);
+    ctx.fillText(Math.floor(this.score).toString(), CONFIG.designW / 2, 300);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "700 13px system-ui";
-    ctx.fillText(`Sectors: ${SECTORS.length} / ${SECTORS.length}  ·  Kills: ${this.kills}`, CONFIG.designW / 2, 316);
-    ctx.fillText(`Time: ${fmtTime(this.runTime)}  ·  Best: ${Math.floor(this.best)}`, CONFIG.designW / 2, 338);
+    ctx.fillText(`Sectors: ${SECTORS.length} / ${SECTORS.length}  ·  Kills: ${this.kills}`, CONFIG.designW / 2, 340);
+    ctx.fillText(`Time: ${fmtTime(this.runTime)}  ·  Best: ${Math.floor(this.best)}`, CONFIG.designW / 2, 362);
 
     // Stars decoration
     const pulse = Math.sin(this.time * 3) * 0.15;
     ctx.globalAlpha = 0.7 + pulse;
     ctx.fillStyle = CONFIG.colors.cyan;
     ctx.font = "900 22px system-ui";
-    ctx.fillText("★ ★ ★ ★", CONFIG.designW / 2, 384);
+    ctx.fillText("★ ★ ★ ★", CONFIG.designW / 2, 408);
     ctx.globalAlpha = 1;
 
-    this.drawButton(ctx, 72, 528, 276, 66, "PLAY AGAIN");
+    this.drawVictoryButton(ctx, 72, 528, 276, 66, "PLAY AGAIN");
+    ctx.restore();
+  }
+
+  drawVictoryButton(ctx, x, y, w, h, text) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(5,17,36,0.9)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 24);
+    ctx.fill();
+
+    const frame = this.loader.get("uiStartRunButtonFrame");
+    if (frame) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.92 + Math.sin(this.time * 2.8) * 0.08;
+      ctx.drawImage(frame, 28, 110, 2117, 475, x - 4, y - 4, w + 8, h + 8);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "900 20px system-ui";
+    ctx.shadowColor = CONFIG.colors.cyan;
+    ctx.shadowBlur = 8;
+    ctx.fillText(text, x + w / 2, y + 42);
     ctx.restore();
   }
 
