@@ -10,8 +10,13 @@ export const PROJECTILE_VISUALS = {
   // pixel silhouettes are very different. Tune them as weapons, not as hull
   // attachments: cannon rounds stay nimble while rockets read as the heavier
   // payload at a glance.
-  playerAuto:   { assetKey: "projectileAuto",   w: 34, h: 34, rotOffset: Math.PI / 2, color: "#58e6ff", glowColor: "#58e6ff", frameW: 32, frameH: 32, frameCount: 4,  fps: 10 },
-  playerRocket: { assetKey: "projectileRocket", w: 74, h: 74, scaleX: 1.45, rotOffset: Math.PI / 2, color: "#ffb347", glowColor: "#ff8a32", frameW: 32, frameH: 32, frameCount: 3,  fps: 10 },
+  // The auto-cannon's bright sprite has a deceptively heavy silhouette; keep
+  // it tight so a multi-shot volley reads as precision fire rather than a wall.
+  playerAuto:   { assetKey: "projectileAuto",   w: 28, h: 28, rotOffset: Math.PI / 2, color: "#58e6ff", glowColor: "#58e6ff", frameW: 32, frameH: 32, frameCount: 4,  fps: 10 },
+  // Rocket source frames are intentionally thin. Width has to be amplified
+  // independently of length so the flight reads as a physical missile, not a
+  // small bright line with a long exhaust trail.
+  playerRocket: { assetKey: "projectileRocket", w: 68, h: 68, scaleX: 1.35, rotOffset: Math.PI / 2, color: "#ffb347", glowColor: "#ff8a32", frameW: 32, frameH: 32, frameCount: 3,  fps: 10 },
   playerZapper: { assetKey: "projectileZapper", w: 51, h: 51, rotOffset: Math.PI / 2, color: "#dc78ff", glowColor: "#bd55ff", frameW: 32, frameH: 32, frameCount: 8,  fps: 10 },
   playerBigGun: { assetKey: "projectileBigGun", w: 51, h: 51, rotOffset: 0,           color: "#85ff8e", glowColor: "#4cff72", frameW: 32, frameH: 32, frameCount: 10, fps: 10 },
 
@@ -25,6 +30,8 @@ export const PROJECTILE_VISUALS = {
   klaedFrigate:      { assetKey: "klaedBullet",    w: 10, h: 24, rotOffset: Math.PI / 2, color: "#ff466b", glowColor: "#ff2040", frameW: 4,  frameH: 16, frameCount: 4, fps: 12 },
   klaedBattlecruiser:{ assetKey: "klaedRay",       w: 18, h: 38, rotOffset: Math.PI / 2, color: "#ff6680", glowColor: "#ff2040", frameW: 18, frameH: 38, frameCount: 4, fps: 12 },
   klaedBoss:         { assetKey: "klaedBigBullet", w: 14, h: 28, rotOffset: Math.PI / 2, color: "#ff8899", glowColor: "#ff2040", frameW: 8,  frameH: 16, frameCount: 4, fps: 10 },
+  klaedTorpedo:      { assetKey: "klaedTorpedo",   w: 18, h: 38, rotOffset: Math.PI / 2, color: "#ff9166", glowColor: "#ff5428", frameW: 11, frameH: 32, frameCount: 3, fps: 10 },
+  klaedWave:         { assetKey: "klaedWave",      w: 64, h: 24, scaleX: 2.4,  rotOffset: -Math.PI / 2, color: "#ffbb55", glowColor: "#ff7a22", frameW: 64, frameH: 64, frameCount: 6, fps: 12 },
 
   // --- Nairan ---
   nairanBomber:       { assetKey: "nairanBolt",    w: 12, h: 12, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff", frameW: 9, frameH: 9,  frameCount: 5, fps: 14 },
@@ -49,6 +56,8 @@ export const ENEMY_WEAPON_PROFILES = {
   klaedFrigate:       { speed: 250, damage: 7,  cooldown: 2.5, hitRadius: 4,   life: 2.8, behavior: "straight" },
   klaedBattlecruiser: { speed: 355, damage: 10, cooldown: 3.1, hitRadius: 4.5, life: 2.2, behavior: "ray" },
   klaedBoss:          { speed: 275, damage: 12, cooldown: 1.1, wideCooldown: 1.6, hitRadius: 6, life: 3.3, behavior: "straight" },
+  klaedTorpedo:       { speed: 132, damage: 15, cooldown: 4.2, hitRadius: 5, life: 4.8, behavior: "homing", turnRate: 0.92, homingDuration: 1.0, acceleration: 105 },
+  klaedWave:          { speed: 210, damage: 10, cooldown: 4.8, hitRadius: 5, life: 3.4, behavior: "straight", hitWidth: 58, hitHeight: 12 },
 
   // Nairan: fast precision fire and gently tracking missiles.
   nairanBomber:        { speed: 315, damage: 7,  cooldown: 2.2, hitRadius: 4.5, life: 2.5, behavior: "straight" },

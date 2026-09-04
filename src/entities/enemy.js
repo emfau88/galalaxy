@@ -35,6 +35,7 @@ export class Enemy {
     this.visual = enemyVisualFor(type);
     this.weaponAnimation = null;
     this.pendingShots = [];
+    this.specialCharge = null;
     // Boss shields add a readable, authored defensive phase without making
     // ordinary swarm ships visually noisy.
     this.maxShield = boss ? Math.round(this.maxHp * 0.16) : 0;
@@ -69,9 +70,9 @@ export class Enemy {
     };
   }
 
-  _spawnWeaponShot(angle, { speedMult = 1, damageMult = 1, lane = 0, facingAngle = null } = {}) {
-    const profile = this.weaponProfile;
-    const muzzle = this._muzzlePosition(facingAngle ?? this._facingAngle(), lane);
+  _spawnWeaponShot(angle, { speedMult = 1, damageMult = 1, lane = 0, facingAngle = null, visualKey = this.projVisual, origin = null } = {}) {
+    const profile = ENEMY_WEAPON_PROFILES[visualKey] || this.weaponProfile;
+    const muzzle = origin || this._muzzlePosition(facingAngle ?? this._facingAngle(), lane);
     this.game.spawnProjectile(
       muzzle.x,
       muzzle.y,
@@ -80,14 +81,15 @@ export class Enemy {
       profile.damage * damageMult,
       "enemy",
       "enemy",
-      this.projVisual
+      visualKey
     );
   }
 
-  _queueWeaponShot(angle, options = {}) {
-    const weapon = this.visual?.weapon;
+  _queueWeaponShot(angle, { delay = 0, skipWeaponAnimation = false, ...options } = {}) {
+    const weapon = skipWeaponAnimation ? null : this.visual?.weapon;
     if (!weapon) {
-      this._spawnWeaponShot(angle, options);
+      if (delay <= 0) this._spawnWeaponShot(angle, options);
+      else this.pendingShots.push({ at: this.game.time + delay, angle, options });
       return;
     }
     // A volley shares one authored animation; individual spread shots leave
@@ -99,10 +101,66 @@ export class Enemy {
       };
     }
     this.pendingShots.push({
-      at: this.game.time + weapon.releaseFrame / weapon.fps,
+      at: this.game.time + delay + (weapon ? weapon.releaseFrame / weapon.fps : 0),
       angle,
       options,
     });
+  }
+
+  _beginSpecialCharge(kind, delay, data = {}) {
+    this.specialCharge = { kind, until: this.game.time + delay, ...data };
+  }
+
+  _fireKlaedBossPattern(player) {
+    this._klaedPattern = (this._klaedPattern ?? 0) % 4 + 1;
+    const facing = Math.atan2(player.y - this.y, player.x - this.x);
+
+    if (this._klaedPattern <= 2) {
+      this.fireTimer = 1.35;
+      for (let lane = -1; lane <= 1; lane++) {
+        this._queueWeaponShot(facing + lane * 0.18, {
+          damageMult: 0.75,
+          lane,
+          facingAngle: facing,
+        });
+      }
+      return;
+    }
+
+    if (this._klaedPattern === 3) {
+      const charge = 0.46;
+      this.fireTimer = 3.45;
+      this._beginSpecialCharge("torpedo", charge);
+      for (const lane of [-1, 1]) {
+        this._queueWeaponShot(facing + lane * 0.09, {
+          delay: charge,
+          lane,
+          facingAngle: facing,
+          visualKey: "klaedTorpedo",
+          skipWeaponAnimation: true,
+        });
+      }
+      return;
+    }
+
+    // Three physical wave segments form a gate. The alternating broad safe
+    // corridor is intentional: players read it first, then move into it.
+    const charge = 0.72;
+    const laneXs = [46, 128, 210, 292, 374];
+    const safeLane = [0, 2, 4][(this._waveGateIndex = (this._waveGateIndex ?? -1) + 1) % 3];
+    const activeLanes = safeLane === 0 ? [2, 3, 4] : safeLane === 2 ? [0, 1, 4] : [0, 1, 2];
+    this.fireTimer = 4.9;
+    this._beginSpecialCharge("wave", charge, { laneXs, activeLanes });
+    for (const index of activeLanes) {
+      this._queueWeaponShot(Math.PI / 2, {
+        delay: charge,
+        visualKey: "klaedWave",
+        skipWeaponAnimation: true,
+        // The gate forms below the dreadnought's hull, so every segment is
+        // visible before it starts closing on the player.
+        origin: { x: laneXs[index], y: this.y + 140 },
+      });
+    }
   }
 
   _releaseQueuedShots() {
@@ -145,7 +203,9 @@ export class Enemy {
     }
 
     this.fireTimer -= dt;
-    if (this.boss && this.fireTimer <= 0) {
+    if (this.boss && this.type === "dreadnought" && this.fireTimer <= 0) {
+      this._fireKlaedBossPattern(p);
+    } else if (this.boss && this.fireTimer <= 0) {
       // Alternating rhythm: tight burst (3 shots) then wide spread (5 shots)
       this._bossVolley = (this._bossVolley ?? 0) + 1;
       const isBurst = this._bossVolley % 3 !== 0; // every 3rd volley is the wide spread
@@ -171,9 +231,18 @@ export class Enemy {
         }
       }
     } else if (!this.boss && Enemy._canFire(this.type) && this.fireTimer <= 0) {
-      this.fireTimer = this.weaponProfile.cooldown;
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
-      this._queueWeaponShot(ang);
+      const isKlaedBattlecruiser = this.type === "battlecruiser";
+      this._battlecruiserVolley = isKlaedBattlecruiser ? (this._battlecruiserVolley ?? 0) + 1 : 0;
+      const firesTorpedo = isKlaedBattlecruiser && this._battlecruiserVolley % 3 === 0;
+      this.fireTimer = firesTorpedo ? 4.2 : this.weaponProfile.cooldown;
+      if (firesTorpedo) {
+        const charge = 0.46;
+        this._beginSpecialCharge("torpedo", charge);
+        this._queueWeaponShot(ang, { delay: charge, visualKey: "klaedTorpedo", skipWeaponAnimation: true });
+      } else {
+        this._queueWeaponShot(ang);
+      }
     }
 
     if (dist2(this.x, this.y, p.x, p.y) < (this.r + p.r) ** 2) {
@@ -237,6 +306,40 @@ export class Enemy {
       ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+    }
+
+    if (this.specialCharge && this.game.time < this.specialCharge.until) {
+      const progress = 1 - (this.specialCharge.until - this.game.time) /
+        (this.specialCharge.kind === "wave" ? 0.72 : 0.46);
+      ctx.save();
+      // Draw telegraphs in world orientation after undoing the ship rotation.
+      ctx.rotate(-drawAngle);
+      ctx.globalCompositeOperation = "lighter";
+      if (this.specialCharge.kind === "wave") {
+        const alpha = 0.22 + progress * 0.38;
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "#ff8b35";
+        ctx.shadowColor = "#ff5428";
+        ctx.shadowBlur = 7;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        for (const index of this.specialCharge.activeLanes) {
+          const x = this.specialCharge.laneXs[index] - this.x;
+          ctx.strokeRect(x - 29, 112, 58, CONFIG.designH - this.y - 102);
+        }
+        ctx.setLineDash([]);
+      } else {
+        ctx.globalAlpha = 0.35 + progress * 0.45;
+        ctx.fillStyle = "#ffb06a";
+        ctx.shadowColor = "#ff5428";
+        ctx.shadowBlur = 14;
+        for (const x of [-15, 15]) {
+          ctx.beginPath();
+          ctx.arc(x, 28, 4 + progress * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
     }
 
     ctx.globalAlpha = 1;

@@ -147,6 +147,8 @@ export const ASSETS = {
   pickupPulse:     "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Big Pulse Engine.png",
   pickupBurst:     "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Burst Engine.png",
   pickupSuper:     "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Supercharged Engine.png",
+  pickupShieldFront: "assets/Foozle_2DS0016_Void_PickupsPack/Shield Generators/PNGs/Pickup Icon - Shield Generator - Front Shield.png",
+  pickupShieldFrontSide: "assets/Foozle_2DS0016_Void_PickupsPack/Shield Generators/PNGs/Pickup Icon - Shield Generator - Front and Side Shield.png",
   pickupShield:    "assets/Foozle_2DS0016_Void_PickupsPack/Shield Generators/PNGs/Pickup Icon - Shield Generator - All around shield.png",
   pickupInvincible:"assets/Foozle_2DS0016_Void_PickupsPack/Shield Generators/PNGs/Pickup Icon - Shield Generator - Invincibility Shield.png",
   pickupAuto:      "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Auto Cannons.png",

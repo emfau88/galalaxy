@@ -67,24 +67,36 @@ export function emitTrail(game, pr) {
   const cols = colorsFor(pr.visualKey, pr.owner);
   const isBoss = pr.visualKey && pr.visualKey.endsWith("Boss");
   const isPlayer = pr.owner === "player";
+  const isPlayerAuto = pr.visualKey === "playerAuto";
   const isPlayerRocket = pr.visualKey === "playerRocket";
 
   // Trail length / brightness by type
-  const life = isBoss ? 0.22 : isPlayerRocket ? 0.19 : isPlayer ? 0.12 : 0.15;
-  const size = isBoss ? 2.8 : isPlayerRocket ? 3.35 : isPlayer ? 2.2 : 1.8;
-  const spread = isPlayerRocket ? 16 : 12;
+  // Auto-cannon gets a short, restrained tracer; rockets use a longer, hot
+  // exhaust so their silhouette still reads clearly in a busy volley.
+  const life = isBoss ? 0.22 : isPlayerRocket ? 0.18 : isPlayerAuto ? 0.08 : isPlayer ? 0.12 : 0.15;
+  const size = isBoss ? 2.8 : isPlayerRocket ? 3.0 : isPlayerAuto ? 1.45 : isPlayer ? 2.2 : 1.8;
+  const spread = isPlayerRocket ? 8 : isPlayerAuto ? 7 : 12;
 
   // Rockets receive a brighter two-particle exhaust; other player shots stay
   // light enough for mobile performance.
   const count = isBoss || isPlayerRocket ? 2 : 1;
+  const velocityLength = Math.hypot(pr.vx, pr.vy) || 1;
+  const directionX = pr.vx / velocityLength;
+  const directionY = pr.vy / velocityLength;
+  // Fire is emitted from the propulsion end, not from the projectile centre.
+  // This prevents the exhaust from painting over the rocket body in flight.
+  const exhaustOffset = isPlayerRocket ? 21 : 0;
+  const exhaustX = pr.x - directionX * exhaustOffset;
+  const exhaustY = pr.y - directionY * exhaustOffset;
   for (let i = 0; i < count; i++) {
-    const ox = (Math.random() - 0.5) * spread * 0.3;
-    const oy = (Math.random() - 0.5) * spread * 0.3;
+    const lateral = (Math.random() - 0.5) * spread * 0.3;
+    const ox = -directionY * lateral;
+    const oy = directionX * lateral;
     // Velocity opposite to travel direction, faint
     const spd = (Math.random() * 20 + 10);
     const ang = Math.atan2(pr.vy, pr.vx) + Math.PI + (Math.random() - 0.5) * 0.5;
     pushParticle(game,
-      pr.x + ox, pr.y + oy,
+      exhaustX + ox, exhaustY + oy,
       Math.cos(ang) * spd, Math.sin(ang) * spd,
       i === 0 ? cols.primary : cols.secondary,
       life, size

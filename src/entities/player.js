@@ -55,6 +55,11 @@ export class Player {
     this.rocketDisabled = false;
     this.siegePayload  = false;
     this.pulseReactor  = false;
+    // Passive defensive keystone. It only triggers when a hit would reach
+    // the hull, so normal shield chip never wastes it.
+    this.emergencyAegis = false;
+    this.aegisCooldown = 0;
+    this.aegisReadyFlash = 0;
     this.weaponAnimations = Object.create(null);
     this.pendingWeaponShots = [];
     this._autoBarrel = 0;
@@ -181,6 +186,8 @@ export class Player {
     this.bank = lerp(this.bank, clamp(this.vx / 520, -0.35, 0.35), clamp(dt * 9, 0, 1));
 
     this.invuln = Math.max(0, this.invuln - dt);
+    this.aegisCooldown = Math.max(0, this.aegisCooldown - dt);
+    this.aegisReadyFlash = Math.max(0, this.aegisReadyFlash - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.shield = clamp(this.shield + this.shieldRegen * dt, 0, this.maxShield);
     this.updatePendingWeaponShots(dt);
@@ -294,7 +301,12 @@ export class Player {
     const visual = PLAYER_WEAPON_VISUALS.zapper;
     const frameDuration = this.triggerWeaponAnimation("zapper");
     const zapDmg = (20 + Math.max(1, this.zapper) * 5) * (overcharged ? 2.2 : 1);
-    const chainCount = overcharged ? 2 : (this.zapper >= 2 ? 1 : 0);
+    // Level 2 unlocks the first jump; levels 4–5 earn a second. The
+    // Overcharged Core extends that pattern once more for a true lightning
+    // build, rather than merely raising a hidden damage value.
+    const chainCount = overcharged ? 3 : Math.floor(this.zapper / 2);
+    const chainRange = 180 + Math.max(0, this.zapper - 1) * 25;
+    const zapIntensity = 1 + Math.max(0, this.zapper - 1) * 0.15 + (overcharged ? 0.25 : 0);
 
     this.queueWeaponShot(visual.releaseFrames[0] * frameDuration, () => {
       const scale = this.shipVisualScale();
@@ -302,24 +314,24 @@ export class Player {
       const x = this.x + muzzle.x * scale;
       const y = this.y + muzzle.y * scale;
       const currentTarget = target && !target.dead ? target : this.game.closestEnemy(x, y, 360);
-      const angle = currentTarget ? Math.atan2(currentTarget.y - y, currentTarget.x - x) : -Math.PI / 2;
-      this.game.spawnProjectile(x, y, angle, 760, zapDmg, "player", "zapper", visual.projectileKey, {
-        target: currentTarget,
-        turnRate: 9,
-        hitRadius: 5,
-        life: 0.85,
-        onHit: hit => this._chainZapperHit(hit, zapDmg, chainCount),
-      });
+      if (!currentTarget || currentTarget.dead) return;
+
+      // The Zapper is an instantaneous lightning weapon, not a slow energy
+      // projectile. Its visible first arc is therefore identical in language
+      // to the later chain arcs and makes the whole upgrade read at a glance.
+      currentTarget.damage(zapDmg);
+      this.game.spawnZap(x, y, currentTarget.x, currentTarget.y, false, zapIntensity);
+      this._chainZapperHit(currentTarget, zapDmg, chainCount, chainRange, zapIntensity);
     });
   }
 
-  _chainZapperHit(primary, damage, chainCount) {
+  _chainZapperHit(primary, damage, chainCount, chainRange, intensity) {
     if (!chainCount) return;
     const visited = new Set([primary]);
     let last = primary;
     for (let c = 0; c < chainCount; c++) {
       let next = null;
-      let bestDistance = 200 * 200;
+      let bestDistance = chainRange * chainRange;
       for (const enemy of this.game.enemies) {
         if (enemy.dead || visited.has(enemy)) continue;
         const distance = this.game.dist2(last.x, last.y, enemy.x, enemy.y);
@@ -330,7 +342,7 @@ export class Player {
       }
       if (!next) break;
       next.damage(damage * 0.6);
-      this.game.spawnZap(last.x, last.y, next.x, next.y, true);
+      this.game.spawnZap(last.x, last.y, next.x, next.y, true, intensity * 0.78);
       visited.add(next);
       last = next;
     }
@@ -373,6 +385,17 @@ export class Player {
       const used = Math.min(this.shield, left);
       this.shield -= used;
       left -= used;
+    }
+    if (left > 0 && this.emergencyAegis && this.aegisCooldown <= 0) {
+      // The triggering hull hit is fully blocked, then the authored
+      // invincibility-shield layer stays active for the protection window.
+      this.invuln = 1.8;
+      this.aegisCooldown = 18;
+      this.aegisReadyFlash = 0.75;
+      this.hitFlash = 0.24;
+      this.game.shake = Math.max(this.game.shake, 6);
+      this.game.burst(this.x, this.y, "#bc72ff", 24);
+      return;
     }
     this.hp -= left;
     this.hitFlash = 0.14;
@@ -437,7 +460,10 @@ export class Player {
       ctx.fill();
     }
 
-    if (showWeapon) this._drawWeaponLayer(ctx, img, t);
+    if (showWeapon) {
+      this._drawZapperCharge(ctx, t);
+      this._drawWeaponLayer(ctx, img, t);
+    }
 
     ctx.restore();
   }
@@ -502,6 +528,33 @@ export class Player {
     }
   }
 
+  _drawZapperCharge(ctx, t) {
+    if (!this.zapper) return;
+    const level = Math.min(5, this.zapper);
+    const prongs = 1 + Math.floor((level - 1) / 2);
+    const spacing = 11;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.3 + level * 0.08;
+    ctx.strokeStyle = "#e477ff";
+    ctx.shadowColor = "#bd55ff";
+    ctx.shadowBlur = this.game.lowEffects ? 0 : 7 + level * 2;
+    ctx.lineWidth = 1 + level * 0.22;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (let i = 0; i < prongs; i++) {
+      const x = (i - (prongs - 1) / 2) * spacing;
+      const flicker = Math.sin(t * 14 + i * 2.7) * 2;
+      ctx.beginPath();
+      ctx.moveTo(x, -20);
+      ctx.lineTo(x + flicker, -28);
+      ctx.lineTo(x - flicker * 0.6, -34 - level * 0.8);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   _drawShieldLayer(ctx, img, t) {
     const invincible = this.invuln > 0;
     if (!invincible && (this.shield <= 0 || this.shieldLevel <= 0)) return;
@@ -532,6 +585,7 @@ export class Player {
       overcharged: "#cc66ff",
       siege: "#ff8800",
       reactor: "#00ffcc",
+      aegis: "#bd76ff",
     };
     const color = colors[this.keystoneId];
     if (!color) return;

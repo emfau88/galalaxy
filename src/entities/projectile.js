@@ -14,6 +14,8 @@ export class Projectile {
     this.visualKey = visualKey || (owner === "player" ? kind : "klaedNormal");
     this.weaponProfile = owner === "enemy" ? ENEMY_WEAPON_PROFILES[this.visualKey] : null;
     this.r = options.hitRadius ?? this.weaponProfile?.hitRadius ?? (kind === "rocket" ? 6 : kind === "enemy" ? 5 : 4);
+    this.hitWidth = options.hitWidth ?? this.weaponProfile?.hitWidth ?? null;
+    this.hitHeight = options.hitHeight ?? this.weaponProfile?.hitHeight ?? null;
     this.life = options.life ?? this.weaponProfile?.life ?? (kind === "rocket" ? 1.9 : (kind === "enemy" && owner === "enemy") ? 2.6 : 1.25);
     this.target = options.target || null;
     this.turnRate = options.turnRate || 0;
@@ -35,7 +37,8 @@ export class Projectile {
     } else if (this.kind === "zapper" && this.owner === "player") {
       if (!this.target || this.target.dead) this.target = game.closestEnemy(this.x, this.y, 360);
       if (this.target) this._steerToward(this.target.x, this.target.y, this.turnRate || 8, dt);
-    } else if (this.owner === "enemy" && this.weaponProfile?.behavior === "homing") {
+    } else if (this.owner === "enemy" && this.weaponProfile?.behavior === "homing" &&
+      (this.weaponProfile.homingDuration === undefined || this.age <= this.weaponProfile.homingDuration)) {
       const p = game.player;
       this._steerToward(p.x, p.y, this.weaponProfile.turnRate ?? 0.5, dt);
     }
@@ -68,6 +71,20 @@ export class Projectile {
     const speed = Math.hypot(this.vx, this.vy);
     this.vx = Math.cos(nextAngle) * speed;
     this.vy = Math.sin(nextAngle) * speed;
+  }
+
+  hitsCircle(x, y, radius) {
+    if (!this.hitWidth || !this.hitHeight) {
+      const dx = this.x - x, dy = this.y - y;
+      return dx * dx + dy * dy < (this.r + radius) ** 2;
+    }
+    const speed = Math.hypot(this.vx, this.vy) || 1;
+    const dirX = this.vx / speed, dirY = this.vy / speed;
+    const dx = x - this.x, dy = y - this.y;
+    const forward = dx * dirX + dy * dirY;
+    const lateral = -dx * dirY + dy * dirX;
+    return Math.abs(lateral) < this.hitWidth / 2 + radius &&
+      Math.abs(forward) < this.hitHeight / 2 + radius;
   }
 
   _drawAssetFrame(ctx, img, vis) {

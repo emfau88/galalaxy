@@ -28,6 +28,7 @@ const PLAYER_VISUAL_TEST_STAGES = [
   { title: "ZAPPER BUILD", detail: "Zapper firing cycle", weapon: "zapper", player: { zapper: 4, speedLevel: 2, shieldLevel: 2 } },
   { title: "BIG SPACE GUN", detail: "Big Space Gun firing cycle", weapon: "bigGun", player: { beam: 2, speedLevel: 3, shieldLevel: 2 } },
   { title: "INVINCIBILITY", detail: "Invincibility Shield hit state", player: { speedLevel: 3, shieldLevel: 2, invuln: 999 } },
+  { title: "EMERGENCY AEGIS", detail: "Keystone: hull hit protection ready", player: { speedLevel: 3, shieldLevel: 2, emergencyAegis: true, invuln: 999 } },
 ];
 
 export class Game {
@@ -51,6 +52,7 @@ export class Game {
     this.hudTestMode = searchParams.get("test") === "hud-layout";
     this.victoryTestMode = searchParams.get("test") === "victory-screen";
     this.upgradeCardTestRocketMode = searchParams.get("upgradeFamily") === "rocket";
+    this.upgradeCardTestAegisMode = searchParams.get("upgradeFamily") === "aegis";
     if (searchParams.has("test")) window.__galalaxyTestGame = this;
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
     this.visualTestStartIndex = Number.isFinite(requestedStage)
@@ -215,9 +217,15 @@ export class Game {
     this.player.speed = 386;
     this.player.maxShield = 67;
     this.player.shield = this.player.maxShield;
+    if (this.upgradeCardTestAegisMode) {
+      Object.assign(this.player, { shieldLevel: 2, maxShield: 79, shield: 79 });
+      this.upgrades._pickCount = 5;
+    }
     const wanted = new Set(this.upgradeCardTestRocketMode
       ? ["rocket", "hp", "magnet"]
-      : ["speed", "shield", "beam"]);
+      : this.upgradeCardTestAegisMode
+        ? ["aegis", "shield", "hp"]
+        : ["speed", "shield", "beam"]);
     this.upgrades.choices = this.upgrades.pool.filter(upgrade => wanted.has(upgrade.id));
     const w = 370, h = 142;
     this.upgrades.cards = this.upgrades.choices.map((_, index) => ({
@@ -275,6 +283,8 @@ export class Game {
       shield: 74,
       fireTimer: Number.MAX_VALUE,
       invuln: Number.POSITIVE_INFINITY,
+      emergencyAegis: true,
+      aegisCooldown: 0,
       _beamCooldown: 2.6,
       _pulseCooldown: 5.4,
     });
@@ -665,7 +675,7 @@ export class Game {
         }
       } else {
         const p = this.player;
-        if (this.dist2(pr.x, pr.y, p.x, p.y) < (pr.r + p.r) ** 2) {
+        if (pr.hitsCircle(p.x, p.y, p.r)) {
           p.damage(pr.dmg);
           pr.dead = true;
         }
@@ -758,12 +768,13 @@ export class Game {
     this.burst(x, y, CONFIG.colors.cyan, Math.floor(size * 0.22));
   }
 
-  spawnZap(x1, y1, x2, y2, secondary = false) {
-    const life = secondary ? 0.13 : 0.18;
+  spawnZap(x1, y1, x2, y2, secondary = false, intensity = 1) {
+    const power = Math.max(0.65, Math.min(1.9, intensity));
+    const life = (secondary ? 0.13 : 0.18) * (0.92 + power * 0.08);
     if (this.zaps.length < this.zapCap) {
-      this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary });
+      this.zaps.push({ x1, y1, x2, y2, life, max: life, secondary, power });
     }
-    this.burst(x2, y2, CONFIG.colors.pink, secondary ? 5 : 14);
+    this.burst(x2, y2, CONFIG.colors.pink, Math.round((secondary ? 5 : 14) * Math.min(1.25, power)));
   }
 
   spawnEnemyDestruction(enemy) {
@@ -994,17 +1005,18 @@ export class Game {
     for (const z of this.zaps) {
       const a = z.life / z.max;
       const sec = z.secondary;
+      const power = z.power || 1;
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       // Jitter midpoint — two segments give lightning feel
       const mx = (z.x1 + z.x2) / 2 + (Math.random() - 0.5) * (sec ? 10 : 20);
       const my = (z.y1 + z.y2) / 2 + (Math.random() - 0.5) * (sec ? 10 : 20);
       // Outer glow
-      ctx.globalAlpha = a * (sec ? 0.3 : 0.55);
+      ctx.globalAlpha = a * (sec ? 0.3 : 0.55) * Math.min(1.2, 0.76 + power * 0.24);
       ctx.strokeStyle = CONFIG.colors.pink;
-      ctx.lineWidth = sec ? 3 : 6;
+      ctx.lineWidth = (sec ? 3 : 6) * power;
       ctx.shadowColor = CONFIG.colors.pink;
-      ctx.shadowBlur = this.lowEffects ? 0 : (sec ? 12 : 26);
+      ctx.shadowBlur = this.lowEffects ? 0 : (sec ? 12 : 26) * Math.min(1.35, power);
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
       ctx.lineTo(mx, my);
@@ -1013,8 +1025,8 @@ export class Game {
       // Bright core
       ctx.globalAlpha = a * (sec ? 0.6 : 1.0);
       ctx.strokeStyle = sec ? "#ddaaff" : "#ffccff";
-      ctx.lineWidth = sec ? 1.2 : 2.2;
-      ctx.shadowBlur = this.lowEffects ? 0 : (sec ? 5 : 10);
+      ctx.lineWidth = (sec ? 1.2 : 2.2) * (0.8 + power * 0.2);
+      ctx.shadowBlur = this.lowEffects ? 0 : (sec ? 5 : 10) * Math.min(1.25, power);
       ctx.beginPath();
       ctx.moveTo(z.x1, z.y1);
       ctx.lineTo(mx, my);
@@ -1104,6 +1116,28 @@ export class Game {
     const shieldIcon = this.loader.get("pickupShield");
     if (shieldIcon) this.drawAsset(ctx, shieldIcon, iconX, shY + shH / 2, 17, 17);
     else this._drawShieldIcon(ctx, iconX, shY + shH / 2, 8, "rgba(88,230,255,0.8)");
+
+    if (p.emergencyAegis) {
+      const aegisX = 165, aegisY = 48;
+      const ready = p.aegisCooldown <= 0;
+      const aegisIcon = this.loader.get("pickupInvincible");
+      ctx.save();
+      if (aegisIcon) this.drawAsset(ctx, aegisIcon, aegisX, aegisY, 19, 19);
+      ctx.strokeStyle = ready ? "#cf8cff" : "rgba(190,120,255,0.48)";
+      ctx.shadowColor = "#b95cff";
+      ctx.shadowBlur = ready && !this.lowEffects ? 7 : 0;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      const remaining = ready ? 1 : 1 - p.aegisCooldown / 18;
+      ctx.arc(aegisX, aegisY, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.textAlign = "left";
+      ctx.font = "800 6px system-ui";
+      ctx.fillStyle = ready ? "#dcb6ff" : "rgba(205,180,235,0.62)";
+      ctx.fillText(ready ? "AEGIS READY" : `AEGIS ${Math.ceil(p.aegisCooldown)}s`, 180, 50);
+      ctx.restore();
+    }
 
     // Timer — very subtle, bottom-left of panel
     ctx.textAlign = "left";

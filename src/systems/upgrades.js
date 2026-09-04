@@ -25,17 +25,17 @@ const POOL = [
   { id: "fire",    name: "Fire Rate",      desc: "Auto cannon fires faster.",           icon: "pickupAuto",        family: "core",   maxLevel: null, minLevel: 0, weight: 10 },
   { id: "twin",    name: "Multi Cannon",   desc: "Adds cannon barrels. Up to 5 shots.", icon: "pickupAuto",        family: "core",   maxLevel: 4,    minLevel: 0, weight: 8  },
   { id: "speed",   name: "Engine Boost",   desc: "Movement becomes sharper.",            icon: "pickupSuper",       family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
-  { id: "shield",  name: "Shield Regen",   desc: "Shield recovers faster.",              icon: "pickupShield",      family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
+  { id: "shield",  name: "Shield Array",   desc: "More shield capacity and faster recharge.", icon: "pickupShield",    family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "hp",      name: "Hull Upgrade",   desc: "Max HP increases.",                    icon: "playerFull",        family: "core",   maxLevel: null, minLevel: 0, weight: 7  },
   { id: "magnet",  name: "Pickup Magnet",  desc: "Energy pulls in from farther away.",   icon: "pickupPulse",       family: "core",   maxLevel: null, minLevel: 0, weight: 5  },
 
   // --- Zapper Family ---
-  { id: "zapper",  name: "Zapper Chain",   desc: "Occasional lightning strike.",         icon: "pickupZapper",      family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
+  { id: "zapper",  name: "Zapper Chain",   desc: "Direct lightning grows brighter and chains farther.", icon: "pickupZapper", family: "zapper", maxLevel: 5,    minLevel: 0, weight: 8  },
   { id: "beam",    name: "Big Space Gun",  desc: "Piercing energy orb. Higher levels recharge faster.", icon: "pickupBigGun", family: "zapper", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Rocket Family ---
-  { id: "rocket",  name: "Homing Rockets", desc: "Raises the chance to launch a homing rocket.", icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
-  { id: "barrage", name: "Rocket Barrage", desc: "Rockets launch in rapid 3-shot bursts.", icon: "pickupRocket",   family: "rocket", maxLevel: 3,    minLevel: 2, weight: 4  },
+  { id: "rocket",  name: "Homing Rockets", desc: "Launches a homing rocket more often.", icon: "pickupRocket",      family: "rocket", maxLevel: 5,    minLevel: 0, weight: 8  },
+  { id: "barrage", name: "Rocket Barrage", desc: "Each rocket launch fires a 3-rocket volley.", icon: "pickupRocket", family: "rocket", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Pulse Family ---
   { id: "pulse",   name: "Pulse Wave",     desc: "Shockwave pushes enemies. Higher levels wider radius.", icon: "pickupShield", family: "pulse",  maxLevel: 3,    minLevel: 2, weight: 4  },
@@ -44,6 +44,7 @@ const POOL = [
   { id: "overcharged", name: "Overcharged Core",   desc: "Zapper always fires. Rockets disabled.",     icon: "pickupZapper",  family: "zapper", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
   { id: "siege",       name: "Siege Payload",       desc: "Rockets deal 2.5× damage. Shot delay +35%.", icon: "pickupRocket",  family: "rocket", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
   { id: "reactor",     name: "Pulse Reactor",       desc: "Pulse fires automatically. Speed −80.",     icon: "pickupShield",  family: "pulse",  maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
+  { id: "aegis",       name: "Emergency Aegis",     desc: "Hull hits trigger 1.8s invulnerability. 18s cooldown.", icon: "pickupInvincible", family: "core", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
 ];
 
 export class UpgradeSystem {
@@ -106,13 +107,13 @@ export class UpgradeSystem {
       }
       case "zapper": {
         const overcharged = p.keystoneId === "overcharged";
-        const currentChance = p.zapper > 0 ? (overcharged ? 100 : Math.round((0.15 + p.zapper * 0.025) * 100)) : 0;
         const nextLevel = Math.min(5, p.zapper + 1);
-        const nextChance = overcharged ? 100 : Math.round((0.15 + nextLevel * 0.025) * 100);
         const damageMult = overcharged ? 2.2 : 1;
         const currentDamage = p.zapper > 0 ? Math.round((20 + p.zapper * 5) * damageMult) : 0;
         const nextDamage = Math.round((20 + nextLevel * 5) * damageMult);
-        return `Chance ${currentChance}%${arrow}${nextChance}%  ·  DMG ${currentDamage}${arrow}${nextDamage}`;
+        const currentChains = overcharged ? 3 : Math.floor(p.zapper / 2);
+        const nextChains = overcharged ? 3 : Math.floor(nextLevel / 2);
+        return `DMG ${currentDamage}${arrow}${nextDamage}  ·  ARC ${currentChains}${arrow}${nextChains}`;
       }
       case "beam": {
         const currentDamage = p.beam > 0 ? 48 + p.beam * 18 : 0;
@@ -142,6 +143,7 @@ export class UpgradeSystem {
       case "overcharged": return "Zapper chance 100%  ·  Damage ×2.2";
       case "siege":       return "Rocket damage ×2.5  ·  Shot delay ×1.35";
       case "reactor":     return "Auto pulse every 6s  ·  Speed −80";
+      case "aegis":       return "Hull hit blocked  ·  1.8s Aegis  ·  CD 18s";
       default:             return u.desc;
     }
   }
@@ -175,6 +177,7 @@ export class UpgradeSystem {
       case "overcharged": preview.keystoneId = "overcharged"; preview.rocketDisabled = true; if (!preview.zapper) preview.zapper = 1; break;
       case "siege": preview.keystoneId = "siege"; preview.siegePayload = true; if (!preview.rocket) preview.rocket = 1; break;
       case "reactor": preview.keystoneId = "reactor"; preview.pulseReactor = true; if (!preview.pulse) preview.pulse = 1; break;
+      case "aegis": preview.keystoneId = "aegis"; preview.emergencyAegis = true; preview.invuln = 1.8; break;
     }
     return preview;
   }
@@ -191,8 +194,22 @@ export class UpgradeSystem {
     ctx.restore();
   }
 
+  _upgradeIconKey(u) {
+    const level = this._playerLevel(u);
+    // Cards advertise the module the player is about to install. The ship
+    // comparison already carries the current state, so one focused icon stays
+    // compact while making shield and engine progression immediately legible.
+    if (u.id === "speed") {
+      return level === 0 ? "pickupPulse" : level === 1 ? "pickupBurst" : "pickupSuper";
+    }
+    if (u.id === "shield") {
+      return level === 0 ? "pickupShieldFront" : level === 1 ? "pickupShieldFrontSide" : "pickupShield";
+    }
+    return u.icon;
+  }
+
   _drawUpgradeIcon(ctx, img, u, x, y) {
-    const icon = img.get(u.icon);
+    const icon = img.get(this._upgradeIconKey(u));
     if (!icon) return;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
@@ -307,6 +324,7 @@ export class UpgradeSystem {
         if (u.id === "overcharged" && (p.zapper < 2 && p.beam === 0)) return false;
         if (u.id === "siege"       && (p.rocket < 2 && p.barrage === 0)) return false;
         if (u.id === "reactor"     && p.pulse === 0) return false;
+        if (u.id === "aegis"       && p.shieldLevel < 2) return false;
       }
       return true;
     });
@@ -394,6 +412,11 @@ export class UpgradeSystem {
         p.speed        = Math.max(180, p.speed - 80);
         if (p.pulse === 0) { p.pulse = 1; p._pulseCooldown = 2.0; }
         else p._pulseCooldown = 2.0;
+        break;
+      case "aegis":
+        p.keystoneId = "aegis";
+        p.emergencyAegis = true;
+        p.aegisCooldown = 0;
         break;
     }
     this._pickCount++;
