@@ -1,7 +1,6 @@
 import { CONFIG, SECTORS } from "../config.js";
 import { SECTOR_ASSET_GROUPS } from "../assets.js";
 import { clamp } from "../utils.js";
-import { SaveSystem } from "../saveSystem.js";
 import { Player } from "../entities/player.js";
 import { Enemy } from "../entities/enemy.js";
 import { FLEETS, pickSoloEnemy } from "../data/fleets.js";
@@ -15,6 +14,7 @@ class SectorMethods {
       this.sectorTimer = 0;
       this.bossActive = true;
       this.bossWarning = 3.1;
+      this.sounds?.play("boss");
       const fleet = FLEETS[SECTORS[this.currentSectorIndex].fleet];
       this.spawnEnemy(fleet.bossType, true);
       return;
@@ -64,6 +64,7 @@ class SectorMethods {
   }
 
   returnToHangar() {
+    this.clearArena();
     this._unloadAssetGroups(["nairan", "nautolan", "victory"]);
     this._loadAssetGroups(["shared", "klaed"]);
     this.player = new Player(this);
@@ -75,13 +76,19 @@ class SectorMethods {
     this.enemyDeaths = [];
     this.bossRewardData = null;
     this.resumeAfterUpgradeState = null;
+    this.pendingUpgrades = 0;
     this.input.cancelMovement();
     this.titleTime = 0;
     this.state = "title";
   }
 
   onBossKilled(bossX, bossY, bossXp = 12) {
+    // Bank only existing, uncollected XP. Surviving enemies grant no free kills.
+    const recoveredXp = this.pickups.reduce((sum, p) => sum + (p.dead ? 0 : p.value), 0);
+    this.clearArena();
     this.bossActive = false;
+    this.bossWarning = 0;
+    this.sectorsCleared = this.currentSectorIndex + 1;
     const finalBoss = this.currentSectorIndex >= SECTORS.length - 1;
 
     if (!finalBoss) {
@@ -106,7 +113,7 @@ class SectorMethods {
       fireBonusStr: FIRE_BONUS[tier]  || "",
       bossX,
       bossY,
-      bossXp,
+      bossXp: bossXp + recoveredXp,
       finalBoss,
     };
 
@@ -133,6 +140,9 @@ class SectorMethods {
     }
 
     this.bossRewardData = null;
+    // The boss death effect may have been created after onBossKilled returned.
+    // Release every fleet reference before unloading its image group.
+    this.clearArena();
 
     const finishedSectorIndex = reward.finalBoss
       ? this.currentSectorIndex
@@ -143,10 +153,7 @@ class SectorMethods {
     if (!reward.finalBoss) this._preloadNextSectorAssets();
 
     const nextState = reward.finalBoss ? "victory" : "playing";
-    if (reward.finalBoss) {
-      SaveSystem.setBest(this.score);
-      this.best = SaveSystem.best();
-    } else {
+    if (!reward.finalBoss) {
       this.sectorTransition = 2.2;
     }
 
@@ -158,6 +165,7 @@ class SectorMethods {
     if (this.state === "bossReward") {
       this.state = nextState;
       this.resumeAfterUpgradeState = null;
+      if (nextState === "victory") this.finishRun("victory");
     }
   }
 

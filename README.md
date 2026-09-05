@@ -26,7 +26,8 @@ A mobile-first arcade space-survivor built with vanilla JavaScript and HTML5 Can
 
 - **Touch or mouse:** drag to steer
 - **Upgrade screens:** tap or click a card
-- **Pause:** press `P`
+- **Pause:** tap the pause button in the HUD or press `P`; switching away pauses combat until you resume
+- **Sound:** the speaker button toggles music and the four gameplay cues; the choice is saved
 - Weapons fire automatically
 
 ## Run locally
@@ -46,6 +47,36 @@ while the local server is running. It verifies staged asset loading, all four
 sector transitions, the shared Nautolan fleet group, victory, replay and
 return-to-hangar. A successful run changes the page title to
 `Galalaxy QA PASS`; failures are reported in the browser console.
+
+Dependency-free regression and asset checks:
+
+```bash
+node scripts/reliability-check.mjs
+node scripts/verify-assets.mjs
+```
+
+`node scripts/browser-reliability-check.mjs` runs the browser regression suite
+with Playwright and Edge installed (Playwright must be resolvable, e.g. through
+`NODE_PATH`). It saves screenshots and a JSON report under `docs/qa/` and tests
+six viewport/safe-area combinations, touch input, audio triggers and run endings.
+Physical multitouch and real phone browser switching still need device testing.
+
+Completed runs keep the latest 24 build summaries and keystone observations in
+local browser storage. No data is sent anywhere. To inspect reachability in the
+developer console, run:
+
+```js
+const { RunStats } = await import('./src/runStats.js');
+const stats = new RunStats();
+console.table(stats.keystoneSummary());
+console.table(stats.history);
+```
+
+Times count active combat seconds. Measurements include eligibility, offers,
+selection time and combat time remaining after selection. QA runs are excluded;
+use normal completed runs to gather meaningful rates. UI source images remain
+editable; `python scripts/optimize-ui-assets.py` regenerates runtime derivatives
+with Pillow.
 
 ## Technology
 

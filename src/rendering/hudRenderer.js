@@ -153,22 +153,20 @@ class HudRenderingMethods {
     ctx.font = "700 8px ui-monospace, monospace";
     ctx.fillText(`BEST  ${Math.floor(this.best)}`, W - 18, 57);
 
-    // Keep boss telemetry and contextual abilities anchored to the playfield;
-    // only the compact header moves into a sufficiently large letterbox.
-    ctx.restore();
-
     // ── Boss HP bar ──────────────────────────────────────────────────
+    // Share the header's transform, including its letterbox offset. The frame
+    // extends 17px above the fill: keep its top 6px below the panel bottom (82).
     if (this.bossActive && this.bossWarning <= 0) {
       const boss = this.enemies.find(e => e.boss && !e.dead);
       if (boss) {
-        const bx = 18, by = 90, bw = W - 36, bh = 7;
+        const bx = 18, by = 105, bw = W - 36, bh = 7;
 
         // Three-slice treatment: preserve the detailed alert end-caps while
         // stretching only the central rail to the current viewport width.
         const bossFrame = this.loader.get("uiBossAlertFrame");
         if (bossFrame) {
-          const sx = 24, sy = 170, sw = 2123, sh = 369;
-          const capSrc = 250, capDst = 30;
+          const sx = 0, sy = 0, sw = 1062, sh = 185;
+          const capSrc = 125, capDst = 30;
           const fx = bx - 7, fy = by - 17, fw = bw + 14, fh = 42;
           const middleSrc = sw - capSrc * 2;
           const middleDst = Math.max(1, fw - capDst * 2);
@@ -212,7 +210,9 @@ class HudRenderingMethods {
       }
     }
 
-    // ── Ability pips ─────────────────────────────────────────────────
+    ctx.restore();
+
+    // ── Ability pips stay anchored to the playfield ───────────────────
     this.drawAbilityPips(ctx);
 
     ctx.restore();

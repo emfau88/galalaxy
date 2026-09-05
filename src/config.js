@@ -8,6 +8,8 @@ export const CONFIG = {
   particleCap: 220,
   pickupCap: 80,
   saveKey: "void_drift_best_score_v1",
+  settingsKey: "galalaxy_settings_v1",
+  runHistoryKey: "galalaxy_run_history_v1",
   assetTimeoutMs: 9000,
   colors: {
     bg: "#050716",

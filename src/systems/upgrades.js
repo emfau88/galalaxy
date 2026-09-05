@@ -1,4 +1,5 @@
 import { CONFIG, PLAYER_ENGINE_SPEEDS, PLAYER_SHIELD_RECHARGE_DELAYS, PLAYER_WEAPON_BALANCE } from "../config.js";
+import { drawFittedText, drawWrappedText } from "../rendering/text.js";
 
 // Family color accents for card tinting
 const FAMILY_ACCENT = {
@@ -10,9 +11,9 @@ const FAMILY_ACCENT = {
 
 // The v2 panel has a deliberately empty center: the gameplay canvas owns the
 // comparison and all text, so neither gets buried in decorative art.
-const UPGRADE_CARD_FRAME_SOURCE = { x: 38, y: 46, w: 1909, h: 683 };
-const ROCKET_CARD_FRAME_SOURCE = { x: 10, y: 4, w: 1963, h: 781 };
-const PURPLE_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 1908, h: 809 };
+const UPGRADE_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 955, h: 342 };
+const ROCKET_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 982, h: 391 };
+const PURPLE_CARD_FRAME_SOURCE = { x: 0, y: 0, w: 954, h: 405 };
 
 // Preserve the roomy original card interior, but shift the whole selector up
 // to leave a generous lower safe area when a mobile browser toolbar appears.
@@ -52,12 +53,12 @@ const POOL = [
   { id: "barrage", name: "Rocket Barrage", desc: "Each rocket launch fires a 3-rocket volley.", icon: "pickupRocket", family: "rocket", maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Pulse Family ---
-  { id: "pulse",   name: "Pulse Wave",     desc: "Shockwave pushes enemies. Higher levels wider radius.", icon: "pickupShield", family: "pulse",  maxLevel: 3,    minLevel: 2, weight: 4  },
+  { id: "pulse",   name: "Pulse Wave",     desc: "Automatic shockwave pushes enemies. Higher levels widen it.", icon: "pickupShield", family: "pulse",  maxLevel: 3,    minLevel: 2, weight: 4  },
 
   // --- Keystone Upgrades (one per run, minLevel 5, weight low — weighted sampling still biases toward build family) ---
   { id: "overcharged", name: "Overcharged Core",   desc: "Zapper always fires. Rockets disabled.",     icon: "pickupZapper",  family: "zapper", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
   { id: "siege",       name: "Siege Payload",       desc: "Rockets deal 2.5× damage. Shot delay +35%.", icon: "pickupRocket",  family: "rocket", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
-  { id: "reactor",     name: "Pulse Reactor",       desc: "Pulse fires automatically. Speed −80.",     icon: "pickupShield",  family: "pulse",  maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
+  { id: "reactor",     name: "Pulse Reactor",       desc: "Pulse radius +30%. Max speed −80.",     icon: "pickupShield",  family: "pulse",  maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
   { id: "aegis",       name: "Emergency Aegis",     desc: "Hull hits trigger 1.8s invulnerability. 18s cooldown.", icon: "pickupInvincible", family: "core", maxLevel: 1, minLevel: 5, weight: 3, keystone: true },
 ];
 
@@ -167,7 +168,7 @@ export class UpgradeSystem {
       }
       case "overcharged": return "Zapper chance 100%  ·  Damage ×2.2";
       case "siege":       return "Rocket damage ×2.5  ·  Shot delay ×1.35";
-      case "reactor":     return "Auto pulse every 6s  ·  Speed −80";
+      case "reactor":     return "Pulse cooldown  9s → 6s";
       case "aegis":       return "Hull hit blocked  ·  1.8s Aegis  ·  CD 18s";
       default:             return u.desc;
     }
@@ -205,7 +206,7 @@ export class UpgradeSystem {
       case "overcharged": preview.keystoneId = "overcharged"; preview.rocketDisabled = true; if (!preview.zapper) preview.zapper = 1; break;
       case "siege": preview.keystoneId = "siege"; preview.siegePayload = true; if (!preview.rocket) preview.rocket = 1; break;
       case "reactor": preview.keystoneId = "reactor"; preview.pulseReactor = true; if (!preview.pulse) preview.pulse = 1; break;
-      case "aegis": preview.keystoneId = "aegis"; preview.emergencyAegis = true; preview.invuln = 1.8; break;
+      case "aegis": preview.keystoneId = "aegis"; preview.emergencyAegis = true; preview.aegisCooldown = 0; break;
     }
     return preview;
   }
@@ -264,7 +265,7 @@ export class UpgradeSystem {
     ctx.lineTo(center, bayY + bayH - 12);
     ctx.stroke();
     ctx.globalAlpha = 1;
-    this._drawShipPreview(ctx, img, before, left, y, 0.62, 0.55);
+    this._drawShipPreview(ctx, img, before, left, y, 0.74, 0.55);
     this._drawShipPreview(ctx, img, after, right, y, 0.74, 1);
     ctx.fillStyle = accent.shadow;
     ctx.font = "800 12px system-ui";
@@ -381,6 +382,7 @@ export class UpgradeSystem {
     }
 
     this.choices = picked;
+    this.game.runStats?.offer(this.game, picked, candidates);
     this.cards = createUpgradeCards(3);
   }
 
@@ -446,9 +448,10 @@ export class UpgradeSystem {
         break;
     }
     this._pickCount++;
+    this.game.runStats?.pick(this.game, u);
+    this.game.sounds?.play("upgrade");
     this.game.input.cancelMovement();
-    this.game.state = this.game.resumeAfterUpgradeState || "playing";
-    this.game.resumeAfterUpgradeState = null;
+    this.game.finishUpgrade();
   }
 
   handleTap(x, y) {
@@ -477,7 +480,7 @@ export class UpgradeSystem {
     ctx.shadowBlur = 0;
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "500 13px system-ui";
-    ctx.fillText("Choose one module", CONFIG.designW / 2, UPGRADE_CARD_LAYOUT.subtitleY);
+    ctx.fillText(this.game.pendingUpgrades > 1 ? `Choose one module · ${this.game.pendingUpgrades} upgrades earned` : "Choose one module", CONFIG.designW / 2, UPGRADE_CARD_LAYOUT.subtitleY);
 
     for (let i = 0; i < this.choices.length; i++) {
       const u = this.choices[i], c = this.cards[i];
@@ -566,23 +569,13 @@ export class UpgradeSystem {
       this._drawUpgradeIcon(ctx, img, u, c.x + 184, c.y + 47);
       ctx.textAlign = "left";
       ctx.fillStyle = CONFIG.colors.white;
-      ctx.font = "800 16px system-ui";
-      ctx.fillText(u.name, c.x + 198, c.y + 53);
+      drawFittedText(ctx, u.name, c.x + 198, c.y + 53, c.w - 210, 16, 800);
 
       ctx.fillStyle = accent.shadow;
-      ctx.font = "700 10px system-ui";
-      ctx.fillText(this._effectPreview(u), c.x + 174, c.y + 76);
+      drawWrappedText(ctx, this._effectPreview(u), c.x + 174, c.y + 73, c.w - 190, 2, 11, 700);
 
       ctx.fillStyle = CONFIG.colors.dim;
-      ctx.font = "400 11px system-ui";
-      const descWords = u.desc.split(" ");
-      let line1 = "", line2 = "";
-      for (const wd of descWords) {
-        if ((line1 + wd).length < 31) line1 += (line1 ? " " : "") + wd;
-        else line2 += (line2 ? " " : "") + wd;
-      }
-      ctx.fillText(line1, c.x + 174, c.y + 101);
-      if (line2) ctx.fillText(line2, c.x + 174, c.y + 117);
+      drawWrappedText(ctx, u.desc, c.x + 174, c.y + 105, c.w - 190, 2, 11);
     }
 
     ctx.restore();

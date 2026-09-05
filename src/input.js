@@ -20,6 +20,7 @@ export class Input {
 
     const down = e => {
       e.preventDefault();
+      this.game.activateAudio();
       const p = this.getPoint(e);
       // Fullscreen APIs require the request to be made inside the original
       // user gesture. Unlike ordinary game taps, this cannot wait until the
@@ -42,10 +43,21 @@ export class Input {
         this.tapY = p.wy;
         return;
       }
-      // If tap lands inside a registered exclusion zone, fire as tap-only — no ship movement.
-      if (this.exclusionZones.some(z =>
+      if (this.game.state === "paused") {
+        this.cancelMovement();
+        this.justTapped = true;
+        this.tapX = p.wx;
+        this.tapY = p.wy;
+        return;
+      }
+      // A second finger must never steal steering from the active pointer.
+      // Utility zones remain available as tap-only controls while dragging.
+      const isUtilityTap = this.exclusionZones.some(z =>
         p.wx >= z.x && p.wx <= z.x + z.w && p.wy >= z.y && p.wy <= z.y + z.h
-      )) {
+      );
+      if (this.active && e.pointerId !== this.pointerId && !isUtilityTap) return;
+      // If tap lands inside a registered exclusion zone, fire as tap-only — no ship movement.
+      if (isUtilityTap) {
         this.justTapped = true;
         this.tapX = p.wx;
         this.tapY = p.wy;
@@ -53,6 +65,7 @@ export class Input {
       }
       this.active = true;
       this.pointerId = e.pointerId ?? 1;
+      try { canvas.setPointerCapture?.(this.pointerId); } catch {}
       this.isTouch = e.pointerType === "touch" || e.pointerType === "pen";
       this.x = p.x;
       this.y = p.y;
@@ -65,7 +78,7 @@ export class Input {
     };
 
     const move = e => {
-      if (!this.active || this.game.state !== "playing") return;
+      if (!this.active || e.pointerId !== this.pointerId || this.game.state !== "playing") return;
       e.preventDefault();
       const p = this.getPoint(e);
       this.x = p.x;
@@ -76,7 +89,11 @@ export class Input {
     };
 
     const up = e => {
+      if (this.pointerId !== null && e.pointerId !== this.pointerId) return;
       e.preventDefault();
+      if (this.pointerId !== null) {
+        try { canvas.releasePointerCapture?.(this.pointerId); } catch {}
+      }
       this.active = false;
       this.pointerId = null;
     };
@@ -87,7 +104,10 @@ export class Input {
     canvas.addEventListener("pointercancel", up, { passive: false });
 
     window.addEventListener("keydown", e => {
+      if (e.repeat) return;
       if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        this.game.activateAudio();
         this.justTapped = true;
         this.tapX = CONFIG.designW / 2;
         this.tapY = CONFIG.designH / 2;
@@ -105,9 +125,13 @@ export class Input {
   }
 
   cancelMovement() {
+    if (this.pointerId !== null) {
+      try { this.canvas.releasePointerCapture?.(this.pointerId); } catch {}
+    }
     this.active = false;
     this.pointerId = null;
     this.isTouch = false;
+    this.justTapped = false;
   }
 
   getPoint(e) {

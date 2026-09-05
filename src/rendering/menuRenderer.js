@@ -1,8 +1,9 @@
 import { CONFIG, SECTORS } from "../config.js";
 import { clamp, fmtTime } from "../utils.js";
+import { drawWrappedText } from "./text.js";
 
-export const VICTORY_PLAY_BUTTON = { x: 72, y: 482, w: 276, h: 66 };
-export const VICTORY_HANGAR_BUTTON = { x: 88, y: 574, w: 244, h: 50 };
+export const VICTORY_PLAY_BUTTON = { x: 72, y: 554, w: 276, h: 66 };
+export const VICTORY_HANGAR_BUTTON = { x: 88, y: 644, w: 244, h: 50 };
 
 class MenuRenderingMethods {
   drawVictory(ctx) {
@@ -17,7 +18,7 @@ class MenuRenderingMethods {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 0.9;
-      ctx.drawImage(victoryFrame, 0, 0, 1292, 1217, 36, 150, 348, 328);
+      ctx.drawImage(victoryFrame, 0, 0, 1292, 1217, 36, 24, 348, 300);
       ctx.restore();
     }
 
@@ -26,28 +27,21 @@ class MenuRenderingMethods {
     ctx.font = "700 15px system-ui";
     ctx.shadowColor = CONFIG.colors.cyan;
     ctx.shadowBlur = 14;
-    ctx.fillText("RUN COMPLETE", CONFIG.designW / 2, 232);
+    ctx.fillText("RUN COMPLETE", CONFIG.designW / 2, 110);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "900 44px system-ui";
     ctx.shadowColor = CONFIG.colors.cyan;
     ctx.shadowBlur = 28;
-    ctx.fillText(Math.floor(this.score).toString(), CONFIG.designW / 2, 300);
+    ctx.fillText(Math.floor(this.score).toString(), CONFIG.designW / 2, 175);
     ctx.shadowBlur = 0;
-
     ctx.fillStyle = CONFIG.colors.dim;
-    ctx.font = "700 13px system-ui";
-    ctx.fillText(`Sectors: ${SECTORS.length} / ${SECTORS.length}  ·  Kills: ${this.kills}`, CONFIG.designW / 2, 340);
-    ctx.fillText(`Time: ${fmtTime(this.runTime)}  ·  Best: ${Math.floor(this.best)}`, CONFIG.designW / 2, 362);
+    ctx.font = "700 12px system-ui";
+    ctx.fillText(`Kills: ${this.kills} · Time: ${fmtTime(this.runTime)}`, CONFIG.designW / 2, 213);
+    ctx.fillText(`Best: ${Math.floor(this.best)}`, CONFIG.designW / 2, 237);
 
-    // Stars decoration
-    const pulse = Math.sin(this.time * 3) * 0.15;
-    ctx.globalAlpha = 0.7 + pulse;
-    ctx.fillStyle = CONFIG.colors.cyan;
-    ctx.font = "900 22px system-ui";
-    ctx.fillText("★ ★ ★ ★", CONFIG.designW / 2, 408);
-    ctx.globalAlpha = 1;
+    this.drawRunReview(ctx, 350, "FINAL SHIP", false);
 
     this.drawVictoryButton(ctx, VICTORY_PLAY_BUTTON, "PLAY AGAIN");
     this.drawHangarButton(ctx, VICTORY_HANGAR_BUTTON, "RETURN TO HANGAR");
@@ -67,7 +61,7 @@ class MenuRenderingMethods {
     if (frame) {
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 0.92 + Math.sin(this.time * 2.8) * 0.08;
-      ctx.drawImage(frame, 28, 110, 2117, 475, x - 4, y - 4, w + 8, h + 8);
+      ctx.drawImage(frame, 0, 0, 1059, 238, x - 4, y - 4, w + 8, h + 8);
     }
 
     ctx.globalAlpha = 1;
@@ -178,7 +172,7 @@ class MenuRenderingMethods {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 0.88;
-      ctx.drawImage(titlePanel, 16, 12, 1743, 853, 16, 118, W - 32, 242);
+      ctx.drawImage(titlePanel, 0, 0, 872, 427, 16, 118, W - 32, 242);
       ctx.restore();
     }
 
@@ -287,7 +281,7 @@ class MenuRenderingMethods {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = btnPulse;
-      ctx.drawImage(startFrame, 28, 110, 2117, 475, btnX - 4, btnY - 4, btnW + 8, btnH + 8);
+      ctx.drawImage(startFrame, 0, 0, 1059, 238, btnX - 4, btnY - 4, btnW + 8, btnH + 8);
       ctx.restore();
     }
     // Label
@@ -316,21 +310,64 @@ class MenuRenderingMethods {
     ctx.save();
     ctx.fillStyle = "rgba(2,4,12,0.78)";
     ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH);
+    this.drawDefeatFrame(ctx);
     ctx.textAlign = "center";
     ctx.fillStyle = CONFIG.colors.red;
-    ctx.font = "900 34px system-ui";
-    ctx.fillText("SHIP DESTROYED", CONFIG.designW / 2, 245);
+    ctx.font = "900 28px system-ui";
+    ctx.fillText("SHIP DESTROYED", CONFIG.designW / 2, 110);
 
     ctx.fillStyle = CONFIG.colors.white;
     ctx.font = "900 40px system-ui";
-    ctx.fillText(Math.floor(this.score).toString(), CONFIG.designW / 2, 315);
+    ctx.fillText(Math.floor(this.score).toString(), CONFIG.designW / 2, 175);
 
     ctx.fillStyle = CONFIG.colors.dim;
-    ctx.font = "700 14px system-ui";
-    ctx.fillText(`Best: ${Math.floor(this.best)} · Kills: ${this.kills} · Time: ${fmtTime(this.runTime)}`, CONFIG.designW / 2, 350);
+    ctx.font = "700 13px system-ui";
+    ctx.fillText(`Kills: ${this.kills} · Time: ${fmtTime(this.runTime)}`, CONFIG.designW / 2, 213);
+    ctx.fillText(`Best: ${Math.floor(this.best)}`, CONFIG.designW / 2, 237);
+
+    this.drawRunReview(ctx, 350, "END SHIP", false);
 
     this.drawVictoryButton(ctx, VICTORY_PLAY_BUTTON, "PLAY AGAIN");
     this.drawHangarButton(ctx, VICTORY_HANGAR_BUTTON, "RETURN TO HANGAR");
+    ctx.restore();
+  }
+
+  drawDefeatFrame(ctx) {
+    ctx.save();
+    const x = 36, y = 24, w = 348, h = 300, cut = 22;
+    ctx.fillStyle = "rgba(24,8,27,0.92)";
+    ctx.strokeStyle = "#b33f68";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + cut, y);
+    ctx.lineTo(x + w - cut, y);
+    ctx.lineTo(x + w, y + cut);
+    ctx.lineTo(x + w, y + h - cut);
+    ctx.lineTo(x + w - cut, y + h);
+    ctx.lineTo(x + cut, y + h);
+    ctx.lineTo(x, y + h - cut);
+    ctx.lineTo(x, y + cut);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    const rail = this.loader.get("uiBossAlertFrame");
+    if (rail) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(rail, x - 7, y - 3, w + 14, 42);
+      ctx.drawImage(rail, x - 7, y + h - 39, w + 14, 42);
+    }
+    ctx.strokeStyle = CONFIG.colors.red;
+    ctx.shadowColor = CONFIG.colors.red;
+    ctx.shadowBlur = this.lowEffects ? 0 : 10;
+    ctx.lineWidth = 3;
+    for (const side of [x + 8, x + w - 8]) {
+      ctx.beginPath();
+      ctx.moveTo(side, y + 49);
+      ctx.lineTo(side, y + 112);
+      ctx.moveTo(side, y + h - 112);
+      ctx.lineTo(side, y + h - 49);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -346,6 +383,78 @@ class MenuRenderingMethods {
     ctx.font = "700 14px system-ui";
     ctx.fillText("Tap to resume", CONFIG.designW / 2, 376);
     ctx.restore();
+  }
+
+  drawRunReview(ctx, y, title, compact) {
+    const summary = this.lastRun || {
+      outcome: this.state === "victory" ? "victory" : "defeat",
+      sectorReached: Math.max(1, this.currentSectorIndex + 1),
+      sectorsCleared: this.sectorsCleared || 0,
+      modules: [],
+      keystoneName: null,
+      cause: null,
+      branch: this.player.shipBranch(),
+    };
+    const x = 34, w = 352, h = compact ? 140 : 166;
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(5,15,35,0.86)";
+    ctx.strokeStyle = summary.outcome === "victory" ? "rgba(88,230,255,0.58)" : "rgba(255,70,107,0.58)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = summary.outcome === "victory" ? CONFIG.colors.cyan : CONFIG.colors.red;
+    ctx.font = "800 10px ui-monospace, monospace";
+    ctx.fillText(title, x + 14, y + 20);
+
+    this._drawEndShipPreview(ctx, x + 74, y + (compact ? 78 : 88));
+    const tx = x + 136;
+    const branch = (summary.branch || this.player.shipBranch()).toUpperCase();
+    ctx.fillStyle = CONFIG.colors.white;
+    ctx.font = "800 14px system-ui";
+    const tier = ["I", "II", "III", "IV"][(summary.tier || this.player.shipTier()) - 1];
+    ctx.fillText(`MK-${tier} · ${branch}`, tx, y + 43);
+
+    ctx.fillStyle = "rgba(225,240,255,0.76)";
+    ctx.font = "600 11px system-ui";
+    ctx.fillText(`Keystone: ${summary.keystoneName || "No keystone installed"}`, tx, y + 64);
+    const sector = SECTORS[Math.min(SECTORS.length - 1, Math.max(0, (summary.sectorReached || 1) - 1))];
+    ctx.fillText(`Reached ${sector.shortName} · Cleared ${summary.sectorsCleared || 0}/${SECTORS.length}`, tx, y + 83);
+    ctx.fillText(`Cause: ${this._runCause(summary)}`, tx, y + 102);
+
+    const modules = summary.modules?.length
+      ? summary.modules.map(module => `${module.name} ${module.level}`).join(" · ")
+      : "Starter systems only";
+    ctx.fillStyle = CONFIG.colors.dim;
+    drawWrappedText(ctx, modules, tx, y + 124, w - (tx - x) - 12, compact ? 2 : 2, 10, 600);
+    ctx.restore();
+  }
+
+  _drawEndShipPreview(ctx, x, y) {
+    const player = Object.assign(Object.create(Object.getPrototypeOf(this.player)), this.player);
+    player.x = x;
+    player.y = y;
+    player.bank = 0;
+    player.vx = 0;
+    player.vy = 0;
+    player.hitFlash = 0;
+    player.invuln = 0;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(0.86, 0.86);
+    ctx.translate(-x, -y);
+    player.draw(ctx, this.loader, { showShield: true });
+    ctx.restore();
+  }
+
+  _runCause(summary) {
+    if (summary.outcome === "victory") return "Void Core secured";
+    if (summary.cause?.kind === "collision") return summary.cause.boss ? "Boss collision" : "Enemy collision";
+    if (summary.cause?.kind === "projectile") return "Enemy fire";
+    return "Hull failure";
   }
 
   // ── Rendering helpers (used by entities via this.game.*) ───────────────────

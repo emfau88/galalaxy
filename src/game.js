@@ -7,6 +7,8 @@ import { Input } from "./input.js";
 import { Player } from "./entities/player.js";
 import { Enemy } from "./entities/enemy.js";
 import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
+import { RunStats } from "./runStats.js";
+import { SoundSystem } from "./systems/soundSystem.js";
 import { sectorMethods } from "./systems/sectorSystem.js";
 import { combatMethods } from "./systems/combatSystem.js";
 import { worldRenderingMethods } from "./rendering/worldRenderer.js";
@@ -43,7 +45,10 @@ export class Game {
     this.state = "loading";
     this.prevState = "title";
     this.last = performance.now();
+    // UI animation may continue while a modal is shown. Combat scheduling must
+    // use simTime, which freezes for pauses and upgrade selection.
     this.time = 0;
+    this.simTime = 0;
     const searchParams = new URLSearchParams(window.location.search);
     this.visualTestMode = searchParams.get("test") === "upgrade-visuals";
     this.upgradeCardTestMode = searchParams.get("test") === "upgrade-cards";
@@ -55,7 +60,8 @@ export class Game {
     this.fullRunTestMode = searchParams.get("test") === "full-run";
     this.upgradeCardTestRocketMode = searchParams.get("upgradeFamily") === "rocket";
     this.upgradeCardTestAegisMode = searchParams.get("upgradeFamily") === "aegis";
-    if (searchParams.has("test")) window.__galalaxyTestGame = this;
+    this.isQaRun = searchParams.has("test");
+    if (this.isQaRun) window.__galalaxyTestGame = this;
     const requestedStage = Number.parseInt(searchParams.get("stage"), 10);
     this.visualTestStartIndex = Number.isFinite(requestedStage)
       ? Math.max(0, Math.min(PLAYER_VISUAL_TEST_STAGES.length - 1, requestedStage))
@@ -69,6 +75,10 @@ export class Game {
     this.level = 1;
     this.xp = 0;
     this.xpNeed = 8;
+    this.pendingUpgrades = 0;
+    this.sectorsCleared = 0;
+    this.runFinished = false;
+    this.lastRun = null;
     this.best = SaveSystem.best();
     this.shake = 0;
     this.spawnTimer = 0;
@@ -81,13 +91,15 @@ export class Game {
     this.bossRewardData = null;
     this.resumeAfterUpgradeState = null;
     this.titleTime = 0;
-    this.musicMuted = false;
+    this.musicMuted = SaveSystem.settings().audioMuted;
+    this.sounds = new SoundSystem(this.musicMuted);
+    this.runStats = new RunStats();
     this.fullscreenActive = Boolean(document.fullscreenElement);
     this._music = new Audio("assets/music/track1.ogg");
     this._music.loop = true;
     this._music.volume = 0.28;
     // Browsers may block autoplay; handleTap() retries on the first gesture.
-    this._music.play().catch(() => {});
+    if (!this.musicMuted) this._music.play().catch(() => {});
     this.player = new Player(this);
     this.enemies = [];
     this.projectiles = [];
@@ -108,16 +120,16 @@ export class Game {
       this.resize();
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden && this.state === "playing") {
-        this.prevState = this.state;
-        this.state = "paused";
-      }
+      if (document.hidden) this.pauseForInterruption();
     });
+    window.addEventListener("blur", () => this.pauseForInterruption());
 
     // Utility controls remain tap-only and sit away from the steering corner.
     const MBX = CONFIG.designW - 52, MBY = CONFIG.designH - 52;
     this._muteBtnZone = { x: MBX, y: MBY, w: 48, h: 48 };
+    this._pauseBtnZone = this._pauseButtonZone();
     this.input.exclusionZones.push(this._muteBtnZone);
+    this.input.exclusionZones.push(this._pauseBtnZone);
     this._fullscreenBtnZone = this._fullscreenButtonZone();
     this.fullscreenAvailable = Boolean(document.fullscreenEnabled && this.canvas.requestFullscreen);
 
@@ -180,6 +192,7 @@ export class Game {
     this.offsetY = (sh - CONFIG.designH * this.scale) / 2;
     this.safeTopPx = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
     if (this._fullscreenBtnZone) this._fullscreenBtnZone = this._fullscreenButtonZone();
+    if (this._pauseBtnZone) Object.assign(this._pauseBtnZone, this._pauseButtonZone());
   }
 
   hudHeaderOffsetY() {
@@ -191,6 +204,10 @@ export class Game {
 
   _fullscreenButtonZone() {
     return { x: CONFIG.designW - 72, y: 59 + this.hudHeaderOffsetY(), w: 28, h: 22 };
+  }
+
+  _pauseButtonZone() {
+    return { x: CONFIG.designW - 116, y: 52 + this.hudHeaderOffsetY(), w: 32, h: 26 };
   }
 
   initStars() {
@@ -273,6 +290,7 @@ export class Game {
     this.xp = 0;
     this.xpNeed = 8;
     this.runTime = 0;
+    this.simTime = 0;
     this.spawnTimer = 0.6;
     this.currentSectorIndex = 0;
     this.sectorTimer = SECTORS[0].duration;
@@ -282,9 +300,14 @@ export class Game {
     this.bossRewardTimer = 0;
     this.bossRewardData = null;
     this.resumeAfterUpgradeState = null;
+    this.pendingUpgrades = 0;
+    this.sectorsCleared = 0;
+    this.runFinished = false;
+    this.lastRun = null;
     this.shake = 0;
     this.upgrades._pickCount = 0;
     this.state = "playing";
+    this.runStats.start(this);
     this._preloadNextSectorAssets();
     return true;
   }
@@ -321,6 +344,7 @@ export class Game {
         : ["speed", "shield", "beam"]);
     this.upgrades.choices = this.upgrades.pool.filter(upgrade => wanted.has(upgrade.id));
     this.upgrades.cards = createUpgradeCards(this.upgrades.choices.length);
+    this.pendingUpgrades = 1;
     this.state = "levelUp";
   }
 
@@ -427,9 +451,21 @@ export class Game {
     if (this.visualTestTimer >= 3.4) this.nextVisualTestStage();
   }
 
-  endRun() {
-    SaveSystem.setBest(this.score);
+  finishRun(outcome, cause = null) {
+    if (this.runFinished) return this.lastRun;
+    this.runFinished = true;
+    this.lastRun = this.runStats.complete(this, outcome, cause);
+    if (!this.isQaRun) SaveSystem.setBest(this.score);
     this.best = SaveSystem.best();
+    return this.lastRun;
+  }
+
+  endRun(cause = { kind: "unknown" }) {
+    if (this.runFinished || this.state !== "playing") return;
+    this.clearArena();
+    this.bossActive = false;
+    this.bossWarning = 0;
+    this.finishRun("defeat", cause);
     this.state = "gameOver";
   }
 
@@ -437,9 +473,19 @@ export class Game {
     if (this.state === "playing") {
       this.prevState = "playing";
       this.state = "paused";
+      this.input.cancelMovement();
     } else if (this.state === "paused") {
       this.state = this.prevState || "playing";
     }
+  }
+
+  pauseForInterruption() {
+    if (this.state === "playing") this.togglePause();
+  }
+
+  activateAudio() {
+    this.sounds.unlock();
+    this._tryStartMusic();
   }
 
   loop(now) {
@@ -460,16 +506,19 @@ export class Game {
     if (this.state === "visualTest") this.updateVisualTest(dt);
 
     if (this.state === "playing") {
+      this.simTime += dt;
       this.runTime += dt;
       this.score += dt * 2.4;
       this.player.update(dt);
-      this.updateSpawning(dt);
+      if (this.state === "playing") this.updateSpawning(dt);
       this.updateCollections(dt);
-      this.handleCollisions();
-      this.cleanup();
-      // FX: projectile trails + atmosphere dust
-      for (const pr of this.projectiles) emitTrail(this, pr);
-      emitSectorDust(this, dt);
+      if (this.state === "playing") this.handleCollisions();
+      if (this.state === "playing") {
+        this.cleanup();
+        // FX: projectile trails + atmosphere dust
+        for (const pr of this.projectiles) emitTrail(this, pr);
+        emitSectorDust(this, dt);
+      }
     }
 
     if (this.state === "title") this.titleTime += dt;
@@ -478,15 +527,20 @@ export class Game {
       this.bossRewardTimer -= dt; // counts down to 0 then stops — player must tap to continue
     }
 
-    for (const p of this.particles) p.update(dt);
-    for (const z of this.zaps) z.life -= dt;
-    for (const death of this.enemyDeaths) death.age += dt;
+    const animateCombatFx = this.state === "playing" || this.state === "bossReward" || this.state === "visualTest";
+    if (animateCombatFx) {
+      for (const p of this.particles) p.update(dt);
+      for (const z of this.zaps) z.life -= dt;
+      for (const death of this.enemyDeaths) death.age += dt;
+    }
     this.particles = this.particles.filter(p => !p.dead).slice(-this.particleCap);
     this.zaps = this.zaps.filter(z => z.life > 0).slice(-this.zapCap);
 
-    this.shake = Math.max(0, this.shake - dt * 20);
-    this.bossWarning = Math.max(0, this.bossWarning - dt);
-    this.sectorTransition = Math.max(0, this.sectorTransition - dt);
+    if (this.state === "playing") {
+      this.shake = Math.max(0, this.shake - dt * 20);
+      this.bossWarning = Math.max(0, this.bossWarning - dt);
+      this.sectorTransition = Math.max(0, this.sectorTransition - dt);
+    }
   }
 
   _tryStartMusic() {
@@ -497,6 +551,8 @@ export class Game {
 
   toggleMusic() {
     this.musicMuted = !this.musicMuted;
+    this.sounds.setMuted(this.musicMuted);
+    SaveSystem.setAudioMuted(this.musicMuted);
     if (this.musicMuted) {
       this._music.pause();
     } else {
@@ -525,6 +581,12 @@ export class Game {
       this.toggleMusic();
       return;
     }
+    const pz = this._pauseBtnZone;
+    if (x >= pz.x && x <= pz.x + pz.w && y >= pz.y && y <= pz.y + pz.h &&
+        (this.state === "playing" || this.state === "paused")) {
+      this.togglePause();
+      return;
+    }
     this._tryStartMusic();
 
     if (this.state === "title") {
@@ -538,7 +600,7 @@ export class Game {
     } else if (this.state === "levelUp") {
       this.upgrades.handleTap(x, y);
     } else if (this.state === "paused") {
-      this.state = "playing";
+      this.togglePause();
     } else if (this.state === "bossReward") {
       // The final shard lands before the hint appears, so an impatient tap
       // cannot cut off the reward's visual payoff.
@@ -563,7 +625,7 @@ export class Game {
     ctx.translate(sx, sy);
 
     this.drawBackground(ctx);
-    if (this.state !== "title" && this.state !== "loading") this.drawWorld(ctx);
+    if (!["title", "loading", "gameOver", "victory"].includes(this.state)) this.drawWorld(ctx);
 
     if (this.state === "loading") this.drawLoading(ctx);
     if (this.state === "title") this.drawTitle(ctx);
@@ -573,7 +635,10 @@ export class Game {
     if (this.state === "paused") this.drawPaused(ctx);
     if (this.state === "bossReward") this.drawBossReward(ctx);
     if (this.state === "visualTest") this.drawVisualTest(ctx);
-    if (this.state === "playing") this.drawHud(ctx);
+    if (this.state === "playing") {
+      this.drawHud(ctx);
+      this.drawPauseButton(ctx);
+    }
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
     this.drawFullscreenButton(ctx);
     this.drawMuteButton(ctx);

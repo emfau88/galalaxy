@@ -89,26 +89,26 @@ export class Enemy {
     const weapon = skipWeaponAnimation ? null : this.visual?.weapon;
     if (!weapon) {
       if (delay <= 0) this._spawnWeaponShot(angle, options);
-      else this.pendingShots.push({ at: this.game.time + delay, angle, options });
+      else this.pendingShots.push({ at: this.game.simTime + delay, angle, options });
       return;
     }
     // A volley shares one authored animation; individual spread shots leave
     // on its release frame instead of appearing before the gun has fired.
-    if (!this.weaponAnimation || this.game.time >= this.weaponAnimation.until) {
+    if (!this.weaponAnimation || this.game.simTime >= this.weaponAnimation.until) {
       this.weaponAnimation = {
-        startedAt: this.game.time,
-        until: this.game.time + weapon.frameCount / weapon.fps,
+        startedAt: this.game.simTime,
+        until: this.game.simTime + weapon.frameCount / weapon.fps,
       };
     }
     this.pendingShots.push({
-      at: this.game.time + delay + (weapon ? weapon.releaseFrame / weapon.fps : 0),
+      at: this.game.simTime + delay + (weapon ? weapon.releaseFrame / weapon.fps : 0),
       angle,
       options,
     });
   }
 
   _beginSpecialCharge(kind, delay, data = {}) {
-    this.specialCharge = { kind, until: this.game.time + delay, ...data };
+    this.specialCharge = { kind, until: this.game.simTime + delay, ...data };
   }
 
   _fireKlaedBossPattern(player) {
@@ -166,7 +166,7 @@ export class Enemy {
   _releaseQueuedShots() {
     for (let i = this.pendingShots.length - 1; i >= 0; i--) {
       const shot = this.pendingShots[i];
-      if (shot.at > this.game.time) continue;
+      if (shot.at > this.game.simTime) continue;
       this.pendingShots.splice(i, 1);
       if (!this.dead) this._spawnWeaponShot(shot.angle, shot.options);
     }
@@ -181,7 +181,7 @@ export class Enemy {
     if (this.boss) {
       // Boss enters arena and holds position in upper-middle area
       const holdY = 185;
-      const holdX = CONFIG.designW / 2 + Math.sin(this.game.time * 0.55 + this.wobble) * 72;
+      const holdX = CONFIG.designW / 2 + Math.sin(this.game.simTime * 0.55 + this.wobble) * 72;
       this.x = lerp(this.x, holdX, clamp(dt * 1.4, 0, 1));
       this.y = lerp(this.y, holdY, clamp(dt * (this.y < 0 ? 2.2 : 0.9), 0, 1));
     } else if (this.flyby) {
@@ -197,7 +197,7 @@ export class Enemy {
       this.y += (f.vy + py * sineOffset) * dt;
     } else {
       const a = Math.atan2(p.y - this.y, p.x - this.x);
-      const side = Math.sin(this.game.time * 2 + this.wobble) * 28;
+      const side = Math.sin(this.game.simTime * 2 + this.wobble) * 28;
       this.x += Math.cos(a) * this.speed * dt + Math.cos(a + Math.PI / 2) * side * dt;
       this.y += Math.sin(a) * this.speed * dt + Math.sin(a + Math.PI / 2) * side * dt;
     }
@@ -246,7 +246,8 @@ export class Enemy {
     }
 
     if (dist2(this.x, this.y, p.x, p.y) < (this.r + p.r) ** 2) {
-      p.damage(this.damagePower);
+      p.damage(this.damagePower, { kind: "collision", type: this.type, boss: this.boss });
+      if (this.game.state !== "playing") return;
       this.damage(this.boss ? 4 : 999);
     }
 
@@ -258,6 +259,7 @@ export class Enemy {
   }
 
   damage(amount) {
+    if (this.dead) return;
     const absorbed = Math.min(this.shield, amount);
     this.shield -= absorbed;
     if (absorbed > 0) this.shieldFlash = 0.72;
@@ -273,6 +275,7 @@ export class Enemy {
     this.game.spawnEnemyDestruction(this);
     this.game.score += this.score;
     this.game.kills++;
+    this.game.sounds?.play("kill");
     const wasBoss = this.boss;
     if (wasBoss) this.game.onBossKilled(this.x, this.y, 12);
     else this.game.dropXp(this.x, this.y, 1 + Math.floor(this.score / 70));
@@ -293,11 +296,11 @@ export class Enemy {
     const rc = RENDER_CONFIG.enemies[this.type] || { w: this.r * 2, h: this.r * 2 };
     const size = this.boss ? rc.w * 1.85 : rc.w;
 
-    this._drawStrip(ctx, img.get(this.visual?.engine?.assetKey), this.visual?.frame, this.visual?.engine, this.game.time, size);
+    this._drawStrip(ctx, img.get(this.visual?.engine?.assetKey), this.visual?.frame, this.visual?.engine, this.game.simTime, size);
 
     // Boss: tight pulsing aura behind sprite — no big bubble for normal enemies
     if (this.boss) {
-      const pulse = 0.28 + Math.sin(this.game.time * 4) * 0.08;
+      const pulse = 0.28 + Math.sin(this.game.simTime * 4) * 0.08;
       ctx.globalAlpha = pulse;
       ctx.fillStyle = CONFIG.colors.red;
       ctx.shadowColor = CONFIG.colors.red;
@@ -308,8 +311,8 @@ export class Enemy {
       ctx.shadowBlur = 0;
     }
 
-    if (this.specialCharge && this.game.time < this.specialCharge.until) {
-      const progress = 1 - (this.specialCharge.until - this.game.time) /
+    if (this.specialCharge && this.game.simTime < this.specialCharge.until) {
+      const progress = 1 - (this.specialCharge.until - this.game.simTime) /
         (this.specialCharge.kind === "wave" ? 0.72 : 0.46);
       ctx.save();
       // Draw telegraphs in world orientation after undoing the ship rotation.
@@ -356,8 +359,8 @@ export class Enemy {
     ctx.shadowOffsetY = 0;
 
     const weapon = this.visual?.weapon;
-    if (weapon && this.weaponAnimation && this.game.time < this.weaponAnimation.until) {
-      this._drawStrip(ctx, img.get(weapon.assetKey), this.visual.frame, weapon, this.game.time - this.weaponAnimation.startedAt, size);
+    if (weapon && this.weaponAnimation && this.game.simTime < this.weaponAnimation.until) {
+      this._drawStrip(ctx, img.get(weapon.assetKey), this.visual.frame, weapon, this.game.simTime - this.weaponAnimation.startedAt, size);
     }
 
     if (this.visual?.shield && this.shield > 0 && this.shieldFlash > 0) {
@@ -365,7 +368,7 @@ export class Enemy {
       ctx.save();
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = shieldAlpha;
-      this._drawStrip(ctx, img.get(this.visual.shield.assetKey), this.visual.frame, this.visual.shield, this.game.time, size * 1.12);
+      this._drawStrip(ctx, img.get(this.visual.shield.assetKey), this.visual.frame, this.visual.shield, this.game.simTime, size * 1.12);
       ctx.restore();
     }
 
@@ -383,7 +386,7 @@ export class Enemy {
     if (this.boss) {
       ctx.globalCompositeOperation = "source-over";
       ctx.rotate(-(Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2));
-      ctx.globalAlpha = 0.5 + Math.sin(this.game.time * 5) * 0.15;
+      ctx.globalAlpha = 0.5 + Math.sin(this.game.simTime * 5) * 0.15;
       ctx.strokeStyle = CONFIG.colors.red;
       ctx.lineWidth = 1.8;
       ctx.shadowColor = CONFIG.colors.red;

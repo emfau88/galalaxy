@@ -7,13 +7,17 @@ import { enemyVisualFor } from "../data/enemyVisuals.js";
 
 class CombatMethods {
   updateCollections(dt) {
-    for (const e of this.enemies) e.update(dt);
-    for (const p of this.projectiles) p.update(dt, this);
-    for (const p of this.pickups) p.update(dt, this);
+    for (const collection of [this.enemies, this.projectiles, this.pickups]) {
+      for (const entity of collection) {
+        if (this.state !== "playing") return;
+        if (!entity.dead) entity.update(dt, this);
+      }
+    }
   }
 
   handleCollisions() {
     for (const pr of this.projectiles) {
+      if (this.state !== "playing") return;
       if (pr.dead) continue;
       if (pr.owner === "player") {
         for (const e of this.enemies) {
@@ -21,6 +25,7 @@ class CombatMethods {
           if (pr.hitTargets.has(e)) continue;
           if (this.dist2(pr.x, pr.y, e.x, e.y) < (pr.r + e.r) ** 2) {
             e.damage(pr.dmg);
+            if (this.state !== "playing") return;
             pr.hitTargets.add(e);
             if (!pr.piercing) pr.dead = true;
             spawnHitSparks(this, pr.x, pr.y, pr);
@@ -41,7 +46,7 @@ class CombatMethods {
       } else {
         const p = this.player;
         if (pr.hitsCircle(p.x, p.y, p.r)) {
-          p.damage(pr.dmg);
+          p.damage(pr.dmg, { kind: "projectile", visualKey: pr.visualKey });
           pr.dead = true;
         }
       }
@@ -84,10 +89,46 @@ class CombatMethods {
       this.xp -= this.xpNeed;
       this.level++;
       this.xpNeed = Math.floor(this.xpNeed * 1.28 + 4);
-      this.upgrades.roll();
-      this.input.cancelMovement();
-      this.state = "levelUp";
+      this.pendingUpgrades++;
     }
+    if (this.pendingUpgrades > 0 && this.state !== "levelUp") this.showNextUpgrade();
+  }
+
+  showNextUpgrade() {
+    this.input.cancelMovement();
+    this.state = "levelUp";
+    this.upgrades.roll();
+  }
+
+  finishUpgrade() {
+    this.pendingUpgrades = Math.max(0, this.pendingUpgrades - 1);
+    if (this.pendingUpgrades > 0) {
+      this.showNextUpgrade();
+      return;
+    }
+    this.state = this.resumeAfterUpgradeState || "playing";
+    this.resumeAfterUpgradeState = null;
+    if (this.state === "victory") this.finishRun("victory");
+  }
+
+  clearArena() {
+    // Mark detached objects dead as callbacks may still hold a reference during
+    // the boss-killing update. Clearing never awards score for surviving ships.
+    for (const e of this.enemies) {
+      e.dead = true;
+      e.pendingShots = [];
+    }
+    for (const p of this.projectiles) p.dead = true;
+    this.enemies = [];
+    this.projectiles = [];
+    this.pickups = [];
+    this.particles = [];
+    this.zaps = [];
+    this.enemyDeaths = [];
+    this.player.pendingWeaponShots = [];
+    this.player.weaponAnimations = Object.create(null);
+    this.player._pulseActive = false;
+    this.input.cancelMovement();
   }
 
   closestEnemy(x, y, range) {

@@ -158,12 +158,12 @@ export const ASSETS = {
 
   // Original UI overlays generated for Galalaxy. They remain text-free so the
   // canvas can keep all gameplay labels sharp and localizable.
-  uiUpgradeCardFrame: "assets/ui/upgrade-card-frame-v2.png",
-  uiUpgradeCardFrameRocket: "assets/ui/upgrade-card-frame-rocket-v1.png",
-  uiUpgradeCardFramePurple: "assets/ui/upgrade-card-frame-purple-v1.png",
-  uiBossAlertFrame:  "assets/ui/boss-alert-frame-v1.png",
-  uiTitleCommandPanel: "assets/ui/title-command-panel-v1.png",
-  uiStartRunButtonFrame: "assets/ui/start-run-button-frame-v1.png",
+  uiUpgradeCardFrame: "assets/ui/runtime/upgrade-card-frame-v2.png",
+  uiUpgradeCardFrameRocket: "assets/ui/runtime/upgrade-card-frame-rocket-v1.png",
+  uiUpgradeCardFramePurple: "assets/ui/runtime/upgrade-card-frame-purple-v1.png",
+  uiBossAlertFrame:  "assets/ui/runtime/boss-alert-frame-v1.png",
+  uiTitleCommandPanel: "assets/ui/runtime/title-command-panel-v1.png",
+  uiStartRunButtonFrame: "assets/ui/runtime/start-run-button-frame-v1.png",
   uiVictoryCommandFrame: "assets/ui/victory-command-frame-v1.png"
 };
 

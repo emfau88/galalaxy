@@ -103,7 +103,7 @@ export class Player {
     const visual = PLAYER_WEAPON_VISUALS[key];
     if (!visual) return 1 / PLAYER_ANIMATION_FPS;
 
-    const now = this.game.time || 0;
+    const now = this.game.state === "visualTest" ? (this.game.time || 0) : (this.game.simTime || 0);
     const activeFrameCount = frameCount ?? visual.frameCount;
     const duration = cycleDuration ?? activeFrameCount / PLAYER_ANIMATION_FPS;
     const frameDuration = duration / activeFrameCount;
@@ -118,7 +118,8 @@ export class Player {
 
   isWeaponAnimationActive(key) {
     const state = this.weaponAnimations[key];
-    return Boolean(state && (this.game.time || 0) < state.activeUntil);
+    const now = this.game.state === "visualTest" ? (this.game.time || 0) : (this.game.simTime || 0);
+    return Boolean(state && now < state.activeUntil);
   }
 
   queueWeaponShot(delay, fire) {
@@ -133,6 +134,7 @@ export class Player {
       if (shot.remaining > 0) continue;
       this.pendingWeaponShots.splice(i, 1);
       shot.fire();
+      if (this.game.state !== "playing" && this.game.state !== "visualTest") return;
     }
   }
 
@@ -207,6 +209,7 @@ export class Player {
       this.shield = clamp(this.shield + this.shieldRegen * dt, 0, this.maxShield);
     }
     this.updatePendingWeaponShots(dt);
+    if (this.game.state !== "playing") return;
 
     this.fireTimer -= dt;
     if (this.fireTimer <= 0) {
@@ -404,7 +407,7 @@ export class Player {
     else if (key === "bigGun") this.fireBigGun(true);
   }
 
-  damage(amount) {
+  damage(amount, cause = { kind: "unknown" }) {
     if (this.invuln > 0) return;
     let left = amount;
     if (this.shield > 0) {
@@ -422,14 +425,16 @@ export class Player {
       this.hitFlash = 0.24;
       this.game.shake = Math.max(this.game.shake, 6);
       this.game.burst(this.x, this.y, "#bc72ff", 24);
+      this.game.sounds?.play("hit");
       return;
     }
     this.hp -= left;
+    this.game.sounds?.play("hit");
     this.hitFlash = 0.14;
     this.invuln = 0.28;
     this.game.shake = Math.max(this.game.shake, 4);
     this.game.burst(this.x, this.y, left > 0 ? CONFIG.colors.red : CONFIG.colors.cyan, 14);
-    if (this.hp <= 0) this.game.endRun();
+    if (this.hp <= 0) this.game.endRun(cause);
   }
 
   damageSprite() {
@@ -456,7 +461,7 @@ export class Player {
 
     const branch = this.shipBranch();
     const bc     = BRANCH_COLORS[branch];
-    const t      = this.game.time;
+    const t      = this.game.state === "visualTest" ? this.game.time : this.game.simTime;
     const visualScale = this.shipVisualScale();
     ctx.scale(visualScale, visualScale);
 
@@ -616,6 +621,23 @@ export class Player {
     };
     const color = colors[this.keystoneId];
     if (!color) return;
+
+    // Aegis is an additional emergency layer. Ready-state brackets stay visible
+    // around the installed shield; the full bubble is reserved for a hull hit.
+    if (this.keystoneId === "aegis" && this.aegisCooldown <= 0) {
+      ctx.save();
+      ctx.strokeStyle = "#dca7ff";
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = this.game.lowEffects ? 0 : 8;
+      for (let i = 0; i < 4; i++) {
+        const angle = Math.PI / 4 + i * Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 49, angle - 0.19, angle + 0.19);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     const pulse = 0.55 + Math.sin(t * 3.5) * 0.2;
     ctx.save();

@@ -1,0 +1,118 @@
+{
+  "fullRun": {
+    "ok": true,
+    "transitions": [
+      {
+        "from": 1,
+        "to": 2,
+        "activeGroup": "nairan",
+        "sharedFleetGroup": false
+      },
+      {
+        "from": 2,
+        "to": 3,
+        "activeGroup": "nautolan",
+        "sharedFleetGroup": false
+      },
+      {
+        "from": 3,
+        "to": 4,
+        "activeGroup": "nautolan",
+        "sharedFleetGroup": true
+      }
+    ],
+    "replay": true,
+    "hangar": true,
+    "arenaCleanup": true,
+    "queuedLevels": true,
+    "pausedCombatClock": true
+  },
+  "finalReward": {
+    "queued": 2,
+    "between": "levelUp",
+    "state": "victory",
+    "outcome": "victory",
+    "cleared": 4
+  },
+  "pause": {
+    "frozen": true,
+    "pointerReleased": true
+  },
+  "pointerLifecycle": {
+    "ownerPreserved": true,
+    "stayedPaused": true
+  },
+  "soundCues": {
+    "state": "running",
+    "played": [
+      "boss",
+      "hit",
+      "kill",
+      "upgrade"
+    ]
+  },
+  "runReview": {
+    "outcome": "defeat",
+    "modules": 4,
+    "sector": 3,
+    "cause": "projectile"
+  },
+  "hudLayouts": [
+    {
+      "width": 390,
+      "height": 844,
+      "safeTop": 0,
+      "headerOffset": 0,
+      "headerTop": 76.5714316368103,
+      "gap": 5.999999834940984,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 360,
+      "height": 900,
+      "safeTop": 0,
+      "headerOffset": -148.33333333333334,
+      "headerTop": 4.000002074809345,
+      "gap": 6.000000059604645,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "safeTop": 0,
+      "headerOffset": -108.37500000000001,
+      "headerTop": 3.9999967589974403,
+      "gap": 6.000000111758709,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "safeTop": 0,
+      "headerOffset": 0,
+      "headerTop": 85.14285373687744,
+      "gap": 6.000000166338544,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 390,
+      "height": 1000,
+      "safeTop": 44,
+      "headerOffset": -114.76923076923073,
+      "headerTop": 47.99999564296604,
+      "gap": 5.999999834940984,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 900,
+      "height": 420,
+      "safeTop": 0,
+      "headerOffset": 0,
+      "headerTop": 4.421052455902071,
+      "gap": 5.99999976158142,
+      "pauseInsideHeader": true
+    }
+  ],
+  "errors": [],
+  "ok": true
+}

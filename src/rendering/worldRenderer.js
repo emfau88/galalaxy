@@ -3,6 +3,28 @@ import { clamp } from "../utils.js";
 import { drawPulse } from "../systems/abilities.js";
 
 class WorldRenderingMethods {
+  drawPauseButton(ctx) {
+    const pz = this._pauseBtnZone;
+    const x = pz.x + pz.w / 2;
+    const y = pz.y + pz.h / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(2,6,20,0.82)";
+    ctx.strokeStyle = "rgba(88,230,255,0.62)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(pz.x, pz.y, pz.w, pz.h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = CONFIG.colors.cyan;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y - 5); ctx.lineTo(x - 4, y + 5);
+    ctx.moveTo(x + 4, y - 5); ctx.lineTo(x + 4, y + 5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   drawMuteButton(ctx) {
     const mz = this._muteBtnZone;
     const x = mz.x + mz.w / 2, y = mz.y + mz.h / 2, r = 14;
