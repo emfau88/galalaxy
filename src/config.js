@@ -99,7 +99,7 @@ export const SECTORS = [
     index: 0,
     name: "Kla'ed Frontier",
     shortName: "SECTOR I",
-    duration: 65,
+    duration: 70,
     fleet: "klaed",
     tint: [30, 60, 140],
     spawnMult: 0.9,       // ~10% fewer regular spawns than formula baseline

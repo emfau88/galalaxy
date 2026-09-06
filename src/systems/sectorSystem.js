@@ -22,22 +22,25 @@ class SectorMethods {
 
     this.spawnTimer -= dt;
     const sector = SECTORS[this.currentSectorIndex];
+    const sectorElapsed = sector.duration - this.sectorTimer;
     const sectorProgress = 1 - this.sectorTimer / sector.duration;
     const difficulty = 1 + this.currentSectorIndex * 0.6 + sectorProgress * 0.5;
-    // spawnMult > 1 stretches the interval (fewer spawns); Sector I uses 0.9 → interval ÷ 0.9
-    const interval = clamp((1.0 - difficulty * 0.08) / (sector.spawnMult ?? 1.0), 0.22, 1.0);
+    // Sector I briefly eases entry, then returns to the existing spawn curve.
+    const normalInterval = clamp((1.0 - difficulty * 0.08) / (sector.spawnMult ?? 1.0), 0.22, 1.0);
+    const interval = this.currentSectorIndex === 0 && sectorElapsed < 10
+      ? 1.25
+      : normalInterval;
 
     if (this.spawnTimer <= 0 && this.enemies.length < CONFIG.enemyCap) {
       this.spawnTimer = interval;
       const fleet = FLEETS[sector.fleet];
       const speedMult = sector.enemySpeedMult ?? 1.0;
 
-      // Formation chance per sector; suppressed in Sector I before 15s elapsed
+      // Formation chance per sector; suppressed in Sector I before 22s elapsed
       // and suppressed during bossWarning. Formation replaces the normal solo spawn.
       const formationChance = [0.25, 0.30, 0.34, 0.36][this.currentSectorIndex] ?? 0.25;
-      const sectorElapsed = sector.duration - this.sectorTimer;
       const formationAllowed = !this.bossWarning &&
-                               !(this.currentSectorIndex === 0 && sectorElapsed < 15) &&
+                               !(this.currentSectorIndex === 0 && sectorElapsed < 22) &&
                                this.enemies.length + 5 <= CONFIG.enemyCap;
 
       if (formationAllowed && Math.random() < formationChance) {

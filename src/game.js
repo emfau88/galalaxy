@@ -291,7 +291,7 @@ export class Game {
     this.xpNeed = 8;
     this.runTime = 0;
     this.simTime = 0;
-    this.spawnTimer = 0.6;
+    this.spawnTimer = 1.2;
     this.currentSectorIndex = 0;
     this.sectorTimer = SECTORS[0].duration;
     this.bossActive = false;
@@ -536,8 +536,10 @@ export class Game {
     this.particles = this.particles.filter(p => !p.dead).slice(-this.particleCap);
     this.zaps = this.zaps.filter(z => z.life > 0).slice(-this.zapCap);
 
+    // Camera shake is a visual effect, not a combat timer. Let it settle even
+    // while an upgrade or pause overlay freezes simulation time.
+    this.shake = Math.max(0, this.shake - dt * 20);
     if (this.state === "playing") {
-      this.shake = Math.max(0, this.shake - dt * 20);
       this.bossWarning = Math.max(0, this.bossWarning - dt);
       this.sectorTransition = Math.max(0, this.sectorTransition - dt);
     }
@@ -620,8 +622,9 @@ export class Game {
     ctx.translate(this.offsetX, this.offsetY);
     ctx.scale(this.scale, this.scale);
 
-    const sx = (Math.random() - 0.5) * this.shake;
-    const sy = (Math.random() - 0.5) * this.shake;
+    const cameraShake = this.state === "playing" ? this.shake : 0;
+    const sx = (Math.random() - 0.5) * cameraShake;
+    const sy = (Math.random() - 0.5) * cameraShake;
     ctx.translate(sx, sy);
 
     this.drawBackground(ctx);
