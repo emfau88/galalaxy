@@ -6,6 +6,7 @@ import { UpgradeSystem } from "../src/systems/upgrades.js";
 import { RunStats } from "../src/runStats.js";
 import { wrapText } from "../src/rendering/text.js";
 import { SECTORS } from "../src/config.js";
+import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
 
 function createGame() {
   const game = Object.create(Game.prototype);
@@ -214,6 +215,22 @@ function testSectorOnePacing() {
   }
 }
 
+function testKongregateStats() {
+  assert.equal(isKongregateHost("https://www.kongregate.com/games/dev/galalaxy"), true);
+  assert.equal(isKongregateHost("https://game12345.konggames.com/"), true);
+  assert.equal(isKongregateHost("https://example.com/kongregate.com"), false);
+  assert.deepEqual(KONGREGATE_STATS, {
+    HighScore: "Max", SectorReached: "Max", MaxLevel: "Max",
+    KeystoneInstalled: "Max", GameComplete: "Max",
+  });
+  assert.deepEqual(kongregateStatsForRun({
+    score: 18420.9, sectorReached: 4, level: 11, keystone: "reactor", outcome: "victory",
+  }), {
+    HighScore: 18420, SectorReached: 4, MaxLevel: 11,
+    KeystoneInstalled: 1, GameComplete: 1,
+  });
+}
+
 testQueuedLevelUps();
 testPausedCombatClock();
 testArenaCleanup();
@@ -222,4 +239,5 @@ testKeystoneMeasurement();
 testAegis();
 testUpgradeCameraShake();
 testSectorOnePacing();
+testKongregateStats();
 console.log("Reliability checks passed");

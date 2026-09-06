@@ -9,6 +9,7 @@ import { Enemy } from "./entities/enemy.js";
 import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
 import { RunStats } from "./runStats.js";
 import { SoundSystem } from "./systems/soundSystem.js";
+import { KongregateBridge } from "./kongregate.js";
 import { sectorMethods } from "./systems/sectorSystem.js";
 import { combatMethods } from "./systems/combatSystem.js";
 import { worldRenderingMethods } from "./rendering/worldRenderer.js";
@@ -94,6 +95,7 @@ export class Game {
     this.musicMuted = SaveSystem.settings().audioMuted;
     this.sounds = new SoundSystem(this.musicMuted);
     this.runStats = new RunStats();
+    this.kongregate = new KongregateBridge();
     this.fullscreenActive = Boolean(document.fullscreenElement);
     this._music = new Audio("assets/music/track1.ogg");
     this._music.loop = true;
@@ -455,6 +457,7 @@ export class Game {
     if (this.runFinished) return this.lastRun;
     this.runFinished = true;
     this.lastRun = this.runStats.complete(this, outcome, cause);
+    if (!this.isQaRun) this.kongregate.recordRun(this.lastRun);
     if (!this.isQaRun) SaveSystem.setBest(this.score);
     this.best = SaveSystem.best();
     return this.lastRun;

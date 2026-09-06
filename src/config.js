@@ -10,6 +10,7 @@ export const CONFIG = {
   saveKey: "void_drift_best_score_v1",
   settingsKey: "galalaxy_settings_v1",
   runHistoryKey: "galalaxy_run_history_v1",
+  kongregateStatsKey: "galalaxy_kongregate_stats_v1",
   assetTimeoutMs: 9000,
   colors: {
     bg: "#050716",
