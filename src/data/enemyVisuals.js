@@ -49,6 +49,7 @@ export const NAIRAN_VISUALS = {
   frigate: { frame: 64, engine: { assetKey: "nairanFrigateEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nairanFrigateWeapon", frameCount: 5, releaseFrame: 2, fps: 10 }, shield: { assetKey: "nairanFrigateShield", frameCount: 8, fps: 10 }, destruction: { assetKey: "nairanFrigateDestruction", frameCount: 16, fps: 14 } },
   battlecruiser: { frame: 128, engine: { assetKey: "nairanBattlecruiserEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nairanBattlecruiserWeapon", frameCount: 9, releaseFrame: 3, fps: 10 }, shield: { assetKey: "nairanBattlecruiserShield", frameCount: 8, fps: 10 }, destruction: { assetKey: "nairanBattlecruiserDestruction", frameCount: 18, fps: 14 } },
   dreadnought: { frame: 128, engine: { assetKey: "nairanDreadnoughtEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nairanDreadnoughtWeapon", frameCount: 34, releaseFrame: 14, fps: 12 }, shield: { assetKey: "nairanDreadnoughtShield", frameCount: 8, fps: 10 }, destruction: { assetKey: "nairanDreadnoughtDestruction", frameCount: 18, fps: 14 } },
+  torpedoship: { frame: 64, engine: { assetKey: "nairanTorpedoShipEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nairanTorpedoShipWeapon", frameCount: 12, releaseFrame: 5, fps: 12 }, shield: { assetKey: "nairanTorpedoShipShield", frameCount: 8, fps: 10 }, destruction: { assetKey: "nairanTorpedoShipDestruction", frameCount: 16, fps: 14 } },
 };
 
 export const NAUTOLAN_VISUALS = {
@@ -58,6 +59,7 @@ export const NAUTOLAN_VISUALS = {
   frigate: { frame: 64, engine: { assetKey: "nautolanFrigateEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nautolanFrigateWeapon", frameCount: 9, releaseFrame: 3, fps: 10 }, shield: { assetKey: "nautolanFrigateShield", frameSize: 63, frameCount: 36, fps: 12 }, destruction: { assetKey: "nautolanFrigateDestruction", frameCount: 9, fps: 14 } },
   battlecruiser: { frame: 128, engine: { assetKey: "nautolanBattlecruiserEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nautolanBattlecruiserWeapon", frameCount: 9, releaseFrame: 3, fps: 10 }, shield: { assetKey: "nautolanBattlecruiserShield", frameCount: 11, fps: 10 }, destruction: { assetKey: "nautolanBattlecruiserDestruction", frameCount: 13, fps: 14 } },
   dreadnought: { frame: 128, engine: { assetKey: "nautolanDreadnoughtEngine", frameCount: 8, fps: 10 }, weapon: { assetKey: "nautolanDreadnoughtWeapon", frameCount: 35, releaseFrame: 14, fps: 12 }, shield: { assetKey: "nautolanDreadnoughtShield", frameCount: 20, fps: 12 }, destruction: { assetKey: "nautolanDreadnoughtDestruction", frameCount: 12, fps: 14 } },
+  support: { frame: 64, engine: { assetKey: "nautolanSupportEngine", frameCount: 8, fps: 10 }, weapon: null, shield: null, destruction: { assetKey: "nautolanSupportDestruction", frameCount: 8, fps: 14 } },
 };
 
 export function enemyVisualFor(type) {

@@ -408,6 +408,64 @@ function testNairanPrecisionTelegraph() {
   assert.equal(enemy.pendingShots.length, 1, "Precision shot waits for its visible warning");
 }
 
+function testNairanTorpedoRole() {
+  const spawnGame = createGame();
+  spawnGame.currentSectorIndex = 1;
+  spawnGame.encounterDirector = { waveCount: 1 };
+  spawnGame._spawnEncounterEvent(
+    { at: 0, role: "torpedo", count: 3, entry: "top-center" },
+    WAVE_CARDS["torpedo-lock"], SECTOR_ENCOUNTER_PROFILES[1], SECTORS[1], 0.5,
+  );
+  assert.equal(spawnGame.enemies.filter(enemy => enemy.type === "nairanTorpedoShip").length, 1,
+    "The torpedo introduction permits only one torpedo ship at a time");
+
+  const game = createGame();
+  game.player.x = 210;
+  game.player.y = 620;
+  const torpedo = new Enemy(game, "nairanTorpedoShip", 210, -40);
+  torpedo.fireTimer = 0;
+  game.enemies = [torpedo];
+  torpedo.update(0.01);
+  assert.equal(torpedo.specialCharge, null, "Torpedo ships cannot attack from outside the visible arena");
+
+  torpedo.x = 210;
+  torpedo.y = 170;
+  torpedo.fireTimer = 0;
+  torpedo.update(0.01);
+  assert.equal(torpedo.specialCharge?.kind, "torpedo-lock", "Torpedo attack exposes a dedicated corridor lock");
+  assert.equal(torpedo.pendingShots.length, 1, "The torpedo waits behind its warning delay");
+  const fixedAngle = torpedo.pendingShots[0].angle;
+  game.player.x = 70;
+  game.simTime = torpedo.pendingShots[0].at + 0.01;
+  torpedo.update(0);
+  assert.equal(game.projectiles.length, 1, "The warned torpedo is released after the delay");
+  assert.ok(Math.abs(Math.atan2(game.projectiles[0].vy, game.projectiles[0].vx) - fixedAngle) < 0.001,
+    "The torpedo keeps the direction fixed before the player sidesteps");
+}
+
+function testNautolanSupportRole() {
+  const game = createGame();
+  const support = new Enemy(game, "nautolanSupport", 210, 180);
+  const targets = [
+    new Enemy(game, "nautolanFrigate", 150, 220),
+    new Enemy(game, "nautolanBomber", 250, 225),
+    new Enemy(game, "nautolanFighter", 300, 235),
+  ];
+  game.enemies = [support, ...targets];
+  support._refreshSupportTargets();
+  assert.equal(support.supportTargets.length, 1, "A support ship protects exactly one nearby ally");
+  assert.ok(support.supportTargets.every(target => target.supportSource === support),
+    "Every protected target points to its visible support source");
+  const protectedTarget = support.supportTargets[0];
+  assert.equal(protectedTarget.type, "nautolanFrigate", "Support prioritizes the most robust nearby ally");
+  protectedTarget.damage(20);
+  assert.equal(protectedTarget.hp, protectedTarget.maxHp - 11, "Support protection reduces incoming damage by 45%");
+  support.dead = true;
+  protectedTarget.damage(20);
+  assert.equal(protectedTarget.hp, protectedTarget.maxHp - 31, "Protection ends immediately when support is destroyed");
+  assert.ok(support.maxHp < targets[0].maxHp, "Support remains more vulnerable than the heavy ship it protects");
+}
+
 function testKongregateStats() {
   assert.equal(isKongregateHost("https://www.kongregate.com/games/dev/galalaxy"), true);
   assert.equal(isKongregateHost("https://game12345.konggames.com/"), true);
@@ -448,6 +506,8 @@ testUpgradeCameraShake();
 testEncounterDirector();
 testEncounterProjectileBudget();
 testNairanPrecisionTelegraph();
+testNairanTorpedoRole();
+testNautolanSupportRole();
 testKongregateStats();
 testSectorEnvironments();
 console.log("Reliability checks passed");

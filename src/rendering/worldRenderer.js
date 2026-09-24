@@ -253,6 +253,7 @@ class WorldRenderingMethods {
   drawWorld(ctx) {
     for (const p of this.pickups) p.draw(ctx, this);
     for (const pr of this.projectiles) pr.draw(ctx, this);
+    this.drawSupportLinks(ctx);
     for (const e of this.enemies) e.draw(ctx, this.loader);
     this.drawEnemyDestructions(ctx);
     this.player.draw(ctx, this.loader);
@@ -309,6 +310,37 @@ class WorldRenderingMethods {
       ctx.fillText("DREADNOUGHT SIGNATURE DETECTED", CONFIG.designW / 2, 122);
       ctx.restore();
     }
+  }
+
+  drawSupportLinks(ctx) {
+    const supports = this.enemies.filter(enemy =>
+      !enemy.dead && enemy.type === "nautolanSupport" && enemy.supportTargets?.length);
+    if (!supports.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const support of supports) {
+      for (const target of support.supportTargets.slice(0, 1)) {
+        if (target.dead || target.supportSource !== support) continue;
+        const pulse = 0.62 + Math.sin(this.simTime * 7 + target.wobble) * 0.16;
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = "#69ffd0";
+        ctx.shadowColor = "#1cffb0";
+        ctx.shadowBlur = this.lowEffects ? 0 : 8;
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(support.x, support.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.22 + pulse * 0.16;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, target.r + 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   drawEnemyDestructions(ctx) {

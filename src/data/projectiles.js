@@ -38,6 +38,7 @@ export const PROJECTILE_VISUALS = {
   nairanFrigate:      { assetKey: "nairanRay",     w: 18, h: 38, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff", frameW: 18, frameH: 38, frameCount: 4, fps: 14 },
   nairanBattlecruiser:{ assetKey: "nairanRocket",  w: 14, h: 25, rotOffset: Math.PI / 2, color: "#dd99ff", glowColor: "#aa44ff", frameW: 9, frameH: 16, frameCount: 4, fps: 12 },
   nairanBoss:         { assetKey: "nairanTorpedo", w: 15, h: 34, rotOffset: Math.PI / 2, color: "#ee99ff", glowColor: "#aa44ff", frameW: 9, frameH: 24, frameCount: 3, fps: 10 },
+  nairanTorpedoShip:  { assetKey: "nairanTorpedo", w: 22, h: 48, rotOffset: Math.PI / 2, color: "#f0a6ff", glowColor: "#b84cff", frameW: 9, frameH: 24, frameCount: 3, fps: 10 },
 
   // --- Nautolan ---
   nautolanBomber:       { assetKey: "nautolanSpinningBullet", w: 16, h: 16, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa", frameW: 8,  frameH: 8,  frameCount: 8,  fps: 16 },
@@ -64,6 +65,7 @@ export const ENEMY_WEAPON_PROFILES = {
   nairanFrigate:       { speed: 410, damage: 9,  cooldown: 2.8, hitRadius: 4,   life: 1.9, behavior: "ray" },
   nairanBattlecruiser: { speed: 225, damage: 12, cooldown: 3.1, hitRadius: 6,   life: 3.8, behavior: "homing", turnRate: 0.72 },
   nairanBoss:          { speed: 210, damage: 14, cooldown: 1.1, wideCooldown: 1.6, hitRadius: 7, life: 4.2, behavior: "homing", turnRate: 0.42, acceleration: 16 },
+  nairanTorpedoShip:   { speed: 235, damage: 18, cooldown: 5.4, hitRadius: 7, life: 4.2, behavior: "straight" },
 
   // Nautolan: slower, heavier projectiles with more commitment.
   nautolanBomber:        { speed: 205, damage: 10, cooldown: 3.0, hitRadius: 6,   life: 3.6, behavior: "straight" },

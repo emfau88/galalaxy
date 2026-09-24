@@ -60,6 +60,8 @@ export class Game {
     this.hudTestMode = searchParams.get("test") === "hud-layout";
     this.pickupTestMode = searchParams.get("test") === "pickup-showcase";
     this.sectorMapTestMode = searchParams.get("test") === "sector-map";
+    this.enemyRoleTestMode = searchParams.get("test") === "enemy-role";
+    this.enemyRoleTestId = searchParams.get("role") === "support" ? "support" : "torpedo";
     this.sectorMapTestIndex = clamp(Number.parseInt(searchParams.get("sector"), 10) || 0, 0, SECTORS.length - 1);
     this.victoryTestMode = searchParams.get("test") === "victory-screen";
     this.fullRunTestMode = searchParams.get("test") === "full-run";
@@ -151,6 +153,7 @@ export class Game {
       else if (this.hudTestMode) this.startHudLayoutTest();
       else if (this.pickupTestMode) this.startPickupShowcase();
       else if (this.sectorMapTestMode) this.startSectorMapTest(this.sectorMapTestIndex);
+      else if (this.enemyRoleTestMode) this.startEnemyRoleTest(this.enemyRoleTestId);
       else if (this.victoryTestMode) this.startVictoryTest();
       else if (this.fullRunTestMode) {
         import("./qa/fullRunTest.js")
@@ -250,6 +253,7 @@ export class Game {
     if (this.nautolanTestMode || this.hudTestMode) groups.push("shared", "klaed", "nautolan");
     if (this.pickupTestMode) groups.push("shared", "klaed");
     if (this.sectorMapTestMode) groups.push("shared", "klaed");
+    if (this.enemyRoleTestMode) groups.push("shared", "klaed", this.enemyRoleTestId === "support" ? "nautolan" : "nairan");
     if (this.victoryTestMode) groups.push("shared", "victory");
     return [...new Set(groups)];
   }
@@ -451,6 +455,34 @@ export class Game {
       fireTimer: Number.MAX_VALUE,
       invuln: Number.POSITIVE_INFINITY,
     });
+  }
+
+  startEnemyRoleTest(role) {
+    this.startRun();
+    this.bossActive = true;
+    this.encounterDirector = { disabled: true, sectorIndex: role === "support" ? 2 : 1 };
+    this.currentSectorIndex = role === "support" ? 2 : 1;
+    this.sectorTimer = Number.POSITIVE_INFINITY;
+    Object.assign(this.player, {
+      x: CONFIG.designW / 2,
+      y: 625,
+      fireTimer: Number.MAX_VALUE,
+      invuln: Number.POSITIVE_INFINITY,
+    });
+    if (role === "support") {
+      const left = new Enemy(this, "nautolanFrigate", 145, 245);
+      const right = new Enemy(this, "nautolanBomber", 255, 260);
+      const support = new Enemy(this, "nautolanSupport", 330, 220);
+      left.speed = right.speed = 0;
+      left.fireTimer = right.fireTimer = Number.MAX_VALUE;
+      this.enemies = [left, right, support];
+      support._refreshSupportTargets();
+    } else {
+      const torpedo = new Enemy(this, "nairanTorpedoShip", CONFIG.designW / 2, 175);
+      torpedo.speed = 0;
+      torpedo.fireTimer = 0;
+      this.enemies = [torpedo];
+    }
   }
 
   _applyVisualTestStage() {

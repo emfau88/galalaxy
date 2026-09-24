@@ -44,13 +44,15 @@ export const RENDER_CONFIG = {
     nairanFrigate:      { w: 86,  h: 86  },
     nairanBattlecruiser:{ w: 102, h: 102 },
     nairanDreadnought:  { w: 138, h: 138 },
+    nairanTorpedoShip:  { w: 92,  h: 92  },
     // Nautolan Fleet 3
     nautolanScout:        { w: 70,  h: 70  },
     nautolanFighter:      { w: 82,  h: 82  },
     nautolanBomber:       { w: 82,  h: 82  },
     nautolanFrigate:      { w: 94,  h: 94  },
     nautolanBattlecruiser:{ w: 110, h: 110 },
-    nautolanDreadnought:  { w: 142, h: 142 }
+    nautolanDreadnought:  { w: 142, h: 142 },
+    nautolanSupport:      { w: 88,  h: 88  }
   },
   pickups: { w: 46, h: 46 },
   planet:  { w: 190, h: 190 },

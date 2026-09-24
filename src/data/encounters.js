@@ -78,6 +78,26 @@ export const WAVE_CARDS = Object.freeze({
       { at: 6.4, role: "skirmisher", count: 2, entry: "side-right", band: "middle" },
     ],
   }),
+  "torpedo-lock": Object.freeze({
+    id: "torpedo-lock",
+    duration: 10.5,
+    safeCorridor: "side-step",
+    tags: ["precision", "torpedo", "teaching"],
+    events: [
+      { at: 0, role: "torpedo", count: 1, entry: "top-center", fireDelay: 1.0 },
+      { at: 4.8, role: "skirmisher", count: 2, entry: "side-left", band: "upper" },
+    ],
+  }),
+  "support-screen": Object.freeze({
+    id: "support-screen",
+    duration: 11,
+    safeCorridor: "opposite-support",
+    tags: ["control", "support", "priority"],
+    events: [
+      { at: 0, role: "support", count: 1, entry: "top-right" },
+      { at: 0.6, role: "heavy", count: 2, entry: "top-left", fireDelay: 1.1 },
+    ],
+  }),
 });
 
 export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
@@ -102,8 +122,8 @@ export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
     openingWave: "side-sweep",
     recovery: [3.4, 4.3],
     earlyDeck: ["side-sweep", "open-v"],
-    midDeck: ["side-sweep", "precision-cross", "open-v"],
-    lateDeck: ["precision-cross", "side-sweep"],
+    midDeck: ["side-sweep", "precision-cross", "open-v", "torpedo-lock"],
+    lateDeck: ["precision-cross", "side-sweep", "torpedo-lock"],
   }),
   Object.freeze({
     id: "nautolan-control",
@@ -114,8 +134,8 @@ export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
     openingWave: "anchor-corridor",
     recovery: [4.1, 5],
     earlyDeck: ["anchor-corridor", "open-v"],
-    midDeck: ["anchor-corridor", "hammer-wing"],
-    lateDeck: ["hammer-wing", "anchor-corridor"],
+    midDeck: ["anchor-corridor", "hammer-wing", "support-screen"],
+    lateDeck: ["hammer-wing", "anchor-corridor", "support-screen"],
   }),
   Object.freeze({
     id: "void-combination",
@@ -126,8 +146,8 @@ export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
     openingWave: "finale-relay",
     recovery: [3.5, 4.5],
     earlyDeck: ["side-sweep", "anchor-corridor", "finale-relay"],
-    midDeck: ["precision-cross", "hammer-wing", "finale-relay"],
-    lateDeck: ["finale-relay", "precision-cross", "hammer-wing"],
+    midDeck: ["precision-cross", "hammer-wing", "support-screen", "finale-relay"],
+    lateDeck: ["finale-relay", "precision-cross", "hammer-wing", "support-screen"],
   }),
 ]);
 
@@ -143,12 +163,14 @@ export const FLEET_ROLE_POOLS = Object.freeze({
     skirmisher: ["nairanFighter", "nairanScout"],
     shooter: ["nairanBomber", "nairanFrigate"],
     heavy: ["nairanFrigate", "nairanBattlecruiser"],
+    torpedo: ["nairanTorpedoShip"],
   }),
   nautolan: Object.freeze({
     light: ["nautolanScout"],
     skirmisher: ["nautolanFighter", "nautolanScout"],
     shooter: ["nautolanBomber", "nautolanFrigate"],
     heavy: ["nautolanFrigate", "nautolanBattlecruiser"],
+    support: ["nautolanSupport"],
   }),
 });
 

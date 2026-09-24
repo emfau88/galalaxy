@@ -95,7 +95,12 @@ class SectorMethods {
   _spawnEncounterEvent(event, card, profile, sector, sectorProgress) {
     const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
     const available = Math.max(0, Math.min(profile.enemyCap, CONFIG.enemyCap) - livingEnemies);
-    const count = Math.min(event.count, available);
+    const roleLimit = event.role === "torpedo"
+      ? (this.enemies.some(enemy => !enemy.dead && enemy.type === "nairanTorpedoShip") ? 0 : 1)
+      : event.role === "support"
+        ? (this.enemies.some(enemy => !enemy.dead && enemy.type === "nautolanSupport") ? 0 : 1)
+        : event.count;
+    const count = Math.min(event.count, available, roleLimit);
     for (let index = 0; index < count; index++) {
       const type = pickRoleEnemy(sector.fleet, event.role, sectorProgress);
       const placement = this._encounterPlacement(event, card, type, index, count, sector.enemySpeedMult ?? 1);

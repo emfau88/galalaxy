@@ -38,7 +38,7 @@ export class Enemy {
     this.specialCharge = null;
     // Boss shields add a readable, authored defensive phase without making
     // ordinary swarm ships visually noisy.
-    this.maxShield = boss ? Math.round(this.maxHp * 0.16) : 0;
+    this.maxShield = boss ? Math.round(this.maxHp * 0.16) : (def.shield ?? 0);
     this.shield = this.maxShield;
     this.shieldFlash = 0;
     this.hitFlash = 0;
@@ -49,6 +49,8 @@ export class Enemy {
     // flyby stores { vx, vy, sineAmp, sineFreq } — null means normal chase behavior
     this.flyby = flyby || null;
     this._flybyT = 0; // local time accumulator for sine drift
+    this.supportTargets = [];
+    this.supportRefreshTimer = 0;
   }
 
   _facingAngle() {
@@ -86,7 +88,7 @@ export class Enemy {
     );
   }
 
-  _queueWeaponShot(angle, { delay = 0, skipWeaponAnimation = false, ...options } = {}) {
+  _queueWeaponShot(angle, { delay = 0, delayIncludesAnimation = false, skipWeaponAnimation = false, ...options } = {}) {
     const weapon = skipWeaponAnimation ? null : this.visual?.weapon;
     if (!weapon) {
       if (delay <= 0) this._spawnWeaponShot(angle, options);
@@ -101,8 +103,9 @@ export class Enemy {
         until: this.game.simTime + weapon.frameCount / weapon.fps,
       };
     }
+    const animationDelay = weapon ? weapon.releaseFrame / weapon.fps : 0;
     this.pendingShots.push({
-      at: this.game.simTime + delay + (weapon ? weapon.releaseFrame / weapon.fps : 0),
+      at: this.game.simTime + (delayIncludesAnimation ? Math.max(0, delay - animationDelay) : delay) + animationDelay,
       angle,
       options,
     });
@@ -173,13 +176,52 @@ export class Enemy {
     }
   }
 
+  _isFullyOnscreen() {
+    return this.x - this.r >= 0 && this.x + this.r <= CONFIG.designW &&
+      this.y - this.r >= 0 && this.y + this.r <= CONFIG.designH;
+  }
+
+  _refreshSupportTargets() {
+    for (const target of this.supportTargets) {
+      if (target.supportSource === this) target.supportSource = null;
+    }
+    const candidates = this.game.enemies
+      .filter(enemy => enemy !== this && !enemy.dead && !enemy.boss && enemy.type !== "nautolanSupport")
+      .filter(enemy => dist2(this.x, this.y, enemy.x, enemy.y) <= 210 ** 2)
+      .sort((a, b) => (b.maxHp - a.maxHp) ||
+        (dist2(this.x, this.y, a.x, a.y) - dist2(this.x, this.y, b.x, b.y)));
+    this.supportTargets = candidates.slice(0, 1);
+    for (const target of this.supportTargets) target.supportSource = this;
+  }
+
+  _updateSupportMovement(dt) {
+    this.supportRefreshTimer -= dt;
+    if (this.supportRefreshTimer <= 0 || this.supportTargets.some(target => target.dead)) {
+      this.supportRefreshTimer = 0.2;
+      this._refreshSupportTargets();
+    }
+    if (!this.supportTargets.length) {
+      this.y = lerp(this.y, 220, clamp(dt * 0.8, 0, 1));
+      return;
+    }
+    const centerX = this.supportTargets.reduce((sum, target) => sum + target.x, 0) / this.supportTargets.length;
+    const centerY = this.supportTargets.reduce((sum, target) => sum + target.y, 0) / this.supportTargets.length;
+    const side = Math.sin(this.wobble) < 0 ? -1 : 1;
+    const targetX = clamp(centerX + side * 76, 58, CONFIG.designW - 58);
+    const targetY = clamp(centerY - 8, 105, 390);
+    this.x = lerp(this.x, targetX, clamp(dt * 1.15, 0, 1));
+    this.y = lerp(this.y, targetY, clamp(dt * 1.15, 0, 1));
+  }
+
   update(dt) {
     const p = this.game.player;
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.shieldFlash = Math.max(0, this.shieldFlash - dt);
     this._releaseQueuedShots();
 
-    if (this.boss) {
+    if (this.type === "nautolanSupport") {
+      this._updateSupportMovement(dt);
+    } else if (this.boss) {
       // Boss enters arena and holds position in upper-middle area
       const holdY = 185;
       const holdX = CONFIG.designW / 2 + Math.sin(this.game.simTime * 0.55 + this.wobble) * 72;
@@ -238,7 +280,24 @@ export class Enemy {
       this._battlecruiserVolley = isKlaedBattlecruiser ? (this._battlecruiserVolley ?? 0) + 1 : 0;
       const firesTorpedo = isKlaedBattlecruiser && this._battlecruiserVolley % 3 === 0;
       this.fireTimer = firesTorpedo ? 4.2 : this.weaponProfile.cooldown;
-      if (firesTorpedo) {
+      if (this.type === "nairanTorpedoShip") {
+        if (!this._isFullyOnscreen()) {
+          this.fireTimer = 0.18;
+        } else {
+          const charge = 1.05;
+          const targetX = p.x;
+          const targetY = p.y;
+          const fixedAngle = Math.atan2(targetY - this.y, targetX - this.x);
+          this.fireTimer = this.weaponProfile.cooldown;
+          this._beginSpecialCharge("torpedo-lock", charge, { targetX, targetY, angle: fixedAngle });
+          this._queueWeaponShot(fixedAngle, {
+            delay: charge,
+            delayIncludesAnimation: true,
+            facingAngle: fixedAngle,
+            visualKey: "nairanTorpedoShip",
+          });
+        }
+      } else if (firesTorpedo) {
         const charge = 0.46;
         this._beginSpecialCharge("torpedo", charge);
         this._queueWeaponShot(ang, { delay: charge, visualKey: "klaedTorpedo", skipWeaponAnimation: true });
@@ -272,6 +331,11 @@ export class Enemy {
 
   damage(amount) {
     if (this.dead) return;
+    const support = this.supportSource;
+    if (support && !support.dead && support.supportTargets.includes(this) &&
+        dist2(this.x, this.y, support.x, support.y) <= 210 ** 2) {
+      amount *= 0.55;
+    }
     const absorbed = Math.min(this.shield, amount);
     this.shield -= absorbed;
     if (absorbed > 0) this.shieldFlash = 0.72;
@@ -284,6 +348,12 @@ export class Enemy {
   kill() {
     if (this.dead) return;
     this.dead = true;
+    if (this.type === "nautolanSupport") {
+      for (const target of this.supportTargets) {
+        if (target.supportSource === this) target.supportSource = null;
+      }
+      this.supportTargets = [];
+    }
     this.game.spawnEnemyDestruction(this);
     this.game.score += this.score;
     this.game.kills++;
@@ -370,6 +440,34 @@ export class Enemy {
         ctx.moveTo(tx, ty - 13); ctx.lineTo(tx, ty - 5);
         ctx.moveTo(tx, ty + 5); ctx.lineTo(tx, ty + 13);
         ctx.stroke();
+      } else if (this.specialCharge.kind === "torpedo-lock") {
+        const length = CONFIG.designH * 1.05;
+        const dirX = Math.cos(this.specialCharge.angle);
+        const dirY = Math.sin(this.specialCharge.angle);
+        const sideX = -dirY * 18;
+        const sideY = dirX * 18;
+        ctx.globalAlpha = 0.12 + progress * 0.18;
+        ctx.fillStyle = "#d56cff";
+        ctx.beginPath();
+        ctx.moveTo(sideX, sideY);
+        ctx.lineTo(dirX * length + sideX, dirY * length + sideY);
+        ctx.lineTo(dirX * length - sideX, dirY * length - sideY);
+        ctx.lineTo(-sideX, -sideY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.5 + progress * 0.35;
+        ctx.strokeStyle = "#f1b1ff";
+        ctx.shadowColor = "#b84cff";
+        ctx.shadowBlur = 7;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([7, 6]);
+        for (const sign of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(sideX * sign, sideY * sign);
+          ctx.lineTo(dirX * length + sideX * sign, dirY * length + sideY * sign);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
       } else {
         ctx.globalAlpha = 0.35 + progress * 0.45;
         ctx.fillStyle = "#ffb06a";
@@ -453,7 +551,7 @@ export class Enemy {
 }
 
 Enemy._canFire = function(type) {
-  return /bomber|frigate|battlecruiser|dreadnought/i.test(type);
+  return /bomber|frigate|battlecruiser|dreadnought|torpedoShip/i.test(type);
 };
 
 Enemy._projVisual = function(type, boss) {
@@ -465,6 +563,7 @@ Enemy._projVisual = function(type, boss) {
   // Per-class mapping (suffix after fleet prefix)
   const cls = type.replace(/^nairan|^nautolan/, "") || type; // bare klaed types have no prefix
   if (type.startsWith("nairan")) {
+    if (cls === "TorpedoShip")  return "nairanTorpedoShip";
     if (cls === "Bomber")       return "nairanBomber";
     if (cls === "Frigate")      return "nairanFrigate";
     if (cls === "Battlecruiser" || cls === "Dreadnought") return "nairanBattlecruiser";
@@ -498,6 +597,7 @@ Enemy.defs = {
   nairanFrigate:      { hp: 130, speed: 50,  r: 34, damage: 26, score: 140, img: "nairanFrigate" },
   nairanBattlecruiser:{ hp: 210, speed: 38,  r: 42, damage: 32, score: 240, img: "nairanBattlecruiser" },
   nairanDreadnought:  { hp: 300, speed: 30,  r: 52, damage: 36, score: 480, img: "nairanDreadnought" },
+  nairanTorpedoShip:  { hp: 118, speed: 44,  r: 32, damage: 24, score: 155, img: "nairanTorpedoShip", shield: 28 },
 
   // Nautolan Fleet 3 — slower, tankier, heavier damage
   nautolanScout:        { hp: 32,  speed: 90,  r: 19, damage: 13, score: 30,  img: "nautolanScout" },
@@ -505,5 +605,6 @@ Enemy.defs = {
   nautolanBomber:       { hp: 110, speed: 46,  r: 30, damage: 25, score: 115, img: "nautolanBomber" },
   nautolanFrigate:      { hp: 160, speed: 38,  r: 36, damage: 28, score: 165, img: "nautolanFrigate" },
   nautolanBattlecruiser:{ hp: 250, speed: 28,  r: 44, damage: 34, score: 280, img: "nautolanBattlecruiser" },
-  nautolanDreadnought:  { hp: 360, speed: 22,  r: 54, damage: 40, score: 560, img: "nautolanDreadnought" }
+  nautolanDreadnought:  { hp: 360, speed: 22,  r: 54, damage: 40, score: 560, img: "nautolanDreadnought" },
+  nautolanSupport:      { hp: 72,  speed: 48,  r: 29, damage: 12, score: 135, img: "nautolanSupport" }
 };

@@ -32,7 +32,7 @@ Bulk-Nummern oder Inhalte dürfen nicht stillschweigend umgedeutet werden.
 | Bulk 1 | HUD und ruhiger Einstieg | TEILWEISE |
 | Bulk 2 | Begegnungsrhythmus und Sektorprofile | OFFEN |
 | Bulk 3 | Sektorbezogene Map-Identität | TEILWEISE |
-| Bulk 4 | Torpedo- und Support-Schiffe | OFFEN |
+| Bulk 4 | Torpedo- und Support-Schiffe | TEILWEISE |
 | Bulk 5 | Pickups und Build-Progression | TEILWEISE |
 | Bulk 6 | Individuelle Bosse und echtes Finale | OFFEN |
 | Bulk 7 | Professioneller Polish und Wiederspielwert | TEILWEISE |
@@ -150,34 +150,34 @@ Plan steht bei jedem Bulk.
 ## Bulk C – Torpedo- und Support-Schiffe
 
 **Priorität:** P1
-**Status:** OFFEN
+**Status:** TEILWEISE
 **Bezug:** ursprünglicher Bulk 4
 
 ### Nairan Torpedo Ship
 
-- [ ] Vorhandene Basis-, Engine-, Weapon-, Shield- und Destruction-Assets registrieren.
-- [ ] Sichtbares Ziel-Lock oder einen Zielkorridor anzeigen.
-- [ ] Zielrichtung vor dem Abschuss fixieren.
-- [ ] Verständliche Verzögerung zwischen Warnung und Abschuss einbauen.
-- [ ] Seitliches Ausweichen als klaren Gegenzug ermöglichen.
-- [ ] In der Einführung maximal ein Torpedoschiff gleichzeitig zulassen.
-- [ ] Keine Torpedos aus unsichtbaren Bildschirmbereichen abfeuern.
+- [x] Vorhandene Basis-, Engine-, Weapon-, Shield- und Destruction-Assets registrieren.
+- [x] Sichtbares Ziel-Lock oder einen Zielkorridor anzeigen.
+- [x] Zielrichtung vor dem Abschuss fixieren.
+- [x] Verständliche Verzögerung zwischen Warnung und Abschuss einbauen.
+- [x] Seitliches Ausweichen als klaren Gegenzug ermöglichen.
+- [x] In der Einführung maximal ein Torpedoschiff gleichzeitig zulassen.
+- [x] Keine Torpedos aus unsichtbaren Bildschirmbereichen abfeuern.
 
 ### Nautolan Support Ship
 
-- [ ] Vorhandene Basis-, Engine-, Weapon-, Shield- und Destruction-Assets registrieren.
-- [ ] Maximal zwei nahe Gegner schützen oder verstärken.
-- [ ] Sichtbare Verbindung zwischen Support und Zielschiffen darstellen.
-- [ ] Support selbst relativ verwundbar halten.
-- [ ] Wirkung sofort beenden, wenn der Support zerstört wird.
-- [ ] Zielpriorisierung trotz Auto-Fire über Positionierung ermöglichen.
+- [x] Vorhandene Basis-, Engine- und Destruction-Assets registrieren; das Quellpaket enthält für den Support keine Weapon- oder Shield-PNGs.
+- [x] Genau einen nahen, möglichst robusten Gegner schützen, damit die taktische Beziehung sofort lesbar bleibt.
+- [x] Sichtbare Verbindung zwischen Support und Zielschiffen darstellen.
+- [x] Support selbst relativ verwundbar halten.
+- [x] Wirkung sofort beenden, wenn der Support zerstört wird.
+- [x] Zielpriorisierung trotz Auto-Fire über Positionierung ermöglichen.
 
 ### Abnahme Bulk C
 
 - [ ] Spieler können nach einer Begegnung den Gegenzug beider Rollen erklären.
-- [ ] Torpedo- und Supporteffekte sind auch auf kleinen Displays lesbar.
-- [ ] Kein unsichtbarer Buff und kein unfairer Offscreen-Angriff tritt auf.
-- [ ] Eigene QA-Szenen und automatisierte Tests für beide Rollen bestehen.
+- [x] Torpedo- und Supporteffekte sind auch auf kleinen Displays lesbar.
+- [x] Kein unsichtbarer Buff und kein unfairer Offscreen-Angriff tritt auf.
+- [x] Eigene QA-Szenen und automatisierte Tests für beide Rollen bestehen.
 
 ---
 
@@ -384,6 +384,7 @@ Plan steht bei jedem Bulk.
 
 - [x] Sporadischen Timing-Ausreißer der Sektor-Cleanup-Prüfung reproduziert und den Test deterministisch gemacht.
 - [x] Isolierten WASD-Kandidaten in einem normalen Desktop-Browser manuell abgenommen; der eingebettete Codex-Browser reicht physische WASD-Eingaben nicht zuverlässig weiter.
+- [x] Fehlende Support-Weapon-/Shield-PNGs im Quellpaket verifiziert; Schutzwirkung daher sichtbar prozedural statt mit sachfremden Torpedo-Layern umgesetzt.
 - [ ] Lokalen Entwicklungsserver nach manuellen Tests sauber beenden.
 
 ## Änderungsprotokoll
@@ -394,3 +395,4 @@ Plan steht bei jedem Bulk.
 - **24.09.2026:** WASD-, Diagnose- und die damit verbundenen Start-/Ladepfadänderungen nach manueller Regression vollständig zurückgenommen. Maus/Touch sind wieder der verbindliche Steuerungsstand; WASD bleibt offen und muss später isoliert neu umgesetzt werden.
 - **24.09.2026:** Neuen WASD-Kandidaten strikt opt-in hinter `?controls=wasd` ergänzt. Nur Eingabe und Spielerbewegung wurden geändert; Start-, Fokus-, HTML- und Ladepfade blieben unangetastet. Automatische Tastatur-, Maus-, Pause-, Standardmodus- und Vollrun-Prüfungen bestanden; manuelle Freigabe bleibt offen.
 - **24.09.2026:** WASD in einem externen Desktop-Browser manuell bestätigt und als Standard aktiviert. `?controls=pointer` bleibt als sicherer Rückfallmodus; der Codex-Browser selbst fängt physische WASD-Eingaben ab.
+- **24.09.2026:** Bulk C technisch umgesetzt: Nairan-Torpedoschiff mit fixiertem 1,05-s-Zielkorridor, Nautolan-Support mit genau einem sichtbaren Schutzlink, zwei neue Encounter-Karten und separate Kleinbild-QA-Szenen. Technische Abnahme bestanden; menschliche Erklärung des Gegenzugs bleibt offen.

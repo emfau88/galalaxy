@@ -112,7 +112,7 @@ try {
       })),
     };
   });
-  assert.equal(report.encounterDefinitions.cardCount, 7);
+  assert.equal(report.encounterDefinitions.cardCount, 9);
   assert.equal(report.encounterDefinitions.durationsValid, true);
   assert.equal(report.encounterDefinitions.corridorsPresent, true);
   assert.equal(new Set(report.encounterDefinitions.identities).size, 4);
@@ -312,6 +312,56 @@ try {
   }
   assert.deepEqual(report.encounterScenes.map(scene => scene.wave),
     ["single-file", "side-sweep", "anchor-corridor", "finale-relay"]);
+
+  report.enemyRoles = {};
+  await page.goto(`${base}/?test=enemy-role&role=torpedo`);
+  await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+  report.enemyRoles.torpedo = await page.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    const enemy = g.enemies.find(candidate => candidate.type === "nairanTorpedoShip");
+    enemy.x = 210;
+    enemy.y = 175;
+    enemy.pendingShots = [];
+    enemy.specialCharge = null;
+    enemy.fireTimer = 0;
+    enemy.update(0.01);
+    g.update = () => {};
+    const keys = ["nairanTorpedoShip", "nairanTorpedoShipEngine", "nairanTorpedoShipWeapon",
+      "nairanTorpedoShipShield", "nairanTorpedoShipDestruction", "nairanTorpedo"];
+    return {
+      charge: enemy.specialCharge?.kind,
+      warningSeconds: enemy.specialCharge?.duration,
+      queuedShots: enemy.pendingShots.length,
+      fullyVisible: enemy._isFullyOnscreen(),
+      assetsLoaded: keys.every(key => Boolean(g.loader.get(key))),
+    };
+  });
+  assert.deepEqual(report.enemyRoles.torpedo, {
+    charge: "torpedo-lock", warningSeconds: 1.05, queuedShots: 1, fullyVisible: true, assetsLoaded: true,
+  });
+  await page.setViewportSize({ width: 320, height: 740 });
+  await screenshot("enemy-role-torpedo-small");
+
+  await page.goto(`${base}/?test=enemy-role&role=support`);
+  await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+  report.enemyRoles.support = await page.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    const support = g.enemies.find(candidate => candidate.type === "nautolanSupport");
+    support._refreshSupportTargets();
+    g.update = () => {};
+    return {
+      protectedTargets: support.supportTargets.length,
+      visibleSources: support.supportTargets.every(target => target.supportSource === support),
+      vulnerable: support.maxHp < Math.min(...support.supportTargets.map(target => target.maxHp)),
+      assetsLoaded: ["nautolanSupport", "nautolanSupportEngine", "nautolanSupportDestruction"]
+        .every(key => Boolean(g.loader.get(key))),
+    };
+  });
+  assert.deepEqual(report.enemyRoles.support, {
+    protectedTargets: 1, visibleSources: true, vulnerable: true, assetsLoaded: true,
+  });
+  await screenshot("enemy-role-support-small");
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto(`${base}/?test=hud-layout`);
   await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
