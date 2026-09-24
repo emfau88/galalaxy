@@ -47,6 +47,15 @@ class SectorMethods {
     this._drainPendingEncounterEvents(profile, sector, sectorProgress);
     this._updatePursuitPressure(profile, sector, sectorProgress);
 
+    if (director.phase === "elite-prep") {
+      const card = WAVE_CARDS[director.waveId];
+      const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
+      if (!card || livingEnemies <= card.entryCap) {
+        this._activateEncounterWave(card, profile, sectorProgress);
+      }
+      return;
+    }
+
     if (director.phase === "recovery") {
       if (director.timer <= 0) this._startEncounterWave(profile, sectorProgress, sectorElapsed);
       return;
@@ -70,7 +79,29 @@ class SectorMethods {
 
   _startEncounterWave(profile, sectorProgress, sectorElapsed) {
     const director = this.encounterDirector;
+    if (director.pendingEvents.length) {
+      director.timer = 0.2;
+      return;
+    }
     const card = pickWaveCard(profile, sectorProgress, sectorElapsed, director.lastWaveId);
+    const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
+    if (card.elite && livingEnemies > card.entryCap) {
+      director.phase = "elite-prep";
+      director.waveId = card.id;
+      director.phaseDuration = 0;
+      director.waveElapsed = 0;
+      director.eventIndex = 0;
+      return;
+    }
+    this._activateEncounterWave(card, profile, sectorProgress);
+  }
+
+  _activateEncounterWave(card, profile, sectorProgress) {
+    if (!card) {
+      this._startEncounterRecovery(profile);
+      return;
+    }
+    const director = this.encounterDirector;
     director.phase = "active";
     director.waveId = card.id;
     director.lastWaveId = card.id;
@@ -125,6 +156,9 @@ class SectorMethods {
 
   _updatePursuitPressure(profile, sector, sectorProgress) {
     const director = this.encounterDirector;
+    const activeCard = WAVE_CARDS[director.waveId];
+    if (activeCard?.suppressPressure &&
+        (director.phase === "elite-prep" || director.phase === "active")) return;
     if (director.pressureTimer > 0 || director.pendingEvents.length) return;
 
     const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
@@ -135,22 +169,72 @@ class SectorMethods {
       return;
     }
 
+    const pressureIndex = director.pressureCount;
+    const pursuitSlot = (pressureIndex * 7) % 10;
+    const activePursuers = this.enemies.filter(enemy =>
+      !enemy.dead && enemy.encounterId === "pursuit-pressure").length;
+    const usesPursuit = pursuitSlot < profile.pursuitChance * 10 &&
+      activePursuers < profile.pursuitCap;
     const role = pickPressureRole(profile, sectorProgress);
     const type = pickRoleEnemy(sector.encounterFleet || sector.fleet, role, sectorProgress);
     const teachingLock = this.currentSectorIndex === 0 && sectorProgress < 15 / sector.duration
       ? this.simTime + Math.max(0, 15 - sectorProgress * sector.duration)
       : 0;
-    this.spawnEnemy(type, false, sector.enemySpeedMult ?? 1, null, {
+    const placement = usesPursuit
+      ? this._pursuitPlacement(pressureIndex)
+      : this._lanePressurePlacement(type, pressureIndex, sector.enemySpeedMult ?? 1);
+    this.spawnEnemy(type, false, sector.enemySpeedMult ?? 1, placement.flyby, {
+      x: placement.x,
+      y: placement.y,
       fireLockedUntil: teachingLock,
-      encounterId: "pursuit-pressure",
+      encounterId: usesPursuit ? "pursuit-pressure" : "lane-pressure",
     });
     director.pressureCount++;
     director.pressureTimer = pressureIntervalFor(profile);
   }
 
+  _pursuitPlacement(index) {
+    // Active hunters only enter from the forward and upper-side arcs. Rear
+    // spawns made the player feel surrounded before a threat was readable.
+    const entries = [
+      { x: 82, y: -52 },
+      { x: 210, y: -52 },
+      { x: 338, y: -52 },
+      { x: -52, y: 178 },
+      { x: CONFIG.designW + 52, y: 238 },
+    ];
+    return { ...entries[index % entries.length], flyby: null };
+  }
+
+  _lanePressurePlacement(type, index, speedMult) {
+    const baseSpeed = Enemy.defs[type]?.speed ?? 90;
+    const flightSpeed = baseSpeed * speedMult * 1.04;
+    const pattern = index % 5;
+    if (pattern === 1 || pattern === 4) {
+      const fromLeft = pattern === 1;
+      return {
+        x: fromLeft ? -54 : CONFIG.designW + 54,
+        y: pattern === 1 ? 205 : 285,
+        flyby: {
+          vx: (fromLeft ? 1 : -1) * flightSpeed * 1.16,
+          vy: 18,
+          sineAmp: 6,
+          sineFreq: 1.5,
+        },
+      };
+    }
+    const laneXs = [72, 210, 348];
+    return {
+      x: laneXs[pattern % laneXs.length],
+      y: -52,
+      flyby: { vx: 0, vy: flightSpeed, sineAmp: 0, sineFreq: 0 },
+    };
+  }
+
   _spawnEncounterEvent(event, card, profile, sector, sectorProgress, requestedCount = event.count) {
     const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
-    const available = Math.max(0, Math.min(profile.enemyCap, CONFIG.enemyCap) - livingEnemies);
+    const eventEnemyCap = Math.min(card.enemyCap ?? profile.enemyCap, profile.enemyCap, CONFIG.enemyCap);
+    const available = Math.max(0, eventEnemyCap - livingEnemies);
     const roleLimit = event.role === "torpedo"
       ? (this.enemies.some(enemy => !enemy.dead && enemy.type === "nairanTorpedoShip") ? 0 : 1)
       : event.role === "support"
@@ -372,6 +456,7 @@ class SectorMethods {
     const enemy = new Enemy(this, type, x, y, boss, speedMult, flyby);
     enemy.fireLockedUntil = options.fireLockedUntil ?? 0;
     enemy.encounterId = options.encounterId ?? null;
+    if (enemy.encounterId === "pursuit-pressure") enemy.pursuitUntil = this.simTime + 6;
     this.enemies.push(enemy);
     this.runStats?.enemySpawn?.(this, enemy, options.encounterId ?? (boss ? "boss" : "untracked"));
     if (boss) this.bossEntrance(x, y);

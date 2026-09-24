@@ -161,7 +161,7 @@ export const SECTORS = [
     duration: 105,
     fleet: "nautolan",
     tint: [30, 110, 80],
-    scoreMult: 1.12,
+    scoreMult: 1.4,
     enemySpeedMult: 1.0
   },
   {
@@ -173,7 +173,7 @@ export const SECTORS = [
     encounterFleet: "void",
     bossType: "voidSovereign",
     tint: [140, 30, 30],
-    scoreMult: 1.2,
+    scoreMult: 1.75,
     enemySpeedMult: 1.0
   }
 ];

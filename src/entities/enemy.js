@@ -387,6 +387,22 @@ export class Enemy {
     this.shieldFlash = Math.max(0, this.shieldFlash - dt);
     this._releaseQueuedShots();
 
+    if (this.encounterId === "pursuit-pressure" && !this.flyby &&
+        (this.game.simTime >= this.pursuitUntil || this.y > p.y + 48)) {
+      // Hunters get one readable interception pass. Once they have crossed
+      // behind the player or tracked for six seconds they disengage instead
+      // of circling back into a permanent homing pile.
+      const side = this.x < p.x ? -1 : 1;
+      this.encounterId = "pursuit-exit";
+      this.flyby = {
+        vx: side * this.speed * 0.45,
+        vy: this.speed * 1.05,
+        sineAmp: 0,
+        sineFreq: 0,
+      };
+      this._flybyT = 0;
+    }
+
     if (this.type === "nautolanSupport") {
       this._updateSupportMovement(dt);
     } else if (this.boss) {
@@ -868,7 +884,7 @@ Enemy.defs = {
   nairanFrigate:      { hp: 130, speed: 50,  r: 34, damage: 26, score: 140, img: "nairanFrigate" },
   nairanBattlecruiser:{ hp: 210, speed: 38,  r: 42, damage: 32, score: 240, img: "nairanBattlecruiser" },
   nairanDreadnought:  { hp: 300, speed: 30,  r: 52, damage: 36, score: 480, img: "nairanDreadnought" },
-  nairanTorpedoShip:  { hp: 118, speed: 44,  r: 32, damage: 24, score: 155, img: "nairanTorpedoShip", shield: 28 },
+  nairanTorpedoShip:  { hp: 158, speed: 44,  r: 32, damage: 24, score: 185, img: "nairanTorpedoShip", shield: 44 },
 
   // Nautolan Fleet 3 — slower, tankier, heavier damage
   nautolanScout:        { hp: 32,  speed: 90,  r: 19, damage: 13, score: 30,  img: "nautolanScout" },
@@ -877,7 +893,7 @@ Enemy.defs = {
   nautolanFrigate:      { hp: 160, speed: 38,  r: 36, damage: 28, score: 165, img: "nautolanFrigate" },
   nautolanBattlecruiser:{ hp: 250, speed: 28,  r: 44, damage: 34, score: 280, img: "nautolanBattlecruiser" },
   nautolanDreadnought:  { hp: 360, speed: 22,  r: 54, damage: 40, score: 560, img: "nautolanDreadnought" },
-  nautolanSupport:      { hp: 72,  speed: 48,  r: 29, damage: 12, score: 135, img: "nautolanSupport" },
+  nautolanSupport:      { hp: 84,  speed: 48,  r: 29, damage: 12, score: 145, img: "nautolanSupport" },
 
   // The finale uses the Nautolan capital-ship layers as a base, then adds a
   // dedicated profile, larger silhouette and Void aura in the renderer.

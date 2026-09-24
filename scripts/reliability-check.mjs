@@ -223,7 +223,7 @@ function testSectorScoreScaling() {
   game.currentSectorIndex = 3;
   const enemy = new Enemy(game, "nairanBattlecruiser", 210, 160);
   assert.equal(enemy.baseScore, 240, "Enemy retains its progression and drop basis");
-  assert.equal(enemy.score, 288, "Sector-IV execution earns the authored 1.2x score reward");
+  assert.equal(enemy.score, 420, "Sector-IV execution earns the authored 1.75x score reward");
 
   let droppedXp = 0;
   game.dropXp = (_x, _y, value) => { droppedXp = value; };
@@ -378,6 +378,16 @@ function testEncounterDirector() {
   assert.equal(new Set(SECTOR_ENCOUNTER_PROFILES.map(profile => profile.identity)).size, 4,
     "Every sector has a distinct gameplay identity");
 
+  const eliteCards = [WAVE_CARDS["torpedo-lock"], WAVE_CARDS["support-screen"]];
+  assert.ok(eliteCards.every(card => card.elite && card.suppressPressure),
+    "Torpedo and support cards reserve isolated elite-combat windows");
+  assert.ok(eliteCards.every(card => card.entryCap === 2 && card.enemyCap === 4),
+    "Elite encounters wait for a clear arena and stay inside a four-enemy budget");
+  assert.equal(WAVE_CARDS["support-screen"].events
+    .filter(event => event.role === "heavy")
+    .reduce((sum, event) => sum + event.count, 0), 1,
+  "The support encounter contains only one heavy protected target");
+
   const frontier = simulateEncounterSector(0, 45);
   assert.ok(Math.abs(frontier.events[0].time - 1.2) < 0.06, "Sector I begins after a 1.2s orientation beat");
   const teachingWindow = frontier.events.filter(event => event.time < 15);
@@ -413,6 +423,7 @@ function testEncounterDirector() {
   }
 
   const historicalModeledCounts = [79.8, 143.1, 188.0, 221.9];
+  const recoveryBands = [[0.80, 0.90], [0.80, 0.90], [0.65, 0.75], [0.70, 0.80]];
   const fullSectors = SECTORS.map((sector, sectorIndex) =>
     simulateEncounterSector(sectorIndex, sector.duration));
   let modeledRunScore = Math.floor(SECTORS.reduce((sum, sector) => sum + sector.duration, 0) * 2.4);
@@ -420,14 +431,26 @@ function testEncounterDirector() {
     const simulation = fullSectors[sectorIndex];
     const sector = SECTORS[sectorIndex];
     const recoveryRatio = simulation.events.length / historicalModeledCounts[sectorIndex];
-    assert.ok(recoveryRatio >= 0.80 && recoveryRatio <= 0.90,
-      `Sector ${sectorIndex + 1} restores roughly 85% of its historical modeled density`);
+    const [minimumRecovery, maximumRecovery] = recoveryBands[sectorIndex];
+    assert.ok(recoveryRatio >= minimumRecovery && recoveryRatio <= maximumRecovery,
+      `Sector ${sectorIndex + 1} stays inside its post-playtest density band`);
     const pursuers = simulation.events.filter(event =>
       event.options.encounterId === "pursuit-pressure");
-    assert.ok(pursuers.length / simulation.events.length >= 0.55,
-      `Sector ${sectorIndex + 1} keeps a majority stream of active pursuit enemies`);
+    assert.ok(pursuers.length / simulation.events.length >= 0.20 &&
+      pursuers.length / simulation.events.length <= 0.45,
+    `Sector ${sectorIndex + 1} keeps pursuit pressure present but subordinate`);
     assert.ok(pursuers.every(event => event.flyby === null),
       "Pressure enemies use active player pursuit rather than flyby movement");
+    assert.ok(pursuers.every(event => event.options.y <= 238),
+      "Active pursuers never spawn behind the player");
+    if (sectorIndex >= 2) {
+      const lanePressure = simulation.events.filter(event =>
+        event.options.encounterId === "lane-pressure");
+      assert.ok(lanePressure.length > pursuers.length * 2,
+        `Sector ${sectorIndex + 1} favors readable lanes over pursuit swarms`);
+      assert.ok(pursuers.every(event => !/Battlecruiser/.test(event.type)),
+        `Sector ${sectorIndex + 1} keeps heavy homing ships out of the pursuit stream`);
+    }
 
     modeledRunScore += simulation.events.reduce((score, event) =>
       score + Math.round(Enemy.defs[event.type].score * sector.scoreMult), 0);
@@ -455,6 +478,37 @@ function testEncounterDirector() {
   queuedGame._drainPendingEncounterEvents(SECTOR_ENCOUNTER_PROFILES[0], SECTORS[0], 0.5);
   assert.equal(queuedGame.encounterDirector.pendingEvents.length, 0,
     "The complete authored event spawns when capacity returns");
+
+  const eliteGame = createGame();
+  eliteGame.currentSectorIndex = 1;
+  eliteGame.sectorTimer = SECTORS[1].duration * 0.5;
+  eliteGame.encounterDirector = {
+    sectorIndex: 1,
+    phase: "elite-prep",
+    waveId: "torpedo-lock",
+    lastWaveId: null,
+    timer: 0,
+    phaseDuration: 0,
+    waveElapsed: 0,
+    eventIndex: 0,
+    waveCount: 0,
+    pressureCount: 0,
+    pressureTimer: 0,
+    pendingEvents: [],
+  };
+  eliteGame.enemies = Array.from({ length: 5 }, () => ({ dead: false, type: "nairanFighter" }));
+  eliteGame.updateSpawning(0.1);
+  assert.equal(eliteGame.enemies.length, 5,
+    "Elite preparation neither adds a wave nor background pressure to a crowded arena");
+  assert.equal(eliteGame.encounterDirector.phase, "elite-prep",
+    "The elite encounter waits until the arena has visibly thinned out");
+  eliteGame.enemies.slice(0, 3).forEach(enemy => { enemy.dead = true; });
+  eliteGame.updateSpawning(0.1);
+  assert.equal(eliteGame.encounterDirector.phase, "active",
+    "The elite encounter begins as soon as only two prior enemies remain");
+  assert.equal(eliteGame.enemies.filter(enemy => !enemy.dead).length, 3,
+    "The torpedo introduction starts as a compact three-threat moment");
+  return modeledRunScore;
 }
 
 function testEncounterProjectileBudget() {
@@ -467,6 +521,22 @@ function testEncounterProjectileBudget() {
     "Encounter projectile budget blocks excess hostile fire");
   assert.ok(game.spawnProjectile(0, 0, 0, 100, 1, "player", "laser"),
     "Hostile projectile budget never suppresses player fire");
+}
+
+function testPursuitDisengage() {
+  const game = createGame();
+  game.currentSectorIndex = 2;
+  const enemy = game.spawnEnemy("nautolanFighter", false, 1, null, {
+    x: 90,
+    y: game.player.y + 60,
+    encounterId: "pursuit-pressure",
+  });
+  enemy.fireTimer = Number.MAX_VALUE;
+  enemy.update(0.01);
+  assert.equal(enemy.encounterId, "pursuit-exit",
+    "A hunter disengages after crossing behind the player");
+  assert.ok(enemy.flyby?.vy > 0,
+    "A disengaged hunter exits forward instead of homing back toward the player");
 }
 
 function testNairanPrecisionTelegraph() {
@@ -492,6 +562,9 @@ function testNairanTorpedoRole() {
   );
   assert.equal(spawnGame.enemies.filter(enemy => enemy.type === "nairanTorpedoShip").length, 1,
     "The torpedo introduction permits only one torpedo ship at a time");
+  const stagedTorpedo = spawnGame.enemies.find(enemy => enemy.type === "nairanTorpedoShip");
+  assert.equal(stagedTorpedo.maxHp, 158, "The elite torpedo ship has enough hull to anchor its encounter");
+  assert.equal(stagedTorpedo.maxShield, 44, "The elite torpedo ship has a visible defensive layer");
 
   const game = createGame();
   game.player.x = 210;
@@ -526,6 +599,7 @@ function testNautolanSupportRole() {
     new Enemy(game, "nautolanFighter", 300, 235),
   ];
   game.enemies = [support, ...targets];
+  assert.equal(support.maxHp, 84, "The elite support ship survives long enough to establish its link");
   support._refreshSupportTargets();
   assert.equal(support.supportTargets.length, 1, "A support ship protects exactly one nearby ally");
   assert.ok(support.supportTargets.every(target => target.supportSource === support),
@@ -663,12 +737,13 @@ testCombatPickups();
 testSectorScoreScaling();
 testOptInKeyboardMovement();
 testUpgradeCameraShake();
-testEncounterDirector();
+const modeledRunScore = testEncounterDirector();
 testEncounterProjectileBudget();
+testPursuitDisengage();
 testNairanPrecisionTelegraph();
 testNairanTorpedoRole();
 testNautolanSupportRole();
 testDistinctBossProfiles();
 testKongregateStats();
 testSectorEnvironments();
-console.log("Reliability checks passed");
+console.log(`Reliability checks passed (modeled full-clear score: ${modeledRunScore})`);

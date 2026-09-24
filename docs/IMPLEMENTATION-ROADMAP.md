@@ -162,6 +162,8 @@ Plan steht bei jedem Bulk.
 - [x] Seitliches Ausweichen als klaren Gegenzug ermöglichen.
 - [x] In der Einführung maximal ein Torpedoschiff gleichzeitig zulassen.
 - [x] Keine Torpedos aus unsichtbaren Bildschirmbereichen abfeuern.
+- [x] Torpedo-Begegnung als neunsekündiges Elite-Fenster mit höchstens zwei Altgegnern und vier Gegnern insgesamt inszenieren.
+- [x] Hülle und Schild des Torpedoschiffs anheben, damit der Zielkorridor im Kampf zuverlässig wahrnehmbar wird.
 
 ### Nautolan Support Ship
 
@@ -171,6 +173,8 @@ Plan steht bei jedem Bulk.
 - [x] Support selbst relativ verwundbar halten.
 - [x] Wirkung sofort beenden, wenn der Support zerstört wird.
 - [x] Zielpriorisierung trotz Auto-Fire über Positionierung ermöglichen.
+- [x] Support-Begegnung auf Support, einen robusten Schutzpartner und einen Schützen begrenzen.
+- [x] Normalen Verstärkungsstrom während der neunsekündigen Elite-Begegnung pausieren.
 
 ### Abnahme Bulk C
 
@@ -239,9 +243,12 @@ Plan steht bei jedem Bulk.
 **Bezug:** Spielerrückmeldung nach Bulk D: nur rund 20.000 statt knapp 60.000 Punkte, zu wenig Action
 
 - [x] Historischen Spawner vor `e0ca339` als messbare Referenz auswerten.
-- [x] Rund 85 % der historischen modellierten Spawnmenge wiederherstellen.
+- [x] Sektor I und II auf rund 85 % der historischen modellierten Spawnmenge bringen.
+- [x] Sektor III und IV nach menschlichem Test auf rund 69 % beziehungsweise 75 % entschärfen.
 - [x] Kuratierte Formationen und sektorbezogene Rollen erhalten.
-- [x] Einen mehrheitlichen Strom aktiv jagender Gegner ergänzen.
+- [x] Aktive Jäger als begrenzten Anteil ergänzen; Dauerstrom überwiegend in lesbare Lanes führen.
+- [x] Aktive Jäger ausschließlich von vorn und aus oberen Seitenbereichen starten lassen.
+- [x] Schwere Homing-Gegner aus dem kontinuierlichen Verfolgerstrom entfernen.
 - [x] Gegner- und Projektilbudgets von Sektor I bis IV deutlich eskalieren.
 - [x] Durch volle Gegnerbudgets blockierte Encounter-Spawns kontrolliert nachholen.
 - [x] Rund 60.000 Punkte für einen starken vollständigen Clear rechnerisch ermöglichen.
@@ -252,8 +259,9 @@ Plan steht bei jedem Bulk.
 
 ### Abnahme Bulk D.5
 
-- [x] Modellierte Dichte liegt pro Sektor zwischen 80 und 90 % der historischen Referenz.
-- [x] Aktive Verfolger stellen in jedem Sektor mehr als die Hälfte der regulären Spawns.
+- [x] Sektor I/II liegen bei 80–90 %, Sektor III bei 65–75 % und Sektor IV bei 70–80 % der historischen Referenz.
+- [x] Aktive Verfolger bleiben in jedem Sektor zwischen 20 und 45 % der regulären Spawns.
+- [x] Sektor III/IV enthalten mindestens doppelt so viele Lane-Verstärkungen wie Dauerverfolger.
 - [x] Modellierter perfekter Clear liegt im Zielkorridor 58.000–63.000 Punkte.
 - [ ] Guter menschlicher Run erreicht etwa 55.000–65.000 Punkte, ohne unlesbar oder unfair zu werden.
 
@@ -425,3 +433,5 @@ Plan steht bei jedem Bulk.
 - **24.09.2026:** Bulk C technisch umgesetzt: Nairan-Torpedoschiff mit fixiertem 1,05-s-Zielkorridor, Nautolan-Support mit genau einem sichtbaren Schutzlink, zwei neue Encounter-Karten und separate Kleinbild-QA-Szenen. Technische Abnahme bestanden; menschliche Erklärung des Gegenzugs bleibt offen.
 - **24.09.2026:** Bulk D abgeschlossen: hochwertige ImageGen-Void-Core-Landmarke, zurückhaltende Sektor-4-Randatmosphäre, vier getrennte Bossprofile und Bewegungen, Nairan-Ziel-Lock/Sweep, Nautolan-Korridor/Supportphase sowie dreiphasiger Void Sovereign. Boss-QA und kompletter Browser-Vollrun bestanden; Details unter `docs/qa/bulk-d-2026-09-24/bulk-d-report.md`.
 - **24.09.2026:** Balance-Recovery D.5 technisch umgesetzt: 80–90 % der historischen Spawnmenge pro Sektor, mehrheitlich aktive Verfolger, gestaffelte Budgets, nachgeholte Encounter-Spawns und ein modelliertes Punktepotenzial von rund 60.000. Menschliche Vollrun-Abnahme bleibt offen; Details unter `docs/qa/balance-recovery-2026-09-24/report.md`.
+- **25.09.2026:** Balance-Recovery nach menschlichem Sektor-III-Test korrigiert: Sektor III/IV reduziert, Dauerverfolger hart begrenzt, sämtliche Verfolger-Spawns hinter dem Spieler entfernt und schwere Homing-Rollen aus dem Dauerstrom genommen. Die 60.000-Punkte-Chance bleibt über entkoppelte Sektorwertung erhalten; Details unter `docs/qa/balance-followup-2026-09-25/report.md`.
+- **25.09.2026:** Torpedo- und Support-Wellen zu kurzen Elite-Kampfmomenten verdichtet: Start erst bei höchstens zwei Altgegnern, kein paralleler Dauerstrom, vier Gegner Gesamtlimit, kleinere Supportgruppe und robusteres Torpedoschiff. Vollrun, Rollenszenen und 60.070-Punkte-Modell bestanden; Details unter `docs/qa/elite-followup-2026-09-25/report.md`.
