@@ -7,6 +7,7 @@ import { Input } from "./input.js";
 import { Player } from "./entities/player.js";
 import { Enemy } from "./entities/enemy.js";
 import { COMBAT_PICKUP_DROP_CONFIG, CombatPickup } from "./entities/pickup.js";
+import { FLEETS } from "./data/fleets.js";
 import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
 import { RunStats } from "./runStats.js";
 import { SoundSystem } from "./systems/soundSystem.js";
@@ -61,8 +62,11 @@ export class Game {
     this.pickupTestMode = searchParams.get("test") === "pickup-showcase";
     this.sectorMapTestMode = searchParams.get("test") === "sector-map";
     this.enemyRoleTestMode = searchParams.get("test") === "enemy-role";
+    this.bossTestMode = searchParams.get("test") === "boss";
     this.enemyRoleTestId = searchParams.get("role") === "support" ? "support" : "torpedo";
     this.sectorMapTestIndex = clamp(Number.parseInt(searchParams.get("sector"), 10) || 0, 0, SECTORS.length - 1);
+    this.bossTestIndex = clamp((Number.parseInt(searchParams.get("sector"), 10) || 1) - 1, 0, SECTORS.length - 1);
+    this.bossTestPhase = clamp(Number.parseInt(searchParams.get("phase"), 10) || 1, 1, 3);
     this.victoryTestMode = searchParams.get("test") === "victory-screen";
     this.fullRunTestMode = searchParams.get("test") === "full-run";
     this.upgradeCardTestRocketMode = searchParams.get("upgradeFamily") === "rocket";
@@ -154,6 +158,7 @@ export class Game {
       else if (this.pickupTestMode) this.startPickupShowcase();
       else if (this.sectorMapTestMode) this.startSectorMapTest(this.sectorMapTestIndex);
       else if (this.enemyRoleTestMode) this.startEnemyRoleTest(this.enemyRoleTestId);
+      else if (this.bossTestMode) this.startBossTest(this.bossTestIndex, this.bossTestPhase);
       else if (this.victoryTestMode) this.startVictoryTest();
       else if (this.fullRunTestMode) {
         import("./qa/fullRunTest.js")
@@ -254,6 +259,10 @@ export class Game {
     if (this.pickupTestMode) groups.push("shared", "klaed");
     if (this.sectorMapTestMode) groups.push("shared", "klaed");
     if (this.enemyRoleTestMode) groups.push("shared", "klaed", this.enemyRoleTestId === "support" ? "nautolan" : "nairan");
+    if (this.bossTestMode) {
+      groups.push("shared", "klaed", SECTOR_ASSET_GROUPS[this.bossTestIndex]);
+      if (this.bossTestIndex === 3) groups.push("nairan");
+    }
     if (this.victoryTestMode) groups.push("shared", "victory");
     return [...new Set(groups)];
   }
@@ -485,6 +494,30 @@ export class Game {
     }
   }
 
+  startBossTest(index, phase = 1) {
+    this.startRun();
+    this.currentSectorIndex = clamp(index, 0, SECTORS.length - 1);
+    this.sectorTimer = Number.POSITIVE_INFINITY;
+    this.bossActive = true;
+    this.bossWarning = 0;
+    this.encounterDirector = { disabled: true, sectorIndex: this.currentSectorIndex };
+    Object.assign(this.player, {
+      x: CONFIG.designW / 2,
+      y: 625,
+      fireTimer: Number.MAX_VALUE,
+      invuln: Number.POSITIVE_INFINITY,
+    });
+    const sector = SECTORS[this.currentSectorIndex];
+    const fleet = FLEETS[sector.fleet];
+    const boss = new Enemy(this, sector.bossType || fleet.bossType, CONFIG.designW / 2, 168, true);
+    boss.fireTimer = 0.18;
+    this.enemies = [boss];
+    if (phase > 1) {
+      boss.hp = boss.maxHp * (phase === 2 ? 0.58 : 0.28);
+      boss._syncBossPhase();
+    }
+  }
+
   _applyVisualTestStage() {
     const stage = PLAYER_VISUAL_TEST_STAGES[this.visualTestIndex];
     this.player = new Player(this);
@@ -683,7 +716,8 @@ export class Game {
     } else if (this.state === "bossReward") {
       // The final shard lands before the hint appears, so an impatient tap
       // cannot cut off the reward's visual payoff.
-      if (this.bossRewardTimer < 2.0) this._endBossReward();
+      const elapsed = (this.bossRewardData?.duration || 3.2) - this.bossRewardTimer;
+      if (elapsed >= (this.bossRewardData?.minimumHold || 1.2)) this._endBossReward();
     } else if (this.state === "visualTest") {
       this.nextVisualTestStage();
     }

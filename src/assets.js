@@ -152,7 +152,7 @@ export const ASSETS = {
   planetNoGlow: "assets/Foozle_2DS0015_Void_EnvironmentPack/Planets/PNGs/Earth-Like planet - Without back glow.png",
   environmentNairanStar: "assets/environment/runtime/nairan-star-v1.png",
   environmentNautolanStar: "assets/environment/runtime/nautolan-star-v1.png",
-  environmentVoidCore: "assets/environment/runtime/void-core-v1.png",
+  environmentVoidCore: "assets/environment/runtime/void-core-v2.png",
 
   pickupEngine:    "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Base Engine.png",
   pickupPulse:     "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Big Pulse Engine.png",

@@ -63,6 +63,7 @@ export const NAUTOLAN_VISUALS = {
 };
 
 export function enemyVisualFor(type) {
+  if (type === "voidSovereign") return NAUTOLAN_VISUALS.dreadnought;
   const key = (type.replace(/^nairan|^nautolan/, "") || type).toLowerCase();
   if (type.startsWith("nairan")) return NAIRAN_VISUALS[key] || null;
   if (type.startsWith("nautolan")) return NAUTOLAN_VISUALS[key] || null;

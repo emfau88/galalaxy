@@ -21,8 +21,9 @@ class SectorMethods {
       this.bossActive = true;
       this.bossWarning = 3.1;
       this.sounds?.play("boss");
-      const fleet = FLEETS[SECTORS[this.currentSectorIndex].fleet];
-      this.spawnEnemy(fleet.bossType, true);
+      const sector = SECTORS[this.currentSectorIndex];
+      const fleet = FLEETS[sector.fleet];
+      this.spawnEnemy(sector.bossType || fleet.bossType, true);
       return;
     }
 
@@ -102,7 +103,7 @@ class SectorMethods {
         : event.count;
     const count = Math.min(event.count, available, roleLimit);
     for (let index = 0; index < count; index++) {
-      const type = pickRoleEnemy(sector.fleet, event.role, sectorProgress);
+      const type = pickRoleEnemy(sector.encounterFleet || sector.fleet, event.role, sectorProgress);
       const placement = this._encounterPlacement(event, card, type, index, count, sector.enemySpeedMult ?? 1);
       const teachingLock = this.currentSectorIndex === 0 && sectorProgress < 15 / sector.duration
         ? this.simTime + Math.max(0, 15 - sectorProgress * sector.duration)
@@ -185,7 +186,7 @@ class SectorMethods {
     this.state = "title";
   }
 
-  onBossKilled(bossX, bossY, bossXp = 12) {
+  onBossKilled(bossX, bossY, bossXp = 12, bossProfile = null) {
     // Bank only existing, uncollected XP. Surviving enemies grant no free kills.
     const recoveredXp = this.pickups.reduce((sum, p) =>
       sum + (p.dead || !Number.isFinite(p.value) ? 0 : p.value), 0);
@@ -209,6 +210,7 @@ class SectorMethods {
     const MOVE_BONUS  = ["", "+0%", "+5%", "+8%", "+10%"];
     const FIRE_BONUS  = ["", "+0%", "+6%", "+10%", "+14%"];
 
+    const rewardDuration = finalBoss ? 4.3 : 3.2;
     this.bossRewardData = {
       tier,
       branch,
@@ -219,9 +221,14 @@ class SectorMethods {
       bossY,
       bossXp: bossXp + recoveredXp,
       finalBoss,
+      bossName: bossProfile?.name || "SECTOR COMMANDER",
+      duration: rewardDuration,
+      minimumHold: finalBoss ? 2.4 : 1.2,
     };
 
-    this.bossRewardTimer = 3.2; // total display time in seconds
+    // The finale receives a slightly longer destruction/silence beat before
+    // the victory screen; intermediate bosses retain the established cadence.
+    this.bossRewardTimer = rewardDuration;
     this.state = "bossReward";
   }
 
@@ -231,7 +238,9 @@ class SectorMethods {
 
     const requiredGroups = reward.finalBoss
       ? ["victory"]
-      : [SECTOR_ASSET_GROUPS[this.currentSectorIndex]];
+      : this.currentSectorIndex === 3
+        ? ["nautolan", "nairan"]
+        : [SECTOR_ASSET_GROUPS[this.currentSectorIndex]];
     if (!this._assetGroupsReady(requiredGroups)) {
       this.state = "loading";
       this._loadAssetGroups(requiredGroups).then(() => {
@@ -254,6 +263,7 @@ class SectorMethods {
     const finishedGroup = SECTOR_ASSET_GROUPS[finishedSectorIndex];
     const activeGroup = reward.finalBoss ? null : SECTOR_ASSET_GROUPS[this.currentSectorIndex];
     if (finishedGroup !== activeGroup) this._unloadAssetGroups([finishedGroup]);
+    if (reward.finalBoss) this._unloadAssetGroups(["nairan"]);
     if (!reward.finalBoss) this._preloadNextSectorAssets();
 
     const nextState = reward.finalBoss ? "victory" : "playing";

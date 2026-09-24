@@ -197,7 +197,7 @@ class HudRenderingMethods {
         ctx.textAlign = "left";
         ctx.fillStyle = "rgba(255,100,120,0.65)";
         ctx.font = "700 8px system-ui";
-        ctx.fillText(sector.name.toUpperCase() + " COMMANDER", bx, by - 2);
+        ctx.fillText(boss.bossProfile?.name || sector.name.toUpperCase() + " COMMANDER", bx, by - 2);
 
         const hpFrac = boss.hp / boss.maxHp;
         ctx.textAlign = "right";
@@ -463,8 +463,8 @@ class HudRenderingMethods {
     if (!this.bossRewardData) return;
     const d = this.bossRewardData;
     const W = CONFIG.designW, H = CONFIG.designH;
-    const total = 3.2;
-    const elapsed = total - this.bossRewardTimer;  // 0 → 3.2
+    const total = d.duration || 3.2;
+    const elapsed = total - this.bossRewardTimer;
 
     // Phase timings:
     //   0.0–0.5s  : flash punch fades in (ship silhouette beats in)

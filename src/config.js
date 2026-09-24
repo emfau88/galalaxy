@@ -52,7 +52,8 @@ export const RENDER_CONFIG = {
     nautolanFrigate:      { w: 94,  h: 94  },
     nautolanBattlecruiser:{ w: 110, h: 110 },
     nautolanDreadnought:  { w: 142, h: 142 },
-    nautolanSupport:      { w: 88,  h: 88  }
+    nautolanSupport:      { w: 88,  h: 88  },
+    voidSovereign:        { w: 158, h: 158 }
   },
   pickups: { w: 46, h: 46 },
   planet:  { w: 190, h: 190 },
@@ -124,11 +125,11 @@ export const SECTOR_ENVIRONMENTS = Object.freeze([
   },
   {
     id: "void-core",
-    gradient: ["#100408", "#19070c", "#030205"],
+    gradient: ["#09030a", "#180710", "#020104"],
     landmark: "environmentVoidCore",
-    landmarkX: 210, landmarkY: 156, landmarkSize: 142, landmarkAlpha: 0.42,
-    asteroidCount: 5, asteroidAlpha: 0.19, starAlpha: 0.56,
-    starColor: "#ffe8e4", edgeColor: [174, 54, 62],
+    landmarkX: 210, landmarkY: 148, landmarkSize: 205, landmarkAlpha: 0.24,
+    asteroidCount: 4, asteroidAlpha: 0.12, starAlpha: 0.48,
+    starColor: "#ecdce6", edgeColor: [154, 42, 68],
   },
 ]);
 
@@ -166,6 +167,8 @@ export const SECTORS = [
     shortName: "SECTOR IV",
     duration: 115,
     fleet: "nautolan",
+    encounterFleet: "void",
+    bossType: "voidSovereign",
     tint: [140, 30, 30],
     enemySpeedMult: 1.0
   }

@@ -8,6 +8,8 @@ import { RunStats } from "../src/runStats.js";
 import { wrapText } from "../src/rendering/text.js";
 import { SECTOR_ENVIRONMENTS, SECTORS } from "../src/config.js";
 import { SECTOR_ENCOUNTER_PROFILES, WAVE_CARDS } from "../src/data/encounters.js";
+import { BOSS_PROFILES } from "../src/data/bosses.js";
+import { FLEETS } from "../src/data/fleets.js";
 import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
 
 function createGame() {
@@ -466,6 +468,86 @@ function testNautolanSupportRole() {
   assert.ok(support.maxHp < targets[0].maxHp, "Support remains more vulnerable than the heavy ship it protects");
 }
 
+function testDistinctBossProfiles() {
+  assert.deepEqual(SECTORS.map(sector => sector.bossType || FLEETS[sector.fleet].bossType), [
+    "dreadnought", "nairanDreadnought", "nautolanDreadnought", "voidSovereign",
+  ], "Every sector resolves to a dedicated boss type");
+  assert.equal(new Set(Object.values(BOSS_PROFILES).map(profile => profile.name)).size, 4,
+    "Every boss exposes a distinct name");
+
+  const klaedGame = createGame();
+  const klaed = new Enemy(klaedGame, "dreadnought", 210, 175, true);
+  klaedGame.enemies = [klaed];
+  klaed._klaedPattern = 2;
+  klaed.fireTimer = 0;
+  klaed.update(0.01);
+  assert.equal(klaed.specialCharge?.kind, "torpedo", "Kla'ed boss retains its torpedo phase");
+  klaed.pendingShots = [];
+  klaed.specialCharge = null;
+  klaed._klaedPattern = 3;
+  klaed.fireTimer = 0;
+  klaed.update(0.01);
+  assert.equal(klaed.specialCharge?.kind, "wave", "Kla'ed boss retains its wave gate");
+  assert.equal(klaed.specialCharge.activeLanes.length, 3, "Kla'ed wave gate preserves a broad escape corridor");
+
+  const nairanGame = createGame();
+  nairanGame.currentSectorIndex = 1;
+  const nairan = new Enemy(nairanGame, "nairanDreadnought", 210, 170, true);
+  nairanGame.enemies = [nairan];
+  nairan.fireTimer = 0;
+  nairan.update(0.01);
+  assert.equal(nairan.specialCharge?.kind, "boss-target-lock", "Nairan boss opens with a fixed target lock");
+  assert.equal(nairan.pendingShots.length, 3, "Nairan precision salvo queues three committed shots");
+  nairan.pendingShots = [];
+  nairan.specialCharge = null;
+  nairan.fireTimer = 0;
+  nairan.update(0.01);
+  assert.equal(nairan.specialCharge?.kind, "beam-sweep", "Nairan boss alternates into its precision sweep");
+
+  const nautolanGame = createGame();
+  nautolanGame.currentSectorIndex = 2;
+  const nautolan = new Enemy(nautolanGame, "nautolanDreadnought", 210, 170, true);
+  nautolanGame.enemies = [nautolan];
+  nautolan.hp = nautolan.maxHp * 0.58;
+  nautolan._syncBossPhase();
+  const support = nautolanGame.enemies.find(enemy => enemy.type === "nautolanSupport");
+  assert.equal(nautolan.bossPhase, 2, "Nautolan boss crosses its sixty-percent phase gate");
+  assert.ok(support, "Nautolan control phase summons a support ship");
+  support._refreshSupportTargets();
+  assert.equal(support.supportTargets[0], nautolan, "The support phase visibly protects the boss");
+  nautolan.specialCharge = null;
+  nautolan.fireTimer = 0;
+  nautolan.update(0.01);
+  nautolan.pendingShots = [];
+  nautolan.specialCharge = null;
+  nautolan.fireTimer = 0;
+  nautolan.update(0.01);
+  assert.equal(nautolan.specialCharge?.kind, "control-gate", "Nautolan boss creates a space-control gate");
+  assert.equal(nautolan.specialCharge.activeLanes.length, 4, "The control gate always leaves one safe corridor");
+
+  const voidGame = createGame();
+  voidGame.currentSectorIndex = 3;
+  const sovereign = new Enemy(voidGame, "voidSovereign", 210, 160, true);
+  voidGame.enemies = [sovereign];
+  sovereign.fireTimer = 0;
+  sovereign.update(0.01);
+  assert.equal(sovereign.specialCharge?.kind, "void-lock", "Void Sovereign opens with a readable lock corridor");
+  sovereign.pendingShots = [];
+  sovereign.hp = sovereign.maxHp * 0.58;
+  sovereign._syncBossPhase();
+  assert.equal(sovereign.bossPhase, 2, "Void Sovereign enters phase two at sixty percent");
+  sovereign.specialCharge = null;
+  sovereign.fireTimer = 0;
+  sovereign.update(0.01);
+  assert.equal(sovereign.specialCharge?.kind, "void-rift", "Phase two combines the lock with space control");
+  assert.equal(sovereign.specialCharge.activeLanes.length, 4, "Void rift preserves one safe lane");
+  sovereign.hp = sovereign.maxHp * 0.28;
+  sovereign._syncBossPhase();
+  assert.equal(sovereign.bossPhase, 3, "Void Sovereign enters phase three at thirty percent");
+  assert.deepEqual(sovereign.bossProfile.phaseThresholds, [0.6, 0.3]);
+  assert.ok(sovereign.maxHp > nautolan.maxHp, "The final boss has an independent, higher durability profile");
+}
+
 function testKongregateStats() {
   assert.equal(isKongregateHost("https://www.kongregate.com/games/dev/galalaxy"), true);
   assert.equal(isKongregateHost("https://game12345.konggames.com/"), true);
@@ -490,6 +572,11 @@ function testSectorEnvironments() {
     "Every sector has a distinct landmark asset");
   assert.ok(SECTOR_ENVIRONMENTS.every(environment => environment.asteroidCount <= 8),
     "Sector decoration stays within the existing sparse asteroid budget");
+  assert.equal(SECTOR_ENVIRONMENTS[3].landmark, "environmentVoidCore");
+  assert.ok(SECTOR_ENVIRONMENTS[3].landmarkAlpha <= 0.28,
+    "The finale landmark remains subdued behind combat");
+  assert.ok(SECTOR_ENVIRONMENTS[3].asteroidCount <= 4,
+    "The finale keeps its central combat area visually quiet");
 }
 
 testQueuedLevelUps();
@@ -508,6 +595,7 @@ testEncounterProjectileBudget();
 testNairanPrecisionTelegraph();
 testNairanTorpedoRole();
 testNautolanSupportRole();
+testDistinctBossProfiles();
 testKongregateStats();
 testSectorEnvironments();
 console.log("Reliability checks passed");

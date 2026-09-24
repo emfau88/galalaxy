@@ -138,6 +138,19 @@ export class Projectile {
 
     // Canvas fallback
     ctx.globalCompositeOperation = "lighter";
+    if (this.visualKey === "voidRift") {
+      ctx.fillStyle = "rgba(211,71,104,0.58)";
+      ctx.shadowColor = "#8a1f48";
+      ctx.shadowBlur = glow(14);
+      ctx.beginPath();
+      ctx.roundRect(-30, -6, 60, 12, 5);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,168,190,0.78)";
+      ctx.shadowBlur = glow(5);
+      ctx.fillRect(-27, -1, 54, 2);
+      ctx.restore();
+      return;
+    }
     if (this.owner === "player") {
       if (this.kind === "rocket") {
         ctx.fillStyle = CONFIG.colors.orange;

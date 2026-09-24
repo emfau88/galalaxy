@@ -127,14 +127,20 @@ try {
     g.currentSectorIndex = 3;
     g.state = "playing";
     g.onBossKilled(210, 100, 22);
+    const duration = g.bossRewardData.duration;
+    const minimumHold = g.bossRewardData.minimumHold;
     g._endBossReward();
     const queued = g.pendingUpgrades;
     g.upgrades.pick(0);
     const between = g.state;
     g.upgrades.pick(0);
-    return { queued, between, state: g.state, outcome: g.lastRun?.outcome, cleared: g.lastRun?.sectorsCleared };
+    return { queued, between, state: g.state, outcome: g.lastRun?.outcome,
+      cleared: g.lastRun?.sectorsCleared, duration, minimumHold };
   });
-  assert.deepEqual(report.finalReward, { queued: 2, between: "levelUp", state: "victory", outcome: "victory", cleared: 4 });
+  assert.deepEqual(report.finalReward, {
+    queued: 2, between: "levelUp", state: "victory", outcome: "victory", cleared: 4,
+    duration: 4.3, minimumHold: 2.4,
+  });
 
   await page.evaluate(async () => {
     const g = window.__galalaxyTestGame;
@@ -362,6 +368,48 @@ try {
   });
   await screenshot("enemy-role-support-small");
   await page.setViewportSize({ width: 390, height: 844 });
+
+  report.bossScenes = [];
+  const bossPhases = [1, 1, 2, 3];
+  for (let sector = 1; sector <= 4; sector++) {
+    const phase = bossPhases[sector - 1];
+    await page.goto(`${base}/?test=boss&sector=${sector}&phase=${phase}`);
+    await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+    const scene = await page.evaluate(({ sector, phase }) => {
+      const g = window.__galalaxyTestGame;
+      const boss = g.enemies.find(enemy => enemy.boss && !enemy.dead);
+      boss.pendingShots = [];
+      boss.specialCharge = null;
+      boss.fireTimer = 0;
+      if (sector === 1) boss._klaedPattern = 2;
+      else if (sector >= 3) boss._bossPattern = 1;
+      boss.update(0.01);
+      const support = g.enemies.find(enemy => enemy.type === "nautolanSupport" && !enemy.dead);
+      g.update = () => {};
+      return {
+        sector,
+        type: boss.type,
+        name: boss.bossProfile?.name,
+        movement: boss.bossProfile?.movement,
+        phase: boss.bossPhase,
+        attack: boss.specialCharge?.kind,
+        safeLanes: boss.specialCharge?.safeLane === undefined ? null : 1,
+        protectedBySupport: Boolean(support?.supportTargets.includes(boss)),
+        voidCoreLoaded: sector !== 4 || Boolean(g.loader.get("environmentVoidCore")),
+      };
+    }, { sector, phase });
+    report.bossScenes.push(scene);
+    await screenshot(`boss-sector-${sector}-phase-${phase}`);
+  }
+  assert.deepEqual(report.bossScenes.map(scene => scene.type),
+    ["dreadnought", "nairanDreadnought", "nautolanDreadnought", "voidSovereign"]);
+  assert.equal(new Set(report.bossScenes.map(scene => scene.name)).size, 4);
+  assert.equal(new Set(report.bossScenes.map(scene => scene.movement)).size, 4);
+  assert.deepEqual(report.bossScenes.map(scene => scene.attack),
+    ["torpedo", "boss-target-lock", "control-gate", "void-rift"]);
+  assert.equal(report.bossScenes[2].protectedBySupport, true);
+  assert.ok(report.bossScenes.slice(2).every(scene => scene.safeLanes === 1));
+  assert.ok(report.bossScenes.every(scene => scene.voidCoreLoaded));
 
   await page.goto(`${base}/?test=hud-layout`);
   await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");

@@ -38,6 +38,8 @@ export const PROJECTILE_VISUALS = {
   nairanFrigate:      { assetKey: "nairanRay",     w: 18, h: 38, rotOffset: Math.PI / 2, color: "#cc88ff", glowColor: "#aa44ff", frameW: 18, frameH: 38, frameCount: 4, fps: 14 },
   nairanBattlecruiser:{ assetKey: "nairanRocket",  w: 14, h: 25, rotOffset: Math.PI / 2, color: "#dd99ff", glowColor: "#aa44ff", frameW: 9, frameH: 16, frameCount: 4, fps: 12 },
   nairanBoss:         { assetKey: "nairanTorpedo", w: 15, h: 34, rotOffset: Math.PI / 2, color: "#ee99ff", glowColor: "#aa44ff", frameW: 9, frameH: 24, frameCount: 3, fps: 10 },
+  nairanBossPrecision:{ assetKey: "nairanRay",     w: 18, h: 42, rotOffset: Math.PI / 2, color: "#e8bdff", glowColor: "#aa44ff", frameW: 18, frameH: 38, frameCount: 4, fps: 14 },
+  nairanBossSweep:    { assetKey: "nairanRay",     w: 15, h: 46, rotOffset: Math.PI / 2, color: "#f0c8ff", glowColor: "#b65cff", frameW: 18, frameH: 38, frameCount: 4, fps: 16 },
   nairanTorpedoShip:  { assetKey: "nairanTorpedo", w: 22, h: 48, rotOffset: Math.PI / 2, color: "#f0a6ff", glowColor: "#b84cff", frameW: 9, frameH: 24, frameCount: 3, fps: 10 },
 
   // --- Nautolan ---
@@ -45,6 +47,12 @@ export const PROJECTILE_VISUALS = {
   nautolanFrigate:      { assetKey: "nautolanRay",            w: 18, h: 38, rotOffset: Math.PI / 2, color: "#44ffcc", glowColor: "#00ddaa", frameW: 18, frameH: 38, frameCount: 4,  fps: 10 },
   nautolanBattlecruiser:{ assetKey: "nautolanRocket",         w: 18, h: 36, rotOffset: Math.PI / 2, color: "#66ffdd", glowColor: "#00ddaa", frameW: 16, frameH: 32, frameCount: 6,  fps: 10 },
   nautolanBoss:         { assetKey: "nautolanBomb",           w: 24, h: 24, rotOffset: Math.PI / 2, color: "#88ffee", glowColor: "#00ddaa", frameW: 16, frameH: 16, frameCount: 16, fps: 18 },
+  nautolanWave:         { assetKey: "nautolanWave",           w: 64, h: 24, scaleX: 2.4, rotOffset: -Math.PI / 2, color: "#63ffd1", glowColor: "#00c890", frameW: 64, frameH: 64, frameCount: 6, fps: 12 },
+
+  // --- Void Sovereign ---
+  voidBoss:   { assetKey: "nairanTorpedo", w: 18, h: 40, rotOffset: Math.PI / 2, color: "#e2749c", glowColor: "#9f244f", frameW: 9, frameH: 24, frameCount: 3, fps: 12 },
+  voidLance:  { assetKey: "nairanRay",      w: 20, h: 46, rotOffset: Math.PI / 2, color: "#f08aaa", glowColor: "#9f244f", frameW: 18, frameH: 38, frameCount: 4, fps: 16 },
+  voidRift:   { assetKey: null, w: 64, h: 24, rotOffset: 0, color: "#d34768", glowColor: "#8a1f48" },
 };
 
 // Enemy attack profiles deliberately separate threat roles. The projectile
@@ -65,6 +73,8 @@ export const ENEMY_WEAPON_PROFILES = {
   nairanFrigate:       { speed: 410, damage: 9,  cooldown: 2.8, hitRadius: 4,   life: 1.9, behavior: "ray" },
   nairanBattlecruiser: { speed: 225, damage: 12, cooldown: 3.1, hitRadius: 6,   life: 3.8, behavior: "homing", turnRate: 0.72 },
   nairanBoss:          { speed: 210, damage: 14, cooldown: 1.1, wideCooldown: 1.6, hitRadius: 7, life: 4.2, behavior: "homing", turnRate: 0.42, acceleration: 16 },
+  nairanBossPrecision: { speed: 430, damage: 13, cooldown: 2.7, hitRadius: 4.5, life: 2.0, behavior: "straight" },
+  nairanBossSweep:     { speed: 480, damage: 10, cooldown: 3.4, hitRadius: 4, life: 1.8, behavior: "straight" },
   nairanTorpedoShip:   { speed: 235, damage: 18, cooldown: 5.4, hitRadius: 7, life: 4.2, behavior: "straight" },
 
   // Nautolan: slower, heavier projectiles with more commitment.
@@ -72,4 +82,9 @@ export const ENEMY_WEAPON_PROFILES = {
   nautolanFrigate:       { speed: 300, damage: 12, cooldown: 3.4, hitRadius: 5,   life: 2.7, behavior: "ray" },
   nautolanBattlecruiser: { speed: 165, damage: 16, cooldown: 3.8, hitRadius: 7.5, life: 4.8, behavior: "homing", turnRate: 0.38 },
   nautolanBoss:          { speed: 135, damage: 18, cooldown: 1.2, wideCooldown: 1.8, hitRadius: 9, life: 5.4, behavior: "heavy" },
+  nautolanWave:          { speed: 185, damage: 12, cooldown: 4.4, hitRadius: 5, life: 3.6, behavior: "straight", hitWidth: 58, hitHeight: 12 },
+
+  voidBoss:   { speed: 175, damage: 18, cooldown: 2.8, hitRadius: 7, life: 4.6, behavior: "straight" },
+  voidLance:  { speed: 330, damage: 15, cooldown: 2.6, hitRadius: 5.5, life: 2.8, behavior: "straight" },
+  voidRift:   { speed: 205, damage: 14, cooldown: 3.7, hitRadius: 5, life: 3.4, behavior: "straight", hitWidth: 58, hitHeight: 13 },
 };

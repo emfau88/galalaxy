@@ -2,6 +2,7 @@ import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { clamp, lerp, dist2 } from "../utils.js";
 import { ENEMY_WEAPON_PROFILES } from "../data/projectiles.js";
 import { enemyVisualFor } from "../data/enemyVisuals.js";
+import { bossProfileFor } from "../data/bosses.js";
 
 const DEFAULT_WEAPON_PROFILE = {
   speed: 210,
@@ -22,8 +23,9 @@ export class Enemy {
     this.y = y;
     this.boss = boss;
     const def = Enemy.defs[type];
+    this.bossProfile = boss ? bossProfileFor(type) : null;
     this.r = boss ? def.r * 1.3 : def.r;
-    this.maxHp = boss ? def.hp * 6 : def.hp;
+    this.maxHp = this.bossProfile?.maxHp ?? (boss ? def.hp * 6 : def.hp);
     this.hp = this.maxHp;
     // speedMult only applies to regular enemies; boss speed is never reduced by sector tuning
     this.speed = boss ? def.speed * 0.45 : def.speed * speedMult;
@@ -38,7 +40,7 @@ export class Enemy {
     this.specialCharge = null;
     // Boss shields add a readable, authored defensive phase without making
     // ordinary swarm ships visually noisy.
-    this.maxShield = boss ? Math.round(this.maxHp * 0.16) : (def.shield ?? 0);
+    this.maxShield = this.bossProfile?.maxShield ?? (boss ? Math.round(this.maxHp * 0.16) : (def.shield ?? 0));
     this.shield = this.maxShield;
     this.shieldFlash = 0;
     this.hitFlash = 0;
@@ -51,6 +53,8 @@ export class Enemy {
     this._flybyT = 0; // local time accumulator for sine drift
     this.supportTargets = [];
     this.supportRefreshTimer = 0;
+    this.bossPhase = 1;
+    this.protectableBySupport = boss && type === "nautolanDreadnought";
   }
 
   _facingAngle() {
@@ -167,6 +171,167 @@ export class Enemy {
     }
   }
 
+  _fireNairanBossPattern(player) {
+    this._bossPattern = (this._bossPattern ?? 0) + 1;
+    const facing = Math.atan2(player.y - this.y, player.x - this.x);
+    if (this._bossPattern % 2 === 1) {
+      const charge = 0.72;
+      this.fireTimer = this.bossPhase >= 3 ? 2.15 : 2.7;
+      this._beginSpecialCharge("boss-target-lock", charge, {
+        targetX: player.x, targetY: player.y, angle: facing,
+      });
+      for (const lane of [-1, 0, 1]) {
+        this._queueWeaponShot(facing, {
+          delay: charge,
+          lane,
+          facingAngle: facing,
+          damageMult: lane === 0 ? 0.9 : 0.68,
+          visualKey: "nairanBossPrecision",
+          skipWeaponAnimation: true,
+        });
+      }
+      return;
+    }
+
+    const charge = 0.88;
+    const sweep = [-0.30, -0.15, 0, 0.15, 0.30];
+    this.fireTimer = this.bossPhase >= 2 ? 3.15 : 3.65;
+    this._beginSpecialCharge("beam-sweep", charge, {
+      angle: facing, offsets: sweep,
+    });
+    sweep.forEach((offset, index) => this._queueWeaponShot(facing + offset, {
+      delay: charge + index * 0.10,
+      facingAngle: facing + offset,
+      damageMult: 0.68,
+      visualKey: "nairanBossSweep",
+      skipWeaponAnimation: true,
+    }));
+  }
+
+  _fireNautolanBossPattern(player) {
+    this._bossPattern = (this._bossPattern ?? 0) + 1;
+    if (this._bossPattern % 2 === 0) {
+      const charge = 0.92;
+      const laneXs = [46, 128, 210, 292, 374];
+      const safeLane = [1, 3, 2][(this._controlGateIndex = (this._controlGateIndex ?? -1) + 1) % 3];
+      const activeLanes = laneXs.map((_, index) => index).filter(index => index !== safeLane);
+      this.fireTimer = 4.45;
+      this._beginSpecialCharge("control-gate", charge, { laneXs, activeLanes, safeLane });
+      for (const index of activeLanes) {
+        this._queueWeaponShot(Math.PI / 2, {
+          delay: charge,
+          visualKey: "nautolanWave",
+          skipWeaponAnimation: true,
+          origin: { x: laneXs[index], y: this.y + 136 },
+        });
+      }
+      return;
+    }
+
+    const charge = 0.68;
+    const facing = Math.atan2(player.y - this.y, player.x - this.x);
+    this.fireTimer = 3.35;
+    this._beginSpecialCharge("anchor-bomb", charge, { targetX: player.x, targetY: player.y });
+    for (const offset of [-0.18, 0, 0.18]) {
+      this._queueWeaponShot(facing + offset, {
+        delay: charge,
+        facingAngle: facing,
+        damageMult: 0.72,
+        visualKey: "nautolanBoss",
+        skipWeaponAnimation: true,
+      });
+    }
+  }
+
+  _fireVoidBossPattern(player) {
+    this._bossPattern = (this._bossPattern ?? 0) + 1;
+    const useRift = this.bossPhase >= 2 && this._bossPattern % 2 === 0;
+    if (useRift) {
+      const charge = this.bossPhase >= 3 ? 0.72 : 0.88;
+      const laneXs = [48, 129, 210, 291, 372];
+      const safeLane = [2, 1, 3][(this._voidGateIndex = (this._voidGateIndex ?? -1) + 1) % 3];
+      const activeLanes = laneXs.map((_, index) => index).filter(index => index !== safeLane);
+      this.fireTimer = this.bossPhase >= 3 ? 3.35 : 4.05;
+      this._beginSpecialCharge("void-rift", charge, { laneXs, activeLanes, safeLane });
+      for (const index of activeLanes) {
+        this._queueWeaponShot(Math.PI / 2, {
+          delay: charge,
+          visualKey: "voidRift",
+          skipWeaponAnimation: true,
+          origin: { x: laneXs[index], y: this.y + 145 },
+        });
+      }
+      return;
+    }
+
+    const charge = this.bossPhase >= 3 ? 0.70 : 0.86;
+    const targetX = player.x;
+    const targetY = player.y;
+    const facing = Math.atan2(targetY - this.y, targetX - this.x);
+    this.fireTimer = this.bossPhase >= 3 ? 2.25 : 2.85;
+    this._beginSpecialCharge("void-lock", charge, { targetX, targetY, angle: facing });
+    for (const offset of [-0.07, 0, 0.07]) {
+      this._queueWeaponShot(facing + offset, {
+        delay: charge,
+        facingAngle: facing,
+        damageMult: offset === 0 ? 0.85 : 0.62,
+        visualKey: "voidLance",
+        skipWeaponAnimation: true,
+      });
+    }
+  }
+
+  _summonBossSupport() {
+    if (this.type !== "nautolanDreadnought") return;
+    const existing = this.game.enemies.some(enemy => !enemy.dead && enemy.type === "nautolanSupport");
+    if (existing) return;
+    const side = this.bossPhase % 2 ? -1 : 1;
+    const support = this.game.spawnEnemy("nautolanSupport", false, 1, null, {
+      x: clamp(this.x + side * 112, 54, CONFIG.designW - 54),
+      y: clamp(this.y + 12, 110, 330),
+      fireLockedUntil: Number.POSITIVE_INFINITY,
+      encounterId: "boss-support-phase",
+    });
+    support.fireTimer = Number.MAX_VALUE;
+    support._refreshSupportTargets();
+  }
+
+  _syncBossPhase() {
+    if (!this.boss || !this.bossProfile?.phaseThresholds?.length || this.dead || this.hp <= 0) return;
+    const hpFraction = Math.max(0, this.hp / this.maxHp);
+    const nextPhase = 1 + this.bossProfile.phaseThresholds.filter(threshold => hpFraction <= threshold).length;
+    if (nextPhase <= this.bossPhase) return;
+    this.bossPhase = nextPhase;
+    this.pendingShots = [];
+    this.fireTimer = Math.max(this.fireTimer, 1.15);
+    this._beginSpecialCharge("phase-shift", 1.05, { phase: this.bossPhase });
+    this.shield = Math.min(this.maxShield, this.shield + this.maxShield * 0.18);
+    if (this.type === "nautolanDreadnought") this._summonBossSupport();
+    this.game.burst(this.x, this.y, this.bossProfile.aura, 24);
+    this.game.shake = Math.max(this.game.shake, 7);
+  }
+
+  _updateBossMovement(dt) {
+    const movement = this.bossProfile?.movement;
+    let holdX = CONFIG.designW / 2;
+    let holdY = 180;
+    if (movement === "broad-sweep") {
+      holdX += Math.sin(this.game.simTime * 0.44 + this.wobble) * 78;
+      holdY = 178;
+    } else if (movement === "lateral-lancer") {
+      holdX += Math.sin(this.game.simTime * 0.72 + this.wobble) * 112;
+      holdY = 170;
+    } else if (movement === "anchored-control") {
+      holdX += Math.sin(this.game.simTime * 0.28 + this.wobble) * 28;
+      holdY = 174;
+    } else if (movement === "void-orbit") {
+      holdX += Math.sin(this.game.simTime * 0.38 + this.wobble) * 88;
+      holdY = 160 + Math.sin(this.game.simTime * 0.57 + this.wobble) * 24;
+    }
+    this.x = lerp(this.x, holdX, clamp(dt * 1.25, 0, 1));
+    this.y = lerp(this.y, holdY, clamp(dt * (this.y < 0 ? 2.2 : 0.82), 0, 1));
+  }
+
   _releaseQueuedShots() {
     for (let i = this.pendingShots.length - 1; i >= 0; i--) {
       const shot = this.pendingShots[i];
@@ -186,7 +351,7 @@ export class Enemy {
       if (target.supportSource === this) target.supportSource = null;
     }
     const candidates = this.game.enemies
-      .filter(enemy => enemy !== this && !enemy.dead && !enemy.boss && enemy.type !== "nautolanSupport")
+      .filter(enemy => enemy !== this && !enemy.dead && (!enemy.boss || enemy.protectableBySupport) && enemy.type !== "nautolanSupport")
       .filter(enemy => dist2(this.x, this.y, enemy.x, enemy.y) <= 210 ** 2)
       .sort((a, b) => (b.maxHp - a.maxHp) ||
         (dist2(this.x, this.y, a.x, a.y) - dist2(this.x, this.y, b.x, b.y)));
@@ -222,11 +387,7 @@ export class Enemy {
     if (this.type === "nautolanSupport") {
       this._updateSupportMovement(dt);
     } else if (this.boss) {
-      // Boss enters arena and holds position in upper-middle area
-      const holdY = 185;
-      const holdX = CONFIG.designW / 2 + Math.sin(this.game.simTime * 0.55 + this.wobble) * 72;
-      this.x = lerp(this.x, holdX, clamp(dt * 1.4, 0, 1));
-      this.y = lerp(this.y, holdY, clamp(dt * (this.y < 0 ? 2.2 : 0.9), 0, 1));
+      this._updateBossMovement(dt);
     } else if (this.flyby) {
       // Flyby: fixed velocity + optional perpendicular sine drift — does NOT chase player
       this._flybyT += dt;
@@ -246,33 +407,12 @@ export class Enemy {
     }
 
     this.fireTimer -= dt;
-    if (this.boss && this.type === "dreadnought" && this.fireTimer <= 0) {
-      this._fireKlaedBossPattern(p);
-    } else if (this.boss && this.fireTimer <= 0) {
-      // Alternating rhythm: tight burst (3 shots) then wide spread (5 shots)
-      this._bossVolley = (this._bossVolley ?? 0) + 1;
-      const isBurst = this._bossVolley % 3 !== 0; // every 3rd volley is the wide spread
-      const ang = Math.atan2(p.y - this.y, p.x - this.x);
-      if (isBurst) {
-        this.fireTimer = this.weaponProfile.cooldown;
-        const spread = 0.18;
-        for (let i = -1; i <= 1; i++) {
-          const a = ang + i * spread;
-          this._queueWeaponShot(a, { damageMult: 0.75, lane: i, facingAngle: ang });
-        }
-      } else {
-        this.fireTimer = this.weaponProfile.wideCooldown ?? 1.6;
-        const spread = 0.30;
-        for (let i = -2; i <= 2; i++) {
-          const a = ang + i * spread;
-          this._queueWeaponShot(a, {
-            speedMult: i === 0 ? 0.85 : 0.72,
-            damageMult: i === 0 ? 1 : 0.6,
-            lane: i,
-            facingAngle: ang,
-          });
-        }
-      }
+    if (this.boss && this.fireTimer <= 0) {
+      if (this.type === "dreadnought") this._fireKlaedBossPattern(p);
+      else if (this.type === "nairanDreadnought") this._fireNairanBossPattern(p);
+      else if (this.type === "nautolanDreadnought") this._fireNautolanBossPattern(p);
+      else if (this.type === "voidSovereign") this._fireVoidBossPattern(p);
+      else this.fireTimer = 1;
     } else if (!this.boss && this.game.simTime >= this.fireLockedUntil && Enemy._canFire(this.type) && this.fireTimer <= 0) {
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
       const isKlaedBattlecruiser = this.type === "battlecruiser";
@@ -342,6 +482,7 @@ export class Enemy {
     this.hp -= amount - absorbed;
     this.hitFlash = 0.11;
     this.game.burst(this.x, this.y, CONFIG.colors.cyan, 5);
+    this._syncBossPhase();
     if (this.hp <= 0) this.kill();
   }
 
@@ -359,12 +500,19 @@ export class Enemy {
     this.game.kills++;
     this.game.sounds?.play("kill");
     const wasBoss = this.boss;
-    if (wasBoss) this.game.onBossKilled(this.x, this.y, 12);
+    if (wasBoss) this.game.onBossKilled(this.x, this.y, this.bossProfile?.bossXp ?? 12, this.bossProfile);
     else {
       this.game.dropXp(this.x, this.y, 1 + Math.floor(this.score / 70));
       this.game.maybeDropCombatPickup(this);
     }
-    this.game.explosion(this.x, this.y, wasBoss ? 42 : 22);
+    if (this.type === "voidSovereign") {
+      for (const [ox, oy, size] of [[0, 0, 64], [-48, 18, 28], [46, 12, 28], [0, -42, 34]]) {
+        this.game.explosion(this.x + ox, this.y + oy, size);
+        this.game.burst(this.x + ox, this.y + oy, "#b54878", Math.round(size * 0.36));
+      }
+    } else {
+      this.game.explosion(this.x, this.y, wasBoss ? 42 : 22);
+    }
     this.game.deathBurst(this);
     this.game.shake = Math.max(this.game.shake, wasBoss ? 10 : 3);
   }
@@ -387,13 +535,39 @@ export class Enemy {
     if (this.boss) {
       const pulse = 0.28 + Math.sin(this.game.simTime * 4) * 0.08;
       ctx.globalAlpha = pulse;
-      ctx.fillStyle = CONFIG.colors.red;
-      ctx.shadowColor = CONFIG.colors.red;
+      const auraColor = this.bossProfile?.aura || CONFIG.colors.red;
+      ctx.fillStyle = auraColor;
+      ctx.shadowColor = auraColor;
       ctx.shadowBlur = 24;
       ctx.beginPath();
       ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+      if (this.type === "voidSovereign") {
+        ctx.save();
+        ctx.rotate(this.game.simTime * 0.32);
+        ctx.globalAlpha = 0.38;
+        ctx.strokeStyle = "#b34770";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([18, 12, 7, 11]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 0.59, size * 0.46, 0.22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#6e244d";
+        for (let i = 0; i < 3; i++) {
+          const angle = i * Math.PI * 2 / 3;
+          ctx.save();
+          ctx.rotate(angle);
+          ctx.translate(size * 0.60, 0);
+          ctx.beginPath();
+          ctx.moveTo(11, 0); ctx.lineTo(-8, -6); ctx.lineTo(-4, 0); ctx.lineTo(-8, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+      }
     }
 
     if (this.specialCharge && this.game.simTime < this.specialCharge.until) {
@@ -403,7 +577,18 @@ export class Enemy {
       // Draw telegraphs in world orientation after undoing the ship rotation.
       ctx.rotate(-drawAngle);
       ctx.globalCompositeOperation = "lighter";
-      if (this.specialCharge.kind === "wave") {
+      if (this.specialCharge.kind === "phase-shift") {
+        ctx.globalAlpha = 0.26 + progress * 0.5;
+        ctx.strokeStyle = this.bossProfile?.aura || CONFIG.colors.red;
+        ctx.shadowColor = ctx.strokeStyle;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 3;
+        for (const radius of [42 + progress * 34, 68 + progress * 48]) {
+          ctx.beginPath();
+          ctx.arc(0, 0, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (this.specialCharge.kind === "wave") {
         const alpha = 0.22 + progress * 0.38;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = "#ff8b35";
@@ -416,7 +601,7 @@ export class Enemy {
           ctx.strokeRect(x - 29, 112, 58, CONFIG.designH - this.y - 102);
         }
         ctx.setLineDash([]);
-      } else if (this.specialCharge.kind === "precision") {
+      } else if (this.specialCharge.kind === "precision" || this.specialCharge.kind === "boss-target-lock") {
         const tx = this.specialCharge.targetX - this.x;
         const ty = this.specialCharge.targetY - this.y;
         ctx.globalAlpha = 0.22 + progress * 0.45;
@@ -440,6 +625,57 @@ export class Enemy {
         ctx.moveTo(tx, ty - 13); ctx.lineTo(tx, ty - 5);
         ctx.moveTo(tx, ty + 5); ctx.lineTo(tx, ty + 13);
         ctx.stroke();
+        if (this.specialCharge.kind === "boss-target-lock") {
+          ctx.globalAlpha = 0.16 + progress * 0.24;
+          ctx.fillStyle = "#bd65ff";
+          ctx.beginPath();
+          ctx.arc(tx, ty, 20 - progress * 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (this.specialCharge.kind === "beam-sweep") {
+        const length = CONFIG.designH;
+        ctx.globalAlpha = 0.16 + progress * 0.42;
+        ctx.strokeStyle = "#dca7ff";
+        ctx.shadowColor = "#a84cff";
+        ctx.shadowBlur = 7;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 7]);
+        for (const offset of this.specialCharge.offsets) {
+          const angle = this.specialCharge.angle + offset;
+          ctx.beginPath();
+          ctx.moveTo(0, 22);
+          ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      } else if (this.specialCharge.kind === "control-gate" || this.specialCharge.kind === "void-rift") {
+        const voidGate = this.specialCharge.kind === "void-rift";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        for (const index of this.specialCharge.activeLanes) {
+          const x = this.specialCharge.laneXs[index] - this.x;
+          ctx.globalAlpha = 0.20 + progress * 0.34;
+          ctx.strokeStyle = voidGate ? "#e05b82" : "#60f0c0";
+          ctx.strokeRect(x - 28, 112, 56, CONFIG.designH - this.y - 102);
+        }
+        const safeX = this.specialCharge.laneXs[this.specialCharge.safeLane] - this.x;
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.10 + progress * 0.12;
+        ctx.fillStyle = voidGate ? "#8d3559" : "#36a985";
+        ctx.fillRect(safeX - 34, 112, 68, CONFIG.designH - this.y - 102);
+      } else if (this.specialCharge.kind === "anchor-bomb") {
+        const tx = this.specialCharge.targetX - this.x;
+        const ty = this.specialCharge.targetY - this.y;
+        ctx.globalAlpha = 0.28 + progress * 0.5;
+        ctx.strokeStyle = "#78ffcf";
+        ctx.shadowColor = "#22bf91";
+        ctx.shadowBlur = 7;
+        ctx.lineWidth = 2;
+        for (const radius of [12, 22]) {
+          ctx.beginPath();
+          ctx.arc(tx, ty, radius - progress * 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       } else if (this.specialCharge.kind === "torpedo-lock") {
         const length = CONFIG.designH * 1.05;
         const dirX = Math.cos(this.specialCharge.angle);
@@ -461,6 +697,31 @@ export class Enemy {
         ctx.shadowBlur = 7;
         ctx.lineWidth = 1.6;
         ctx.setLineDash([7, 6]);
+        for (const sign of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(sideX * sign, sideY * sign);
+          ctx.lineTo(dirX * length + sideX * sign, dirY * length + sideY * sign);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      } else if (this.specialCharge.kind === "void-lock") {
+        const length = CONFIG.designH * 1.05;
+        const dirX = Math.cos(this.specialCharge.angle);
+        const dirY = Math.sin(this.specialCharge.angle);
+        const sideX = -dirY * 21;
+        const sideY = dirX * 21;
+        ctx.globalAlpha = 0.11 + progress * 0.20;
+        ctx.fillStyle = "#a52f5c";
+        ctx.beginPath();
+        ctx.moveTo(sideX, sideY);
+        ctx.lineTo(dirX * length + sideX, dirY * length + sideY);
+        ctx.lineTo(dirX * length - sideX, dirY * length - sideY);
+        ctx.lineTo(-sideX, -sideY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.48 + progress * 0.38;
+        ctx.strokeStyle = "#f08aaa";
+        ctx.setLineDash([8, 6]);
         for (const sign of [-1, 1]) {
           ctx.beginPath();
           ctx.moveTo(sideX * sign, sideY * sign);
@@ -524,9 +785,9 @@ export class Enemy {
       ctx.globalCompositeOperation = "source-over";
       ctx.rotate(-(Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2));
       ctx.globalAlpha = 0.5 + Math.sin(this.game.simTime * 5) * 0.15;
-      ctx.strokeStyle = CONFIG.colors.red;
+      ctx.strokeStyle = this.bossProfile?.aura || CONFIG.colors.red;
       ctx.lineWidth = 1.8;
-      ctx.shadowColor = CONFIG.colors.red;
+      ctx.shadowColor = ctx.strokeStyle;
       ctx.shadowBlur = 6;
       ctx.beginPath();
       ctx.arc(0, 0, size * 0.56, 0, Math.PI * 2);
@@ -556,6 +817,7 @@ Enemy._canFire = function(type) {
 
 Enemy._projVisual = function(type, boss) {
   if (boss) {
+    if (type === "voidSovereign") return "voidBoss";
     if (type.startsWith("nairan"))   return "nairanBoss";
     if (type.startsWith("nautolan")) return "nautolanBoss";
     return "klaedBoss";
@@ -606,5 +868,9 @@ Enemy.defs = {
   nautolanFrigate:      { hp: 160, speed: 38,  r: 36, damage: 28, score: 165, img: "nautolanFrigate" },
   nautolanBattlecruiser:{ hp: 250, speed: 28,  r: 44, damage: 34, score: 280, img: "nautolanBattlecruiser" },
   nautolanDreadnought:  { hp: 360, speed: 22,  r: 54, damage: 40, score: 560, img: "nautolanDreadnought" },
-  nautolanSupport:      { hp: 72,  speed: 48,  r: 29, damage: 12, score: 135, img: "nautolanSupport" }
+  nautolanSupport:      { hp: 72,  speed: 48,  r: 29, damage: 12, score: 135, img: "nautolanSupport" },
+
+  // The finale uses the Nautolan capital-ship layers as a base, then adds a
+  // dedicated profile, larger silhouette and Void aura in the renderer.
+  voidSovereign:        { hp: 520, speed: 25, r: 60, damage: 46, score: 900, img: "nautolanDreadnought" }
 };

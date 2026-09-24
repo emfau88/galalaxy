@@ -30,11 +30,11 @@ Bulk-Nummern oder Inhalte dürfen nicht stillschweigend umgedeutet werden.
 |---|---|---|
 | Bulk 0 | Messbare Ausgangsbasis | TEILWEISE |
 | Bulk 1 | HUD und ruhiger Einstieg | TEILWEISE |
-| Bulk 2 | Begegnungsrhythmus und Sektorprofile | OFFEN |
+| Bulk 2 | Begegnungsrhythmus und Sektorprofile | TEILWEISE |
 | Bulk 3 | Sektorbezogene Map-Identität | TEILWEISE |
 | Bulk 4 | Torpedo- und Support-Schiffe | TEILWEISE |
 | Bulk 5 | Pickups und Build-Progression | TEILWEISE |
-| Bulk 6 | Individuelle Bosse und echtes Finale | OFFEN |
+| Bulk 6 | Individuelle Bosse und echtes Finale | ABGESCHLOSSEN |
 | Bulk 7 | Professioneller Polish und Wiederspielwert | TEILWEISE |
 
 > Wichtig: Der zuvor als „Bulk 2“ umgesetzte Pickup-Teil gehört inhaltlich zum
@@ -184,51 +184,51 @@ Plan steht bei jedem Bulk.
 ## Bulk D – Sektor 4 und individuelle Bosse
 
 **Priorität:** P1
-**Status:** OFFEN
+**Status:** ABGESCHLOSSEN
 **Bezug:** Rest aus Bulk 3 + ursprünglicher Bulk 6
 
 ### Sektor-4-Umgebung
 
-- [ ] Aktuelles niedrig aufgelöstes Void-Core-/Black-Hole-Objekt ersetzen.
-- [ ] Per ImageGen ein hochwertiges transparentes Pixel-Art-Void-Core-Asset erzeugen.
-- [ ] Asset als entfernte Landmarke im oberen Spielfeld platzieren.
-- [ ] Kontrast so reduzieren, dass keine Verwechslung mit Projektilen entsteht.
-- [ ] Sektor-4-Debris und Randatmosphäre liebevoller, aber zurückhaltend gestalten.
-- [ ] Rund 70 % der zentralen Kampffläche visuell ruhig halten.
+- [x] Aktuelles niedrig aufgelöstes Void-Core-/Black-Hole-Objekt ersetzen.
+- [x] Per ImageGen ein hochwertiges transparentes Pixel-Art-Void-Core-Asset erzeugen.
+- [x] Asset als entfernte Landmarke im oberen Spielfeld platzieren.
+- [x] Kontrast so reduzieren, dass keine Verwechslung mit Projektilen entsteht.
+- [x] Sektor-4-Debris und Randatmosphäre liebevoller, aber zurückhaltend gestalten.
+- [x] Rund 70 % der zentralen Kampffläche visuell ruhig halten.
 
 ### Kla'ed-Boss
 
-- [ ] Bestehende Torpedo- und Wave-Mechaniken beibehalten.
-- [ ] Reihenfolge, Telegraphen und Übergänge prüfen und gegebenenfalls glätten.
+- [x] Bestehende Torpedo- und Wave-Mechaniken beibehalten.
+- [x] Reihenfolge, Telegraphen und Übergänge prüfen und gegebenenfalls glätten.
 
 ### Nairan-Boss
 
-- [ ] Eigenes Ziel-Lock-Muster implementieren.
-- [ ] Präzisionssalve oder Beam-Sweep implementieren.
-- [ ] Generisches Salvenmuster als alleinige Bossidentität entfernen.
+- [x] Eigenes Ziel-Lock-Muster implementieren.
+- [x] Präzisionssalve oder Beam-Sweep implementieren.
+- [x] Generisches Salvenmuster als alleinige Bossidentität entfernen.
 
 ### Nautolan-Boss in Sektor III
 
-- [ ] Raumkontrollmechanik mit klar erkennbarem sicheren Korridor implementieren.
-- [ ] Support- oder Schutzphase integrieren.
-- [ ] Geschwindigkeit nicht als primäre Schwierigkeit verwenden.
+- [x] Raumkontrollmechanik mit klar erkennbarem sicheren Korridor implementieren.
+- [x] Support- oder Schutzphase integrieren.
+- [x] Geschwindigkeit nicht als primäre Schwierigkeit verwenden.
 
 ### Finalboss in Sektor IV
 
-- [ ] Eigenen Bossnamen und eigenen Introtext definieren.
-- [ ] Eigenes Bossprofil statt Wiederverwendung des Sektor-3-Profils anlegen.
-- [ ] Eigene Werte und mindestens zwei zusätzliche Phasen definieren.
-- [ ] Phasenwechsel beispielsweise bei 60 % und 30 % HP klar inszenieren.
-- [ ] Ziel-Lock und Raumkontrolle kombinieren, ohne alle Fluchtwege zu sperren.
-- [ ] Eigene Aura beziehungsweise klar unterscheidbare Silhouette verwenden.
-- [ ] Eigenen Todeseffekt und eine kurze Siegespause implementieren.
+- [x] Eigenen Bossnamen und eigenen Introtext definieren.
+- [x] Eigenes Bossprofil statt Wiederverwendung des Sektor-3-Profils anlegen.
+- [x] Eigene Werte und mindestens zwei zusätzliche Phasen definieren.
+- [x] Phasenwechsel beispielsweise bei 60 % und 30 % HP klar inszenieren.
+- [x] Ziel-Lock und Raumkontrolle kombinieren, ohne alle Fluchtwege zu sperren.
+- [x] Eigene Aura beziehungsweise klar unterscheidbare Silhouette verwenden.
+- [x] Eigenen Todeseffekt und eine kurze Siegespause implementieren.
 
 ### Abnahme Bulk D
 
-- [ ] Sektor 4 wirkt visuell hochwertig und spielerisch wie ein Finale.
-- [ ] Sektor 3 und 4 besitzen nicht mehr denselben Bosskampf.
-- [ ] Jeder Boss verlangt eine unterscheidbare Bewegung vom Spieler.
-- [ ] Boss-QA-Szenen und kompletter Vollrun bestehen.
+- [x] Sektor 4 wirkt visuell hochwertig und spielerisch wie ein Finale.
+- [x] Sektor 3 und 4 besitzen nicht mehr denselben Bosskampf.
+- [x] Jeder Boss verlangt eine unterscheidbare Bewegung vom Spieler.
+- [x] Boss-QA-Szenen und kompletter Vollrun bestehen.
 
 ---
 
@@ -396,3 +396,4 @@ Plan steht bei jedem Bulk.
 - **24.09.2026:** Neuen WASD-Kandidaten strikt opt-in hinter `?controls=wasd` ergänzt. Nur Eingabe und Spielerbewegung wurden geändert; Start-, Fokus-, HTML- und Ladepfade blieben unangetastet. Automatische Tastatur-, Maus-, Pause-, Standardmodus- und Vollrun-Prüfungen bestanden; manuelle Freigabe bleibt offen.
 - **24.09.2026:** WASD in einem externen Desktop-Browser manuell bestätigt und als Standard aktiviert. `?controls=pointer` bleibt als sicherer Rückfallmodus; der Codex-Browser selbst fängt physische WASD-Eingaben ab.
 - **24.09.2026:** Bulk C technisch umgesetzt: Nairan-Torpedoschiff mit fixiertem 1,05-s-Zielkorridor, Nautolan-Support mit genau einem sichtbaren Schutzlink, zwei neue Encounter-Karten und separate Kleinbild-QA-Szenen. Technische Abnahme bestanden; menschliche Erklärung des Gegenzugs bleibt offen.
+- **24.09.2026:** Bulk D abgeschlossen: hochwertige ImageGen-Void-Core-Landmarke, zurückhaltende Sektor-4-Randatmosphäre, vier getrennte Bossprofile und Bewegungen, Nairan-Ziel-Lock/Sweep, Nautolan-Korridor/Supportphase sowie dreiphasiger Void Sovereign. Boss-QA und kompletter Browser-Vollrun bestanden; Details unter `docs/qa/bulk-d-2026-09-24/bulk-d-report.md`.

@@ -107,6 +107,7 @@ export async function runFullRunTest(game) {
         `sector ${nextSectorIndex + 1}`,
       );
       assert(groupLoaded(game, activeGroup), `${activeGroup} assets were missing after transition`);
+      if (nextSectorIndex === 3) assert(groupLoaded(game, "nairan"), "Nairan remix assets were missing in Sector IV");
       if (finishedGroup !== activeGroup) {
         assert(groupReleased(game, finishedGroup), `${finishedGroup} assets were not released`);
       }
@@ -129,6 +130,7 @@ export async function runFullRunTest(game) {
     await waitFor(() => game.state === "victory", "victory");
     assert(groupLoaded(game, "victory"), "Victory assets were not ready");
     assert(groupReleased(game, "nautolan"), "Final fleet assets were not released");
+    assert(groupReleased(game, "nairan"), "Finale remix assets were not released");
 
     game.startRun();
     await waitFor(

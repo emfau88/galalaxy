@@ -141,8 +141,13 @@ class WorldRenderingMethods {
       a.y += a.v * 0.016;
       a.r += 0.001;
       if (a.y > H + 80) { a.y = -80; a.x = Math.random() * W; }
+      // Finale debris belongs to the margins. Keeping it out of the middle
+      // preserves roughly seventy percent of the active combat lane.
+      const drawX = environment.id === "void-core"
+        ? (a.x < W / 2 ? 12 + a.x * 0.22 : W - 12 - (W - a.x) * 0.22)
+        : a.x;
       ctx.save();
-      ctx.translate(a.x, a.y);
+      ctx.translate(drawX, a.y);
       ctx.rotate(a.r);
       ctx.globalAlpha = environment.asteroidAlpha;
       const sz = clamp(a.s, RENDER_CONFIG.asteroid.wMin, RENDER_CONFIG.asteroid.wMax);
@@ -246,6 +251,29 @@ class WorldRenderingMethods {
         ctx.ellipse(W / 2, 156, radius, radius * 0.38, -0.16, 0, Math.PI * 2);
         ctx.stroke();
       }
+      // Sparse fragments and dust live only in the outer 14% of the arena.
+      // Their slow drift implies depth without creating projectile-like noise.
+      const fragments = [
+        [18, 238, 13, -0.2], [39, 466, 8, 0.4], [15, 650, 11, -0.5],
+        [402, 302, 10, 0.3], [384, 528, 14, -0.35], [405, 698, 7, 0.55],
+      ];
+      ctx.fillStyle = "rgba(128,46,70,0.16)";
+      ctx.strokeStyle = "rgba(214,82,112,0.10)";
+      for (const [x, baseY, size, tilt] of fragments) {
+        const y = baseY + Math.sin(this.time * 0.18 + baseY) * 7;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(tilt + this.time * 0.015);
+        ctx.beginPath();
+        ctx.moveTo(-size, -size * 0.22);
+        ctx.lineTo(size * 0.35, -size * 0.48);
+        ctx.lineTo(size, size * 0.18);
+        ctx.lineTo(-size * 0.28, size * 0.42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
     }
     ctx.restore();
   }
@@ -303,11 +331,12 @@ class WorldRenderingMethods {
       ctx.textAlign = "center";
       ctx.fillStyle = CONFIG.colors.red;
       ctx.font = "900 22px system-ui";
-      const sectorName = SECTORS[this.currentSectorIndex].name.toUpperCase();
-      ctx.fillText(`${sectorName} — SECTOR BOSS`, CONFIG.designW / 2, 100);
+      const boss = this.enemies.find(enemy => enemy.boss && !enemy.dead);
+      const bossName = boss?.bossProfile?.name || `${SECTORS[this.currentSectorIndex].name.toUpperCase()} COMMANDER`;
+      ctx.fillText(bossName, CONFIG.designW / 2, 100);
       ctx.font = "700 14px system-ui";
       ctx.fillStyle = CONFIG.colors.dim;
-      ctx.fillText("DREADNOUGHT SIGNATURE DETECTED", CONFIG.designW / 2, 122);
+      ctx.fillText(boss?.bossProfile?.intro || "DREADNOUGHT SIGNATURE DETECTED", CONFIG.designW / 2, 122);
       ctx.restore();
     }
   }

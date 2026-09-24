@@ -172,6 +172,14 @@ export const FLEET_ROLE_POOLS = Object.freeze({
     heavy: ["nautolanFrigate", "nautolanBattlecruiser"],
     support: ["nautolanSupport"],
   }),
+  void: Object.freeze({
+    light: ["nairanScout", "nautolanScout"],
+    skirmisher: ["nairanFighter", "nautolanFighter"],
+    shooter: ["nairanFrigate", "nautolanFrigate"],
+    heavy: ["nairanBattlecruiser", "nautolanBattlecruiser"],
+    torpedo: ["nairanTorpedoShip"],
+    support: ["nautolanSupport"],
+  }),
 });
 
 export function encounterProfileFor(sectorIndex) {
