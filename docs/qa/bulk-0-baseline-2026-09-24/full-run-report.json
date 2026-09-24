@@ -1,0 +1,13 @@
+{
+  "title": "Galalaxy QA FAIL",
+  "report": {
+    "ok": false,
+    "transitions": [],
+    "replay": false,
+    "hangar": false,
+    "arenaCleanup": false,
+    "queuedLevels": true,
+    "pausedCombatClock": false,
+    "error": "a queued enemy shot released while paused"
+  }
+}

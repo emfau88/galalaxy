@@ -20,14 +20,15 @@ A mobile-first arcade space-survivor built with vanilla JavaScript and HTML5 Can
 - Build-defining upgrades including multi-cannons, rockets, zapper, beam and pulse abilities
 - Persistent upgrade modules and MK-I to MK-IV ship evolution
 - Animated, fleet-specific enemy weapons and projectiles
-- Portrait-oriented touch and mouse controls, auto-fire, music and a saved best score
+- Portrait-oriented touch, mouse and WASD controls, auto-fire, music and a saved best score
 
 ## Controls
 
 - **Touch or mouse:** drag to steer
+- **Keyboard:** hold `W`, `A`, `S`, `D` to steer; mouse control resumes when the keys are released
 - **Upgrade screens:** tap or click a card
 - **Pause:** tap the pause button in the HUD or press `P`; switching away pauses combat until you resume
-- **Sound:** the speaker button toggles music and the four gameplay cues; the choice is saved
+- **Sound:** the speaker button toggles music and the seven gameplay cues; the choice is saved
 - Weapons fire automatically
 
 ## Run locally

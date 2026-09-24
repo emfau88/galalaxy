@@ -1,4 +1,4 @@
-import { CONFIG, RENDER_CONFIG, STRIP_RATIO, SECTORS } from "../config.js";
+import { CONFIG, RENDER_CONFIG, SECTOR_ENVIRONMENTS, STRIP_RATIO, SECTORS } from "../config.js";
 import { clamp } from "../utils.js";
 import { drawPulse } from "../systems/abilities.js";
 
@@ -8,21 +8,38 @@ class WorldRenderingMethods {
     const x = pz.x + pz.w / 2;
     const y = pz.y + pz.h / 2;
     ctx.save();
-    ctx.fillStyle = "rgba(2,6,20,0.82)";
-    ctx.strokeStyle = "rgba(88,230,255,0.62)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(pz.x, pz.y, pz.w, pz.h, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = CONFIG.colors.cyan;
+    const resume = this.state === "paused";
+    this._drawHudUtilityButton(ctx, pz, resume);
+    ctx.strokeStyle = "#9db0bf";
     ctx.lineWidth = 2.2;
-    ctx.lineCap = "round";
+    ctx.lineCap = "square";
     ctx.beginPath();
-    ctx.moveTo(x - 4, y - 5); ctx.lineTo(x - 4, y + 5);
-    ctx.moveTo(x + 4, y - 5); ctx.lineTo(x + 4, y + 5);
+    if (resume) {
+      ctx.moveTo(x - 3.5, y - 5);
+      ctx.lineTo(x + 5, y);
+      ctx.lineTo(x - 3.5, y + 5);
+      ctx.closePath();
+    } else {
+      ctx.moveTo(x - 3.5, y - 4.5); ctx.lineTo(x - 3.5, y + 4.5);
+      ctx.moveTo(x + 3.5, y - 4.5); ctx.lineTo(x + 3.5, y + 4.5);
+    }
     ctx.stroke();
     ctx.restore();
+  }
+
+  _drawHudUtilityButton(ctx, zone, active) {
+    ctx.fillStyle = active ? "rgba(55,67,82,0.98)" : "rgba(14,24,39,0.96)";
+    ctx.strokeStyle = active ? "rgba(174,130,135,0.9)" : "rgba(76,99,120,0.9)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(zone.x, zone.y, zone.w, zone.h, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(164,181,194,0.24)";
+    ctx.beginPath();
+    ctx.moveTo(zone.x + 4, zone.y + 3.5);
+    ctx.lineTo(zone.x + zone.w - 4, zone.y + 3.5);
+    ctx.stroke();
   }
 
   drawMuteButton(ctx) {
@@ -57,19 +74,10 @@ class WorldRenderingMethods {
   drawFullscreenButton(ctx) {
     if (!this.fullscreenAvailable) return;
     const fz = this._fullscreenBtnZone;
-    const x = fz.x + fz.w / 2, y = fz.y + fz.h / 2, r = 10;
+    const x = fz.x + fz.w / 2, y = fz.y + fz.h / 2;
     ctx.save();
-    ctx.globalAlpha = 0.62;
-    ctx.fillStyle = "rgba(2,6,20,0.82)";
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = this.fullscreenActive ? CONFIG.colors.pink : CONFIG.colors.cyan;
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = this.fullscreenActive ? CONFIG.colors.pink : CONFIG.colors.cyan;
+    this._drawHudUtilityButton(ctx, fz, this.fullscreenActive);
+    ctx.strokeStyle = this.fullscreenActive ? "#c58f96" : "#9db0bf";
     ctx.lineWidth = 1.35;
     const d = 4.5, s = 2.5;
     ctx.beginPath();
@@ -90,34 +98,19 @@ class WorldRenderingMethods {
 
   drawBackground(ctx) {
     const W = CONFIG.designW, H = CONFIG.designH;
+    const environment = SECTOR_ENVIRONMENTS[this.currentSectorIndex] || SECTOR_ENVIRONMENTS[0];
 
-    // Deep space gradient
+    // Every sector gets a restrained base palette before its fleet tint is
+    // applied. Landmarks stay in the upper/outer field so combat remains clear.
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#060819");
-    g.addColorStop(0.45, "#091428");
-    g.addColorStop(1, "#030509");
+    g.addColorStop(0, environment.gradient[0]);
+    g.addColorStop(0.45, environment.gradient[1]);
+    g.addColorStop(1, environment.gradient[2]);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    // Planet — it's a massive strip (7392×96), use drawAsset which crops to first frame
-    const planet = this.loader.get("planet");
-    if (planet) {
-      ctx.globalAlpha = 0.28;
-      this.drawAsset(ctx, planet, W - 52, 130 + Math.sin(this.time * 0.16) * 8, RENDER_CONFIG.planet.w, RENDER_CONFIG.planet.h);
-      ctx.globalAlpha = 1;
-    } else {
-      // Fallback planet
-      ctx.globalAlpha = 0.14;
-      const pg = ctx.createRadialGradient(W - 52, 130, 10, W - 52, 130, 90);
-      pg.addColorStop(0, "#4488ff");
-      pg.addColorStop(0.6, "#1a3a88");
-      pg.addColorStop(1, "transparent");
-      ctx.fillStyle = pg;
-      ctx.beginPath();
-      ctx.arc(W - 52, 130, 90, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+    this.drawSectorAtmosphere(ctx, environment, W, H);
+    this.drawSectorLandmark(ctx, environment);
 
     // Sector tint overlay — stronger in later sectors
     const sector = SECTORS[this.currentSectorIndex];
@@ -130,28 +123,28 @@ class WorldRenderingMethods {
     for (const s of this.stars) {
       s.y += s.v * 0.016;
       if (s.y > H) { s.y = -5; s.x = Math.random() * W; }
-      ctx.globalAlpha = s.a * 0.95;
+      ctx.globalAlpha = s.a * 0.95 * environment.starAlpha;
       // Brighter large stars get a cross sparkle
       if (s.s > 1.5 && s.a > 0.6) {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(s.x - 0.5, s.y - s.s * 1.2, 1, s.s * 2.4);
         ctx.fillRect(s.x - s.s * 1.2, s.y - 0.5, s.s * 2.4, 1);
       }
-      ctx.fillStyle = "#e8f8ff";
+      ctx.fillStyle = environment.starColor;
       ctx.fillRect(s.x, s.y, s.s, s.s);
     }
     ctx.globalAlpha = 1;
 
     // Asteroids
     const ast = this.loader.get("asteroid");
-    for (const a of this.asteroids) {
+    for (const a of this.asteroids.slice(0, environment.asteroidCount)) {
       a.y += a.v * 0.016;
       a.r += 0.001;
       if (a.y > H + 80) { a.y = -80; a.x = Math.random() * W; }
       ctx.save();
       ctx.translate(a.x, a.y);
       ctx.rotate(a.r);
-      ctx.globalAlpha = 0.18;
+      ctx.globalAlpha = environment.asteroidAlpha;
       const sz = clamp(a.s, RENDER_CONFIG.asteroid.wMin, RENDER_CONFIG.asteroid.wMax);
       if (ast) this.drawAsset(ctx, ast, 0, 0, sz, sz);
       else {
@@ -164,14 +157,15 @@ class WorldRenderingMethods {
     }
 
     // Subtle edge glow lines (arena framing)
+    const [er, eg, eb] = environment.edgeColor;
     const edgeGrad = ctx.createLinearGradient(0, 0, 22, 0);
-    edgeGrad.addColorStop(0, "rgba(88,150,255,0.18)");
-    edgeGrad.addColorStop(1, "rgba(88,150,255,0)");
+    edgeGrad.addColorStop(0, `rgba(${er},${eg},${eb},0.19)`);
+    edgeGrad.addColorStop(1, `rgba(${er},${eg},${eb},0)`);
     ctx.fillStyle = edgeGrad;
     ctx.fillRect(0, 0, 22, H);
     const edgeGradR = ctx.createLinearGradient(W, 0, W - 22, 0);
-    edgeGradR.addColorStop(0, "rgba(88,150,255,0.18)");
-    edgeGradR.addColorStop(1, "rgba(88,150,255,0)");
+    edgeGradR.addColorStop(0, `rgba(${er},${eg},${eb},0.19)`);
+    edgeGradR.addColorStop(1, `rgba(${er},${eg},${eb},0)`);
     ctx.fillStyle = edgeGradR;
     ctx.fillRect(W - 22, 0, 22, H);
 
@@ -185,8 +179,79 @@ class WorldRenderingMethods {
     ctx.globalAlpha = 1;
   }
 
+  drawSectorLandmark(ctx, environment) {
+    const image = this.loader.get(environment.landmark);
+    const y = environment.landmarkY + Math.sin(this.time * 0.22) * 5;
+    ctx.save();
+    ctx.globalAlpha = environment.landmarkAlpha;
+    if (image) {
+      this.drawAsset(ctx, image, environment.landmarkX, y, environment.landmarkSize, environment.landmarkSize);
+    } else {
+      const fallback = ctx.createRadialGradient(environment.landmarkX, y, 8, environment.landmarkX, y, environment.landmarkSize / 2);
+      fallback.addColorStop(0, "rgba(160,190,220,0.28)");
+      fallback.addColorStop(1, "rgba(20,30,60,0)");
+      ctx.fillStyle = fallback;
+      ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH * 0.45);
+    }
+    ctx.restore();
+  }
+
+  drawSectorAtmosphere(ctx, environment, W, H) {
+    ctx.save();
+    if (environment.id === "frontier-lane") {
+      ctx.strokeStyle = "rgba(82,138,220,0.09)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([9, 18]);
+      for (const x of [34, W - 34]) {
+        ctx.beginPath();
+        ctx.moveTo(x, 110);
+        ctx.lineTo(x, H - 80);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    } else if (environment.id === "nairan-expanse") {
+      for (const [x, y, radius] of [[W + 18, 310, 230], [-24, 650, 180]]) {
+        const cloud = ctx.createRadialGradient(x, y, 12, x, y, radius);
+        cloud.addColorStop(0, "rgba(154,62,185,0.13)");
+        cloud.addColorStop(0.52, "rgba(88,35,135,0.07)");
+        cloud.addColorStop(1, "rgba(50,20,90,0)");
+        ctx.fillStyle = cloud;
+        ctx.fillRect(0, 0, W, H);
+      }
+    } else if (environment.id === "nautolan-depths") {
+      const depth = ctx.createLinearGradient(0, 0, W, 0);
+      depth.addColorStop(0, "rgba(38,150,112,0.11)");
+      depth.addColorStop(0.22, "rgba(20,80,66,0)");
+      depth.addColorStop(0.78, "rgba(20,80,66,0)");
+      depth.addColorStop(1, "rgba(38,150,112,0.11)");
+      ctx.fillStyle = depth;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(104,230,184,0.10)";
+      for (const [x, y, r] of [[28, 280, 12], [390, 410, 18], [42, 620, 8], [376, 690, 11]]) {
+        ctx.beginPath();
+        ctx.arc(x, y + Math.sin(this.time * 0.35 + x) * 5, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (environment.id === "void-core") {
+      const coreShade = ctx.createRadialGradient(W / 2, 156, 24, W / 2, 156, 210);
+      coreShade.addColorStop(0, "rgba(0,0,0,0.58)");
+      coreShade.addColorStop(0.45, "rgba(75,10,18,0.10)");
+      coreShade.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = coreShade;
+      ctx.fillRect(0, 0, W, 390);
+      ctx.strokeStyle = "rgba(220,70,76,0.11)";
+      ctx.lineWidth = 1;
+      for (const radius of [92, 124, 158]) {
+        ctx.beginPath();
+        ctx.ellipse(W / 2, 156, radius, radius * 0.38, -0.16, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   drawWorld(ctx) {
-    for (const p of this.pickups) p.draw(ctx);
+    for (const p of this.pickups) p.draw(ctx, this);
     for (const pr of this.projectiles) pr.draw(ctx, this);
     for (const e of this.enemies) e.draw(ctx, this.loader);
     this.drawEnemyDestructions(ctx);

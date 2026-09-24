@@ -33,9 +33,10 @@ export class RunStats {
 
   start(game) {
     this.current = {
-      version: 1,
+      version: 3,
       offers: 0,
       picks: 0,
+      firstDraftAt: null,
       eligibleOfferCount: 0,
       keystoneOfferCount: 0,
       firstEligibleOfferAt: null,
@@ -44,6 +45,13 @@ export class RunStats {
       offeredKeystones: [],
       pickedKeystone: null,
       sectorsCleared: 0,
+      combatPickupsCollected: 0,
+      combatPickupCounts: { repair: 0, shield: 0, overdrive: 0 },
+      pickupHullRestored: 0,
+      pickupShieldRestored: 0,
+      pickupOverdriveSeconds: 0,
+      encounterCount: 0,
+      encounterTimeline: [],
     };
     this.current.sectorReached = Math.max(1, game.currentSectorIndex + 1);
   }
@@ -53,6 +61,7 @@ export class RunStats {
     const eligible = candidates.filter(upgrade => upgrade.keystone);
     const offered = picked.filter(upgrade => upgrade.keystone);
     this.current.offers++;
+    this.current.firstDraftAt ??= game.runTime;
     if (eligible.length) {
       this.current.eligibleOfferCount++;
       this.current.firstEligibleOfferAt ??= game.runTime;
@@ -71,6 +80,38 @@ export class RunStats {
       this.current.pickedKeystone = upgrade.id;
       this.current.firstKeystonePickAt ??= game.runTime;
     }
+  }
+
+  pickup(game, kind, appliedAmount) {
+    if (!this.current || game.isQaRun) return;
+    this.current.combatPickupsCollected++;
+    if (Object.hasOwn(this.current.combatPickupCounts, kind)) {
+      this.current.combatPickupCounts[kind]++;
+    }
+    if (kind === "repair") this.current.pickupHullRestored += appliedAmount;
+    else if (kind === "shield") this.current.pickupShieldRestored += appliedAmount;
+    else if (kind === "overdrive") this.current.pickupOverdriveSeconds += appliedAmount;
+  }
+
+  encounterStart(game, card, profile) {
+    if (!this.current || game.isQaRun) return;
+    this.current.encounterCount++;
+    if (this.current.encounterTimeline.length >= 40) return;
+    this.current.encounterTimeline.push({
+      sector: game.currentSectorIndex + 1,
+      wave: card.id,
+      startedAt: Number(game.runTime.toFixed(1)),
+      activeSeconds: card.duration,
+      recoverySeconds: null,
+      safeCorridor: card.safeCorridor,
+      profile: profile.id,
+    });
+  }
+
+  encounterRecovery(game, recoverySeconds) {
+    if (!this.current || game.isQaRun || !this.current.encounterTimeline.length) return;
+    const latest = this.current.encounterTimeline.at(-1);
+    latest.recoverySeconds = Number(recoverySeconds.toFixed(1));
   }
 
   complete(game, outcome, cause = null) {

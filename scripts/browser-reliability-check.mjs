@@ -2,9 +2,13 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const base = process.env.GALALAXY_QA_URL || "http://127.0.0.1:8765";
-const output = new URL("../docs/qa/reliability-2026-09-05/", import.meta.url);
+const output = process.env.GALALAXY_QA_OUTPUT
+  ? new URL(`${pathToFileURL(resolve(process.env.GALALAXY_QA_OUTPUT)).href}/`)
+  : new URL("../docs/qa/reliability-2026-09-05/", import.meta.url);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, channel: process.env.GALALAXY_BROWSER_CHANNEL || "msedge" });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -19,6 +23,101 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.fullRunTest, { timeout: 20000 });
   report.fullRun = await page.evaluate(() => JSON.parse(document.documentElement.dataset.fullRunReport));
   assert.equal(report.fullRun.ok, true, JSON.stringify(report.fullRun));
+  const controlsPage = await context.newPage();
+  controlsPage.on("pageerror", error => errors.push(`controls page: ${error.message}`));
+  controlsPage.on("response", response => {
+    if (response.status() >= 400) errors.push(`controls page: ${response.status()} ${response.url()}`);
+  });
+  await controlsPage.goto(`${base}/?test=hud-layout`);
+  await controlsPage.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+  await controlsPage.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    g.input.cancelMovement();
+    g.player.x = 210;
+    g.player.y = 420;
+    g.player.fireTimer = Number.MAX_VALUE;
+  });
+  await controlsPage.keyboard.down("w");
+  const enabledMovement = await controlsPage.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    const before = g.player.y;
+    g.player.update(0.1);
+    return {
+      enabled: g.input.keyboardMovementEnabled,
+      movedUp: g.player.y < before,
+      vectorActive: g.input.movementVector().active,
+    };
+  });
+  await controlsPage.keyboard.up("w");
+  const releaseAndPointer = await controlsPage.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    const released = !g.input.movementVector().active;
+    g.player.x = 210;
+    g.player.y = 420;
+    g.input.active = true;
+    g.input.shipX = 120;
+    g.input.shipY = 420;
+    g.player.update(0.1);
+    return { released, pointerResumed: g.player.x < 210 };
+  });
+  await controlsPage.keyboard.down("d");
+  const pauseClearsKeys = await controlsPage.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    g.togglePause();
+    const cleared = !g.input.movementVector().active;
+    g.togglePause();
+    return cleared;
+  });
+  await controlsPage.keyboard.up("d");
+  await controlsPage.goto(`${base}/?test=hud-layout&controls=pointer`);
+  await controlsPage.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+  await controlsPage.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    g.input.cancelMovement();
+    g.player.x = 210;
+    g.player.y = 420;
+    g.player.fireTimer = Number.MAX_VALUE;
+  });
+  await controlsPage.keyboard.down("w");
+  const pointerFallback = await controlsPage.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    const before = g.player.y;
+    g.player.update(0.1);
+    return { enabled: g.input.keyboardMovementEnabled, stayedPut: g.player.y === before };
+  });
+  await controlsPage.keyboard.up("w");
+  await controlsPage.close();
+  report.keyboardControl = { ...enabledMovement, ...releaseAndPointer, pauseClearsKeys, pointerFallback };
+  assert.deepEqual(report.keyboardControl, {
+    enabled: true,
+    movedUp: true,
+    vectorActive: true,
+    released: true,
+    pointerResumed: true,
+    pauseClearsKeys: true,
+    pointerFallback: { enabled: false, stayedPut: true },
+  });
+  report.encounterDefinitions = await page.evaluate(async () => {
+    const { WAVE_CARDS, SECTOR_ENCOUNTER_PROFILES } = await import("/src/data/encounters.js");
+    return {
+      cardCount: Object.keys(WAVE_CARDS).length,
+      durationsValid: Object.values(WAVE_CARDS).every(card => card.duration >= 8 && card.duration <= 12),
+      corridorsPresent: Object.values(WAVE_CARDS).every(card => Boolean(card.safeCorridor)),
+      identities: SECTOR_ENCOUNTER_PROFILES.map(profile => profile.id),
+      openings: SECTOR_ENCOUNTER_PROFILES.map(profile => profile.openingWave),
+      budgets: SECTOR_ENCOUNTER_PROFILES.map(profile => ({
+        enemies: profile.enemyCap,
+        projectiles: profile.projectileCap,
+        recovery: profile.recovery,
+      })),
+    };
+  });
+  assert.equal(report.encounterDefinitions.cardCount, 7);
+  assert.equal(report.encounterDefinitions.durationsValid, true);
+  assert.equal(report.encounterDefinitions.corridorsPresent, true);
+  assert.equal(new Set(report.encounterDefinitions.identities).size, 4);
+  assert.deepEqual(report.encounterDefinitions.openings,
+    ["single-file", "side-sweep", "anchor-corridor", "finale-relay"]);
   await screenshot("title");
 
   // Final boss rewards must finish every earned choice before saving victory.
@@ -41,8 +140,8 @@ try {
     const g = window.__galalaxyTestGame;
     await g._loadAssetGroups(["klaed"]);
     g.startRun();
-    g.spawnTimer = 999;
     g.sectorTimer = 999;
+    g.encounterDirector = { disabled: true, sectorIndex: g.currentSectorIndex };
     g.player.invuln = 999;
   });
   const pausePoint = await page.evaluate(() => {
@@ -87,6 +186,11 @@ try {
     const enemy = new Enemy(g, "frigate", 100, 100);
     enemy.damage(10000);
     g.player.invuln = 0;
+    g.player.shield = 2;
+    g.player.damage(1, { kind: "projectile" });
+    g.player.invuln = 0;
+    g.player.damage(1, { kind: "projectile" });
+    g.player.invuln = 0;
     g.player.damage(1, { kind: "projectile" });
     g.gainXp(8);
     g.upgrades.pick(0);
@@ -94,7 +198,7 @@ try {
     g.updateSpawning(0.01);
     return { state: g.sounds.context?.state, played: [...g.sounds.lastPlayed.keys()].sort() };
   });
-  assert.deepEqual(report.soundCues, { state: "running", played: ["boss", "hit", "kill", "upgrade"] });
+  assert.deepEqual(report.soundCues, { state: "running", played: ["boss", "hit", "kill", "shield", "shieldBreak", "upgrade"] });
 
   // Use an actual recorded run with all four module rows and the longest name.
   report.runReview = await page.evaluate(() => {
@@ -127,6 +231,88 @@ try {
     await page.waitForFunction(() => window.__galalaxyTestGame?.state === "levelUp");
     await screenshot(`upgrades-${family}`);
   }
+  await page.goto(`${base}/?test=pickup-showcase`);
+  await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+  report.pickupShowcase = await page.evaluate(() => {
+    const g = window.__galalaxyTestGame;
+    const kinds = g.pickups.filter(pickup => pickup.kind).map(pickup => pickup.kind).sort();
+    const assetsLoaded = ["combatPickupRepair", "combatPickupShield", "combatPickupOverdrive"]
+      .every(key => Boolean(g.loader.get(key)));
+    return { kinds, assetsLoaded };
+  });
+  assert.deepEqual(report.pickupShowcase, {
+    kinds: ["overdrive", "repair", "shield"],
+    assetsLoaded: true,
+  });
+  await screenshot("pickup-assets");
+
+  report.encounterScenes = [];
+  for (let sectorIndex = 0; sectorIndex < 4; sectorIndex++) {
+    await page.goto(`${base}/?test=sector-map&sector=${sectorIndex}`);
+    await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+    const scene = await page.evaluate(async sectorIndex => {
+      const g = window.__galalaxyTestGame;
+      const { SECTORS } = await import("/src/config.js");
+      const { SECTOR_ASSET_GROUPS } = await import("/src/assets.js");
+      const { encounterProfileFor } = await import("/src/data/encounters.js");
+      await g._loadAssetGroups([SECTOR_ASSET_GROUPS[sectorIndex]]);
+      g.clearArena();
+      g.currentSectorIndex = sectorIndex;
+      g.sectorTimer = SECTORS[sectorIndex].duration;
+      g.encounterDirector = null;
+      g.bossActive = false;
+      g.bossWarning = 0;
+      g.state = "playing";
+      g.player.x = 210;
+      g.player.y = 630;
+      g.player.fireTimer = Number.MAX_VALUE;
+      g.player.invuln = Number.POSITIVE_INFINITY;
+      const update = g.update.bind(g);
+      // Advance just into the authored opening wave, then freeze for a stable
+      // visual proof of each sector's distinct entry pattern.
+      const previewSeconds = encounterProfileFor(sectorIndex).openingDelay + (sectorIndex === 3 ? 7 : 5);
+      for (let i = 0; i < Math.ceil(previewSeconds * 60); i++) update(1 / 60);
+      g.update = () => {};
+      const profile = encounterProfileFor(sectorIndex);
+      return {
+        sector: sectorIndex + 1,
+        profile: profile.id,
+        wave: g.encounterDirector?.waveId,
+        enemies: g.enemies.filter(enemy => !enemy.dead).length,
+        enemyCap: profile.enemyCap,
+        enemyProjectiles: g.projectiles.filter(projectile => projectile.owner === "enemy" && !projectile.dead).length,
+        projectileCap: profile.projectileCap,
+      };
+    }, sectorIndex);
+    assert.ok(scene.enemies <= scene.enemyCap, JSON.stringify(scene));
+    assert.ok(scene.enemyProjectiles <= scene.projectileCap, JSON.stringify(scene));
+    report.encounterScenes.push(scene);
+    await screenshot(`encounter-sector-${sectorIndex + 1}`);
+    if (sectorIndex === 1) {
+      report.nairanTargetLock = await page.evaluate(async () => {
+        const g = window.__galalaxyTestGame;
+        const { Enemy } = await import("/src/entities/enemy.js");
+        const enemy = new Enemy(g, "nairanFrigate", 105, 175);
+        enemy.fireTimer = 0;
+        g.enemies = [enemy];
+        g.projectiles = [];
+        enemy.update(0.01);
+        return {
+          kind: enemy.specialCharge?.kind,
+          targetX: enemy.specialCharge?.targetX,
+          targetY: enemy.specialCharge?.targetY,
+          queuedShots: enemy.pendingShots.length,
+        };
+      });
+      assert.deepEqual(report.nairanTargetLock, {
+        kind: "precision", targetX: 210, targetY: 630, queuedShots: 1,
+      });
+      await screenshot("encounter-sector-2-target-lock");
+    }
+  }
+  assert.deepEqual(report.encounterScenes.map(scene => scene.wave),
+    ["single-file", "side-sweep", "anchor-corridor", "finale-relay"]);
+
   await page.goto(`${base}/?test=hud-layout`);
   await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
   await page.evaluate(() => { window.__galalaxyTestGame.update = () => {}; });
@@ -142,7 +328,7 @@ try {
       const ctx = g.ctx, roundRect = ctx.roundRect, drawImage = ctx.drawImage;
       let headerTop, headerBottom, bossFrameTop;
       ctx.roundRect = function(x, y, w, h, ...rest) {
-        if (w === 400 && h === 74) {
+        if (w === 400 && h === 82) {
           const m = this.getTransform();
           headerTop = (m.d * y + m.f) / g.renderDpr;
           headerBottom = (m.d * (y + h) + m.f) / g.renderDpr;
@@ -162,7 +348,7 @@ try {
       return { headerOffset: g.hudHeaderOffsetY(), headerTop, gap: (bossFrameTop - headerBottom) / g.scale,
         pauseInsideHeader: pauseTop >= headerTop && pauseBottom <= headerBottom };
     }, { safeTop });
-    assert.ok(Math.abs(layout.gap - 6) < 0.001, `Boss frame gap: ${JSON.stringify(layout)}`);
+    assert.ok(Math.abs(layout.gap - 12) < 0.001, `Boss frame gap: ${JSON.stringify(layout)}`);
     assert.ok(layout.pauseInsideHeader, "Pause control follows the relocated header");
     assert.ok(layout.headerTop >= safeTop, "HUD respects top safe area");
     report.hudLayouts.push({ width, height, safeTop, ...layout });

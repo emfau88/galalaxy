@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { Game } from "../src/game.js";
 import { Player } from "../src/entities/player.js";
 import { Enemy } from "../src/entities/enemy.js";
+import { COMBAT_PICKUP_DROP_CONFIG, CombatPickup } from "../src/entities/pickup.js";
 import { UpgradeSystem } from "../src/systems/upgrades.js";
 import { RunStats } from "../src/runStats.js";
 import { wrapText } from "../src/rendering/text.js";
-import { SECTORS } from "../src/config.js";
+import { SECTOR_ENVIRONMENTS, SECTORS } from "../src/config.js";
+import { SECTOR_ENCOUNTER_PROFILES, WAVE_CARDS } from "../src/data/encounters.js";
 import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
 
 function createGame() {
@@ -31,6 +33,7 @@ function createGame() {
     enemies: [],
     projectiles: [],
     pickups: [],
+    nextCombatPickupAt: 0,
     input: { cancelMovement() {} },
     sounds: { play() {} },
     isQaRun: true,
@@ -103,7 +106,9 @@ function testKeystoneMeasurement() {
   const stats = new RunStats();
   stats.start(game);
   const keystone = { id: "reactor", keystone: true };
+  game.runTime = 22;
   stats.offer(game, [keystone], [keystone]);
+  assert.equal(stats.current.firstDraftAt, 22, "The first upgrade draft time is recorded for pacing review");
   game.runTime = 42;
   stats.pick(game, keystone);
   game.runTime = 59;
@@ -130,6 +135,115 @@ function testAegis() {
   const preview = game.upgrades._previewPlayer(game.upgrades.pool.find(u => u.id === "aegis"), true);
   assert.equal(preview.invuln, 0, "Installation preview keeps the normal shield visible");
   assert.equal(preview.shieldLevel, 2, "Aegis preserves the installed shield module");
+}
+
+function testPlayerStartsReady() {
+  const game = createGame();
+  assert.equal(game.player.shield, game.player.maxShield, "A new run starts with a full shield");
+  assert.equal(game.player.hudShieldTrail, game.player.maxShield, "The HUD trail starts synchronized");
+}
+
+function testSurvivalFeedback() {
+  const game = createGame();
+  const played = [];
+  game.shake = 0;
+  game.sounds.play = name => played.push(name);
+  game.player.shield = 2;
+
+  game.player.damage(1);
+  assert.equal(game.player.shield, 1, "Shield damage is absorbed before hull damage");
+  game.player.invuln = 0;
+  game.player.damage(1);
+  assert.equal(game.player.shield, 0, "The second hit breaks the remaining shield");
+  assert.ok(game.player.shieldBreakFlash > 0, "A shield break starts the HUD alert");
+  game.player.invuln = 0;
+  game.player.damage(1);
+  assert.equal(game.player.hp, game.player.maxHp - 1, "Unshielded damage reaches the hull");
+  assert.deepEqual(played, ["shield", "shieldBreak", "hit"], "Each survival state has distinct audio feedback");
+}
+
+function testCombatPickups() {
+  const game = createGame();
+  game.isQaRun = false;
+  const played = [];
+  game.sounds.play = name => played.push(name);
+  game.simTime = 30;
+  game.player.hp = 40;
+  game.player.shield = game.player.maxShield;
+
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    const pickup = game.maybeDropCombatPickup({ x: 120, y: 180, score: 100 });
+    assert.equal(pickup.kind, "repair", "Low hull prioritizes the repair pickup");
+    assert.equal(game.nextCombatPickupAt, game.simTime + COMBAT_PICKUP_DROP_CONFIG.cooldownSeconds,
+      "A successful utility drop starts the configured cooldown");
+    pickup.x = game.player.x;
+    pickup.y = game.player.y;
+    pickup.update(0.01, game);
+    assert.equal(game.player.hp, 58, "Repair restores 18 hull");
+    assert.equal(pickup.dead, true);
+    assert.equal(game.runStats.current.combatPickupsCollected, 1, "Normal runs record collected combat pickups");
+    assert.equal(game.runStats.current.pickupHullRestored, 18, "Normal runs record effective repair value");
+
+    const overdrive = new CombatPickup(game.player.x, game.player.y, "overdrive");
+    overdrive.apply(game);
+    assert.equal(game.player.overdriveTimer, 7, "Overdrive lasts seven active seconds");
+    assert.ok(Math.abs(game.player.getCombatFireRateMultiplier() - 0.72) < 0.001,
+      "Overdrive accelerates the complete auto-fire cycle");
+    assert.deepEqual(played, ["pickup", "pickup"], "Utility pickups share one restrained audio cue");
+
+    game.simTime = 45;
+    assert.equal(game.maybeDropCombatPickup({ x: 0, y: 0, score: 500 }), null,
+      "The utility-drop cooldown prevents pickup clutter");
+
+    game.simTime = 100;
+    game.nextCombatPickupAt = 0;
+    game.pickups.push(new CombatPickup(10, 10, "shield"));
+    assert.equal(game.maybeDropCombatPickup({ x: 0, y: 0, score: 500 }), null,
+      "Only one live combat pickup may exist at once");
+  } finally {
+    Math.random = random;
+  }
+}
+
+function testOptInKeyboardMovement() {
+  const game = createGame();
+  const player = game.player;
+  player.fireTimer = Number.MAX_VALUE;
+  player.x = 210;
+  player.y = 420;
+  let vector = { x: 1, y: 0, active: true };
+  Object.assign(game.input, {
+    active: true,
+    shipX: 80,
+    shipY: 420,
+    movementVector: () => vector,
+  });
+
+  player.update(0.1);
+  const keyboardX = player.x;
+  assert.ok(keyboardX > 210, "Opt-in keyboard movement takes priority while a key is held");
+
+  vector = { x: 0, y: 0, active: false };
+  player.update(0.1);
+  assert.ok(player.x < keyboardX, "Pointer steering resumes after keyboard movement is released");
+
+  game.input.active = false;
+  player.x = 210;
+  player.y = 420;
+  vector = { x: 1, y: 0, active: true };
+  player.update(0.1);
+  const cardinalDistance = Math.hypot(player.x - 210, player.y - 420);
+
+  player.x = 210;
+  player.y = 420;
+  const diagonal = 1 / Math.sqrt(2);
+  vector = { x: diagonal, y: -diagonal, active: true };
+  player.update(0.1);
+  const diagonalDistance = Math.hypot(player.x - 210, player.y - 420);
+  assert.ok(Math.abs(cardinalDistance - diagonalDistance) < 0.001,
+    "Diagonal keyboard movement uses the same top speed as cardinal movement");
 }
 
 function testUpgradeCameraShake() {
@@ -172,47 +286,126 @@ function testUpgradeCameraShake() {
   assert.ok(translations.every(([x, y]) => x === 0 && y === 0), "Pause screen also stays still");
 }
 
-function testSectorOnePacing() {
+function simulateEncounterSector(sectorIndex, seconds = 48) {
   const game = createGame();
-  game._assetGroupsReady = () => true;
-  game._preloadNextSectorAssets = () => {};
-  game.startRun();
+  game.currentSectorIndex = sectorIndex;
+  game.sectorTimer = SECTORS[sectorIndex].duration;
+  game.bossActive = false;
+  game.bossWarning = 0;
+  game.encounterDirector = null;
   let elapsed = 0;
   const events = [];
-  game.spawnEnemy = (type, boss) => events.push({ time: elapsed, kind: boss ? "boss" : "solo" });
-  game.spawnFormation = () => events.push({ time: elapsed, kind: "formation" });
+  const phases = [];
+  game.runStats = {
+    encounterStart(_game, card, profile) {
+      phases.push({ phase: "active", at: elapsed, duration: card.duration, wave: card.id, profile: profile.id });
+    },
+    encounterRecovery(_game, duration) {
+      phases.push({ phase: "recovery", at: elapsed, duration });
+    },
+  };
+  game.spawnEnemy = (type, boss, _speedMult, flyby, options = {}) => {
+    events.push({ time: elapsed, type, boss, flyby, options });
+    return { type, dead: false };
+  };
   const random = Math.random;
   try {
-    // Always request formations when allowed, to exercise the exact gate.
-    Math.random = () => 0;
-    for (let frame = 1; frame <= 7010; frame++) {
-      elapsed = frame / 100;
-      game.updateSpawning(0.01);
+    Math.random = () => 0.25;
+    const step = 0.05;
+    for (let frame = 1; frame <= seconds / step; frame++) {
+      elapsed = frame * step;
+      game.simTime = elapsed;
+      game.runTime = elapsed;
+      game.updateSpawning(step);
     }
-    assert.ok(Math.abs(events[0].time - 1.2) < 0.02, "First enemy arrives after 1.2s");
-    const early = events.filter(event => event.time < 10);
-    assert.ok(early.length >= 6 && early.length <= 8, "Opening ten seconds retain regular XP opportunities");
-    for (let i = 1; i < early.length; i++) {
-      assert.ok(Math.abs(early[i].time - early[i - 1].time - 1.25) < 0.02, "Opening spawn interval is 1.25s");
-    }
-    const regular = events.filter(event => event.time > 12 && event.time < 21);
-    assert.ok(regular.length >= 8, "Normal cadence resumes after the opening");
-    const firstFormation = events.find(event => event.kind === "formation");
-    assert.ok(firstFormation.time >= 22 && firstFormation.time < 24, "Formations start after 22s");
-    const bosses = events.filter(event => event.kind === "boss");
-    assert.equal(bosses.length, 1);
-    assert.ok(Math.abs(bosses[0].time - 70) < 0.02, "Boss arrives after 70 active seconds");
-    assert.deepEqual(SECTORS.slice(1).map(sector => sector.duration), [90, 105, 115]);
-    game.currentSectorIndex = 1;
-    game.sectorTimer = SECTORS[1].duration;
-    game.spawnTimer = 0;
-    game.bossActive = false;
-    game.bossWarning = 0;
-    game.updateSpawning(0.01);
-    assert.equal(events.at(-1).kind, "formation", "Later sectors keep their existing formation rules");
   } finally {
     Math.random = random;
   }
+  return { events, phases };
+}
+
+function testEncounterDirector() {
+  const cards = Object.values(WAVE_CARDS);
+  assert.ok(cards.length >= 5, "At least five authored wave cards exist");
+  assert.ok(cards.every(card => card.duration >= 8 && card.duration <= 12),
+    "Every encounter danger window lasts 8-12 seconds");
+  assert.ok(cards.every(card => card.safeCorridor), "Every wave card reserves an escape corridor");
+  assert.ok(SECTOR_ENCOUNTER_PROFILES.every(profile =>
+    profile.recovery[0] >= 3 && profile.recovery[1] <= 5),
+  "Every sector recovery range stays within 3-5 seconds");
+
+  const cardUse = new Map();
+  for (const profile of SECTOR_ENCOUNTER_PROFILES) {
+    const deck = new Set([...profile.earlyDeck, ...profile.midDeck, ...profile.lateDeck]);
+    for (const id of deck) {
+      cardUse.set(id, (cardUse.get(id) || 0) + 1);
+      const authoredCount = WAVE_CARDS[id].events.reduce((sum, event) => sum + event.count, 0);
+      assert.ok(authoredCount <= profile.enemyCap, `${id} respects the ${profile.id} enemy budget`);
+    }
+  }
+  assert.ok([...cardUse.values()].filter(count => count >= 2).length >= 5,
+    "At least five wave cards are reused across sector decks");
+  assert.equal(new Set(SECTOR_ENCOUNTER_PROFILES.map(profile => profile.identity)).size, 4,
+    "Every sector has a distinct gameplay identity");
+
+  const frontier = simulateEncounterSector(0, 45);
+  assert.ok(Math.abs(frontier.events[0].time - 1.2) < 0.06, "Sector I begins after a 1.2s orientation beat");
+  const teachingWindow = frontier.events.filter(event => event.time < 15);
+  assert.ok(teachingWindow.every(event => event.type === "scout" || event.type === "fighter"),
+    "Sector I teaches with light ships only");
+  assert.ok(teachingWindow.every(event => event.options.fireLockedUntil >= 14.99),
+    "Sector-I teaching ships cannot fire before 15s");
+  assert.ok(frontier.phases.filter(phase => phase.phase === "active" && phase.at < 25)
+    .every(phase => phase.wave === "single-file"),
+  "Dense formations remain locked until 25s");
+  assert.ok(frontier.events[7].time >= 17 && frontier.events[7].time <= 19,
+    "The eighth XP-capable target leaves time for a first draft around 20-25s");
+
+  const nairan = simulateEncounterSector(1);
+  const lateralDirections = new Set(nairan.events
+    .filter(event => event.flyby?.vx)
+    .map(event => Math.sign(event.flyby.vx)));
+  assert.deepEqual([...lateralDirections].sort(), [-1, 1], "Sector II attacks quickly from both sides");
+
+  const nautolan = simulateEncounterSector(2);
+  assert.ok(nautolan.events.some(event => /Bomber|Frigate|Battlecruiser/.test(event.type)),
+    "Sector III centers robust space-control roles");
+  assert.ok(nautolan.phases.some(phase => phase.wave === "anchor-corridor"),
+    "Sector III opens with a readable anchor corridor");
+
+  const finale = simulateEncounterSector(3);
+  assert.ok(finale.phases.some(phase => phase.wave === "finale-relay"),
+    "Sector IV uses a dedicated learned-role combination card");
+  for (const simulation of [frontier, nairan, nautolan, finale]) {
+    assert.ok(simulation.phases.filter(phase => phase.phase === "recovery")
+      .every(phase => phase.duration >= 3 && phase.duration <= 5),
+    "Simulated recovery windows remain in the authored range");
+  }
+}
+
+function testEncounterProjectileBudget() {
+  const game = createGame();
+  game.bossActive = false;
+  game.encounterDirector = { projectileCap: 2 };
+  assert.ok(game.spawnProjectile(0, 0, 0, 100, 1, "enemy", "enemy"));
+  assert.ok(game.spawnProjectile(0, 0, 0, 100, 1, "enemy", "enemy"));
+  assert.equal(game.spawnProjectile(0, 0, 0, 100, 1, "enemy", "enemy"), null,
+    "Encounter projectile budget blocks excess hostile fire");
+  assert.ok(game.spawnProjectile(0, 0, 0, 100, 1, "player", "laser"),
+    "Hostile projectile budget never suppresses player fire");
+}
+
+function testNairanPrecisionTelegraph() {
+  const game = createGame();
+  game.player.x = 210;
+  game.player.y = 620;
+  const enemy = new Enemy(game, "nairanFrigate", 100, 160);
+  enemy.fireTimer = 0;
+  enemy.update(0.01);
+  assert.equal(enemy.specialCharge?.kind, "precision", "Nairan shooter exposes a precision target lock");
+  assert.equal(enemy.specialCharge?.targetX, 210, "Precision lock commits to the marked X position");
+  assert.equal(enemy.specialCharge?.targetY, 620, "Precision lock commits to the marked Y position");
+  assert.equal(enemy.pendingShots.length, 1, "Precision shot waits for its visible warning");
 }
 
 function testKongregateStats() {
@@ -231,13 +424,30 @@ function testKongregateStats() {
   });
 }
 
+function testSectorEnvironments() {
+  assert.equal(SECTOR_ENVIRONMENTS.length, SECTORS.length, "Every sector has an environment profile");
+  assert.equal(new Set(SECTOR_ENVIRONMENTS.map(environment => environment.id)).size, SECTORS.length,
+    "Every sector has a distinct map identity");
+  assert.equal(new Set(SECTOR_ENVIRONMENTS.map(environment => environment.landmark)).size, SECTORS.length,
+    "Every sector has a distinct landmark asset");
+  assert.ok(SECTOR_ENVIRONMENTS.every(environment => environment.asteroidCount <= 8),
+    "Sector decoration stays within the existing sparse asteroid budget");
+}
+
 testQueuedLevelUps();
 testPausedCombatClock();
 testArenaCleanup();
 testTextWrapping();
 testKeystoneMeasurement();
 testAegis();
+testPlayerStartsReady();
+testSurvivalFeedback();
+testCombatPickups();
+testOptInKeyboardMovement();
 testUpgradeCameraShake();
-testSectorOnePacing();
+testEncounterDirector();
+testEncounterProjectileBudget();
+testNairanPrecisionTelegraph();
 testKongregateStats();
+testSectorEnvironments();
 console.log("Reliability checks passed");

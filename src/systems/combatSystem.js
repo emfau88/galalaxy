@@ -1,6 +1,6 @@
 import { CONFIG, RENDER_CONFIG } from "../config.js";
 import { Projectile } from "../entities/projectile.js";
-import { XpPickup } from "../entities/pickup.js";
+import { COMBAT_PICKUP_DROP_CONFIG, CombatPickup, XpPickup } from "../entities/pickup.js";
 import { Particle } from "../entities/particle.js";
 import { spawnHitSparks, spawnDeathBurst, spawnBossEntrance } from "./fx.js";
 import { enemyVisualFor } from "../data/enemyVisuals.js";
@@ -68,6 +68,14 @@ class CombatMethods {
 
   spawnProjectile(x, y, a, speed, dmg, owner, kind, visualKey = null, options = {}) {
     if (this.projectiles.length >= CONFIG.projectileCap) return null;
+    if (owner === "enemy" && !this.bossActive) {
+      const encounterBudget = this.encounterDirector?.projectileCap;
+      const activeEnemyProjectiles = this.projectiles.reduce(
+        (count, projectile) => count + (projectile.owner === "enemy" && !projectile.dead ? 1 : 0),
+        0,
+      );
+      if (Number.isFinite(encounterBudget) && activeEnemyProjectiles >= encounterBudget) return null;
+    }
     const projectile = new Projectile(x, y, a, speed, dmg, owner, kind, visualKey, options);
     this.projectiles.push(projectile);
     return projectile;
@@ -81,6 +89,40 @@ class CombatMethods {
         1
       ));
     }
+  }
+
+  dropCombatPickup(kind, x, y) {
+    const pickup = new CombatPickup(x, y, kind);
+    this.pickups.push(pickup);
+    return pickup;
+  }
+
+  maybeDropCombatPickup(enemy) {
+    if (this.simTime < COMBAT_PICKUP_DROP_CONFIG.firstEligibleAt || this.simTime < this.nextCombatPickupAt) return null;
+    const activeCombatPickups = this.pickups.filter(pickup => pickup instanceof CombatPickup && !pickup.dead);
+    if (activeCombatPickups.length >= COMBAT_PICKUP_DROP_CONFIG.maxActive) return null;
+
+    // Heavy ships are slightly more likely to produce a utility drop. The
+    // cooldown is applied only after a successful roll, keeping drops scarce.
+    const chance = COMBAT_PICKUP_DROP_CONFIG.baseChance + Math.min(
+      COMBAT_PICKUP_DROP_CONFIG.scoreChanceCap,
+      enemy.score / COMBAT_PICKUP_DROP_CONFIG.scoreDivisor,
+    );
+    if (Math.random() >= chance) return null;
+
+    const hpFraction = this.player.hp / this.player.maxHp;
+    const shieldFraction = this.player.shield / this.player.maxShield;
+    const choices = [];
+    if (hpFraction < 0.72) choices.push({ kind: "repair", weight: 2.2 + (1 - hpFraction) * 4 });
+    if (shieldFraction < 0.68) choices.push({ kind: "shield", weight: 2 + (1 - shieldFraction) * 3 });
+    choices.push({ kind: "overdrive", weight: this.player.overdriveTimer > 2 ? 0.35 : 1.25 });
+
+    const totalWeight = choices.reduce((sum, choice) => sum + choice.weight, 0);
+    let roll = Math.random() * totalWeight;
+    const selected = choices.find(choice => (roll -= choice.weight) <= 0) || choices.at(-1);
+    const pickup = this.dropCombatPickup(selected.kind, enemy.x, enemy.y);
+    this.nextCombatPickupAt = this.simTime + COMBAT_PICKUP_DROP_CONFIG.cooldownSeconds;
+    return pickup;
   }
 
   gainXp(v) {

@@ -1,0 +1,98 @@
+[
+  {
+    "attempt": 1,
+    "title": "Galalaxy QA PASS",
+    "report": {
+      "ok": true,
+      "transitions": [
+        {
+          "from": 1,
+          "to": 2,
+          "activeGroup": "nairan",
+          "sharedFleetGroup": false
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "activeGroup": "nautolan",
+          "sharedFleetGroup": false
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "activeGroup": "nautolan",
+          "sharedFleetGroup": true
+        }
+      ],
+      "replay": true,
+      "hangar": true,
+      "arenaCleanup": true,
+      "queuedLevels": true,
+      "pausedCombatClock": true
+    }
+  },
+  {
+    "attempt": 2,
+    "title": "Galalaxy QA PASS",
+    "report": {
+      "ok": true,
+      "transitions": [
+        {
+          "from": 1,
+          "to": 2,
+          "activeGroup": "nairan",
+          "sharedFleetGroup": false
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "activeGroup": "nautolan",
+          "sharedFleetGroup": false
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "activeGroup": "nautolan",
+          "sharedFleetGroup": true
+        }
+      ],
+      "replay": true,
+      "hangar": true,
+      "arenaCleanup": true,
+      "queuedLevels": true,
+      "pausedCombatClock": true
+    }
+  },
+  {
+    "attempt": 3,
+    "title": "Galalaxy QA PASS",
+    "report": {
+      "ok": true,
+      "transitions": [
+        {
+          "from": 1,
+          "to": 2,
+          "activeGroup": "nairan",
+          "sharedFleetGroup": false
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "activeGroup": "nautolan",
+          "sharedFleetGroup": false
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "activeGroup": "nautolan",
+          "sharedFleetGroup": true
+        }
+      ],
+      "replay": true,
+      "hangar": true,
+      "arenaCleanup": true,
+      "queuedLevels": true,
+      "pausedCombatClock": true
+    }
+  }
+]

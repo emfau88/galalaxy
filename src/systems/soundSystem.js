@@ -1,8 +1,11 @@
 const CUES = {
   hit:     { frequency: 120, type: "triangle", duration: 0.07, volume: 0.045, cooldown: 0.08 },
+  shield:  { frequency: 235, type: "sine", duration: 0.055, volume: 0.035, cooldown: 0.08, sweep: 170 },
+  shieldBreak: { frequency: 310, type: "sawtooth", duration: 0.16, volume: 0.05, cooldown: 0.3, sweep: 72 },
   kill:    { frequency: 330, type: "square",   duration: 0.055, volume: 0.028, cooldown: 0.045 },
   upgrade: { frequency: 520, type: "sine",     duration: 0.16, volume: 0.055, cooldown: 0.14, harmony: 660 },
   boss:    { frequency: 86,  type: "sawtooth", duration: 0.28, volume: 0.055, cooldown: 0.5, sweep: 56 },
+  pickup:  { frequency: 430, type: "triangle", duration: 0.12, volume: 0.042, cooldown: 0.12, harmony: 645 },
 };
 
 export class SoundSystem {

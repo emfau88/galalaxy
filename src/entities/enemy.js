@@ -43,6 +43,7 @@ export class Enemy {
     this.shieldFlash = 0;
     this.hitFlash = 0;
     this.fireTimer = boss ? 1.2 : 2.5 + Math.random() * 2;
+    this.fireLockedUntil = 0;
     this.wobble = Math.random() * Math.PI * 2;
     this.dead = false;
     // flyby stores { vx, vy, sineAmp, sineFreq } — null means normal chase behavior
@@ -108,7 +109,7 @@ export class Enemy {
   }
 
   _beginSpecialCharge(kind, delay, data = {}) {
-    this.specialCharge = { kind, until: this.game.simTime + delay, ...data };
+    this.specialCharge = { kind, duration: delay, until: this.game.simTime + delay, ...data };
   }
 
   _fireKlaedBossPattern(player) {
@@ -230,9 +231,10 @@ export class Enemy {
           });
         }
       }
-    } else if (!this.boss && Enemy._canFire(this.type) && this.fireTimer <= 0) {
+    } else if (!this.boss && this.game.simTime >= this.fireLockedUntil && Enemy._canFire(this.type) && this.fireTimer <= 0) {
       const ang = Math.atan2(p.y - this.y, p.x - this.x);
       const isKlaedBattlecruiser = this.type === "battlecruiser";
+      const isNairanPrecision = this.type.startsWith("nairan");
       this._battlecruiserVolley = isKlaedBattlecruiser ? (this._battlecruiserVolley ?? 0) + 1 : 0;
       const firesTorpedo = isKlaedBattlecruiser && this._battlecruiserVolley % 3 === 0;
       this.fireTimer = firesTorpedo ? 4.2 : this.weaponProfile.cooldown;
@@ -240,6 +242,16 @@ export class Enemy {
         const charge = 0.46;
         this._beginSpecialCharge("torpedo", charge);
         this._queueWeaponShot(ang, { delay: charge, visualKey: "klaedTorpedo", skipWeaponAnimation: true });
+      } else if (isNairanPrecision) {
+        // Nairan fire commits to the player's marked position. The short lock
+        // rewards a late sidestep instead of constant movement or guessing.
+        const charge = 0.42;
+        this._beginSpecialCharge("precision", charge, { targetX: p.x, targetY: p.y });
+        this._queueWeaponShot(ang, {
+          delay: charge,
+          skipWeaponAnimation: true,
+          facingAngle: ang,
+        });
       } else {
         this._queueWeaponShot(ang);
       }
@@ -278,7 +290,10 @@ export class Enemy {
     this.game.sounds?.play("kill");
     const wasBoss = this.boss;
     if (wasBoss) this.game.onBossKilled(this.x, this.y, 12);
-    else this.game.dropXp(this.x, this.y, 1 + Math.floor(this.score / 70));
+    else {
+      this.game.dropXp(this.x, this.y, 1 + Math.floor(this.score / 70));
+      this.game.maybeDropCombatPickup(this);
+    }
     this.game.explosion(this.x, this.y, wasBoss ? 42 : 22);
     this.game.deathBurst(this);
     this.game.shake = Math.max(this.game.shake, wasBoss ? 10 : 3);
@@ -313,7 +328,7 @@ export class Enemy {
 
     if (this.specialCharge && this.game.simTime < this.specialCharge.until) {
       const progress = 1 - (this.specialCharge.until - this.game.simTime) /
-        (this.specialCharge.kind === "wave" ? 0.72 : 0.46);
+        (this.specialCharge.duration || (this.specialCharge.kind === "wave" ? 0.72 : 0.46));
       ctx.save();
       // Draw telegraphs in world orientation after undoing the ship rotation.
       ctx.rotate(-drawAngle);
@@ -331,6 +346,30 @@ export class Enemy {
           ctx.strokeRect(x - 29, 112, 58, CONFIG.designH - this.y - 102);
         }
         ctx.setLineDash([]);
+      } else if (this.specialCharge.kind === "precision") {
+        const tx = this.specialCharge.targetX - this.x;
+        const ty = this.specialCharge.targetY - this.y;
+        ctx.globalAlpha = 0.22 + progress * 0.45;
+        ctx.strokeStyle = "#d8a2ff";
+        ctx.shadowColor = "#a84cff";
+        ctx.shadowBlur = 6;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([4, 7]);
+        ctx.beginPath();
+        ctx.moveTo(0, 22);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 9 - progress * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(tx - 13, ty); ctx.lineTo(tx - 5, ty);
+        ctx.moveTo(tx + 5, ty); ctx.lineTo(tx + 13, ty);
+        ctx.moveTo(tx, ty - 13); ctx.lineTo(tx, ty - 5);
+        ctx.moveTo(tx, ty + 5); ctx.lineTo(tx, ty + 13);
+        ctx.stroke();
       } else {
         ctx.globalAlpha = 0.35 + progress * 0.45;
         ctx.fillStyle = "#ffb06a";

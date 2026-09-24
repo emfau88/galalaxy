@@ -30,11 +30,15 @@ export class Player {
     this.maxHp = 100;
     this.hp = 100;
     this.maxShield = 55;
-    this.shield = 35;
+    this.shield = this.maxShield;
+    this.hudHpTrail = this.hp;
+    this.hudShieldTrail = this.shield;
+    this.shieldBreakFlash = 0;
     this.speed = PLAYER_ENGINE_SPEEDS[0];
     this.fireRate = 0.28;
     this.fireLevel = 0;
     this.fireTimer = 0;
+    this.overdriveTimer = 0;
     this.invuln = 0;
     this.hitFlash = 0;
     this.twin = 0;
@@ -158,6 +162,10 @@ export class Player {
     return 1.0;
   }
 
+  getCombatFireRateMultiplier() {
+    return this.getEvolutionFireRateMultiplier() * (this.overdriveTimer > 0 ? 0.72 : 1);
+  }
+
   shieldRechargeDelayDuration() {
     return PLAYER_SHIELD_RECHARGE_DELAYS[Math.min(PLAYER_SHIELD_RECHARGE_DELAYS.length - 1, this.shieldLevel)];
   }
@@ -176,6 +184,7 @@ export class Player {
 
   update(dt) {
     const input = this.game.input;
+    const keyboard = input.movementVector?.() || { x: 0, y: 0, active: false };
     let tx = this.x;
     let ty = this.y;
 
@@ -186,15 +195,20 @@ export class Player {
 
     const oldX = this.x;
     const oldY = this.y;
-    // Keep direction changes immediate; top speed is the only movement limit.
-    const dx = tx - this.x;
-    const dy = ty - this.y;
-    const distance = Math.hypot(dx, dy);
     const maxStep = this.speed * this.getEvolutionMoveMultiplier() * dt;
-    if (distance > 0.001) {
-      const step = Math.min(distance, maxStep);
-      this.x += (dx / distance) * step;
-      this.y += (dy / distance) * step;
+    if (keyboard.active && this.game.state === "playing") {
+      this.x = clamp(this.x + keyboard.x * maxStep, 36, CONFIG.designW - 36);
+      this.y = clamp(this.y + keyboard.y * maxStep, 88, CONFIG.designH - 38);
+    } else {
+      // Keep pointer direction changes immediate; top speed is unchanged.
+      const dx = tx - this.x;
+      const dy = ty - this.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 0.001) {
+        const step = Math.min(distance, maxStep);
+        this.x += (dx / distance) * step;
+        this.y += (dy / distance) * step;
+      }
     }
     this.vx = (this.x - oldX) / Math.max(dt, 0.001);
     this.vy = (this.y - oldY) / Math.max(dt, 0.001);
@@ -204,17 +218,27 @@ export class Player {
     this.aegisCooldown = Math.max(0, this.aegisCooldown - dt);
     this.aegisReadyFlash = Math.max(0, this.aegisReadyFlash - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
+    this.overdriveTimer = Math.max(0, this.overdriveTimer - dt);
+    this.shieldBreakFlash = Math.max(0, this.shieldBreakFlash - dt);
     this.shieldRechargeDelay = Math.max(0, this.shieldRechargeDelay - dt);
     if (this.shieldRechargeDelay <= 0) {
       this.shield = clamp(this.shield + this.shieldRegen * dt, 0, this.maxShield);
     }
+    // The bright HUD trail follows damage more slowly than the live value, so
+    // a quick glance communicates both the current resource and the recent hit.
+    this.hudHpTrail = this.hp >= this.hudHpTrail
+      ? this.hp
+      : lerp(this.hudHpTrail, this.hp, clamp(dt * 1.8, 0, 1));
+    this.hudShieldTrail = this.shield >= this.hudShieldTrail
+      ? this.shield
+      : lerp(this.hudShieldTrail, this.shield, clamp(dt * 2.2, 0, 1));
     this.updatePendingWeaponShots(dt);
     if (this.game.state !== "playing") return;
 
     this.fireTimer -= dt;
     if (this.fireTimer <= 0) {
       // Evolution multiplier < 1 means faster effective fire rate; does not mutate base fireRate.
-      this.fireTimer = this.fireRate * this.getEvolutionFireRateMultiplier();
+      this.fireTimer = this.fireRate * this.getCombatFireRateMultiplier();
       this.fire(this.fireTimer);
     }
 
@@ -222,7 +246,7 @@ export class Player {
     updatePulse(this, dt);
   }
 
-  fire(autoCycleDuration = this.fireRate * this.getEvolutionFireRateMultiplier()) {
+  fire(autoCycleDuration = this.fireRate * this.getCombatFireRateMultiplier()) {
     this._fireAuto(autoCycleDuration);
     this._tryFireRockets();
     this._tryFireZapper();
@@ -410,12 +434,15 @@ export class Player {
   damage(amount, cause = { kind: "unknown" }) {
     if (this.invuln > 0) return;
     let left = amount;
+    const shieldBefore = this.shield;
     if (this.shield > 0) {
       const used = Math.min(this.shield, left);
       this.shield -= used;
       left -= used;
       this.shieldRechargeDelay = this.shieldRechargeDelayDuration();
     }
+    const shieldBroke = shieldBefore > 0 && this.shield <= 0;
+    if (shieldBroke) this.shieldBreakFlash = 0.65;
     if (left > 0 && this.emergencyAegis && this.aegisCooldown <= 0) {
       // The triggering hull hit is fully blocked, then the authored
       // invincibility-shield layer stays active for the protection window.
@@ -425,11 +452,11 @@ export class Player {
       this.hitFlash = 0.24;
       this.game.shake = Math.max(this.game.shake, 6);
       this.game.burst(this.x, this.y, "#bc72ff", 24);
-      this.game.sounds?.play("hit");
+      this.game.sounds?.play(shieldBroke ? "shieldBreak" : "hit");
       return;
     }
     this.hp -= left;
-    this.game.sounds?.play("hit");
+    this.game.sounds?.play(left > 0 ? "hit" : shieldBroke ? "shieldBreak" : "shield");
     this.hitFlash = 0.14;
     this.invuln = 0.28;
     this.game.shake = Math.max(this.game.shake, 4);
@@ -504,7 +531,8 @@ export class Player {
     const engineLevel = forceEngineLevel ?? this.speedLevel;
     const engine = playerEngineVisual(engineLevel);
     const activeScene = this.game.state === "playing" || this.game.state === "visualTest";
-    const powering = activeScene && (this.game.input.active || speedBoost > 0.08);
+    const powering = activeScene &&
+      (this.game.input.active || this.game.input.isKeyboardMovementActive?.() || speedBoost > 0.08);
     const effect = powering ? engine.powering : engine.idle;
 
     ctx.save();

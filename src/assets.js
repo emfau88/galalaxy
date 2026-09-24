@@ -142,6 +142,9 @@ export const ASSETS = {
   asteroidFlame:"assets/Foozle_2DS0015_Void_EnvironmentPack/Effects/PNGs/Asteroid - Flame.png",
   planet:       "assets/Foozle_2DS0015_Void_EnvironmentPack/Planets/PNGs/Earth-Like planet.png",
   planetNoGlow: "assets/Foozle_2DS0015_Void_EnvironmentPack/Planets/PNGs/Earth-Like planet - Without back glow.png",
+  environmentNairanStar: "assets/environment/runtime/nairan-star-v1.png",
+  environmentNautolanStar: "assets/environment/runtime/nautolan-star-v1.png",
+  environmentVoidCore: "assets/environment/runtime/void-core-v1.png",
 
   pickupEngine:    "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Base Engine.png",
   pickupPulse:     "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Big Pulse Engine.png",
@@ -155,6 +158,9 @@ export const ASSETS = {
   pickupRocket:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Rocket.png",
   pickupZapper:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Zapper.png",
   pickupBigGun:    "assets/Foozle_2DS0016_Void_PickupsPack/Weapons/PNGs/Pickup Icon - Weapons - Big Space Gun 2000.png",
+  combatPickupRepair: "assets/pickups/runtime/repair-cell-v1.png",
+  combatPickupShield: "assets/pickups/runtime/shield-battery-v1.png",
+  combatPickupOverdrive: "assets/pickups/runtime/overdrive-core-v1.png",
 
   // Original UI overlays generated for Galalaxy. They remain text-free so the
   // canvas can keep all gameplay labels sharp and localizable.
@@ -162,6 +168,7 @@ export const ASSETS = {
   uiUpgradeCardFrameRocket: "assets/ui/runtime/upgrade-card-frame-rocket-v1.png",
   uiUpgradeCardFramePurple: "assets/ui/runtime/upgrade-card-frame-purple-v1.png",
   uiBossAlertFrame:  "assets/ui/runtime/boss-alert-frame-v1.png",
+  uiStatusBarFrameMatte: "assets/ui/runtime/status-bar-frame-matte-v1.png",
   uiTitleCommandPanel: "assets/ui/runtime/title-command-panel-v1.png",
   uiStartRunButtonFrame: "assets/ui/runtime/start-run-button-frame-v1.png",
   uiVictoryCommandFrame: "assets/ui/victory-command-frame-v1.png"

@@ -71,6 +71,7 @@ export async function runFullRunTest(game) {
 
     // Enemy telegraphs use simulation time; UI time while paused cannot spend
     // their delay. This avoids instant attacks on resume.
+    game.projectiles = [];
     const queuedEnemy = new Enemy(game, "frigate", 80, 160);
     queuedEnemy._queueWeaponShot(0, { delay: 0.72, skipWeaponAnimation: true });
     game.state = "paused";

@@ -95,6 +95,41 @@ export const CONTROL_CONFIG = {
   mouseOffsetY: 0,
 };
 
+export const SECTOR_ENVIRONMENTS = Object.freeze([
+  {
+    id: "frontier-lane",
+    gradient: ["#05091a", "#09182d", "#03060d"],
+    landmark: "planet",
+    landmarkX: 368, landmarkY: 142, landmarkSize: 190, landmarkAlpha: 0.26,
+    asteroidCount: 6, asteroidAlpha: 0.12, starAlpha: 1,
+    starColor: "#e8f8ff", edgeColor: [74, 126, 205],
+  },
+  {
+    id: "nairan-expanse",
+    gradient: ["#100719", "#17102c", "#05050e"],
+    landmark: "environmentNairanStar",
+    landmarkX: 70, landmarkY: 164, landmarkSize: 128, landmarkAlpha: 0.28,
+    asteroidCount: 3, asteroidAlpha: 0.08, starAlpha: 0.82,
+    starColor: "#f2e8ff", edgeColor: [148, 72, 184],
+  },
+  {
+    id: "nautolan-depths",
+    gradient: ["#03100f", "#08251f", "#020908"],
+    landmark: "environmentNautolanStar",
+    landmarkX: 350, landmarkY: 176, landmarkSize: 116, landmarkAlpha: 0.23,
+    asteroidCount: 8, asteroidAlpha: 0.15, starAlpha: 0.72,
+    starColor: "#dcfff2", edgeColor: [50, 142, 112],
+  },
+  {
+    id: "void-core",
+    gradient: ["#100408", "#19070c", "#030205"],
+    landmark: "environmentVoidCore",
+    landmarkX: 210, landmarkY: 156, landmarkSize: 142, landmarkAlpha: 0.42,
+    asteroidCount: 5, asteroidAlpha: 0.19, starAlpha: 0.56,
+    starColor: "#ffe8e4", edgeColor: [174, 54, 62],
+  },
+]);
+
 export const SECTORS = [
   {
     index: 0,
@@ -103,7 +138,6 @@ export const SECTORS = [
     duration: 70,
     fleet: "klaed",
     tint: [30, 60, 140],
-    spawnMult: 0.9,       // ~10% fewer regular spawns than formula baseline
     enemySpeedMult: 0.9   // regular enemies 10% slower; does not affect boss
   },
   {
@@ -113,7 +147,6 @@ export const SECTORS = [
     duration: 90,
     fleet: "nairan",
     tint: [100, 30, 140],
-    spawnMult: 1.0,
     enemySpeedMult: 1.0
   },
   {
@@ -123,7 +156,6 @@ export const SECTORS = [
     duration: 105,
     fleet: "nautolan",
     tint: [30, 110, 80],
-    spawnMult: 1.0,
     enemySpeedMult: 1.0
   },
   {
@@ -133,7 +165,6 @@ export const SECTORS = [
     duration: 115,
     fleet: "nautolan",
     tint: [140, 30, 30],
-    spawnMult: 1.0,
     enemySpeedMult: 1.0
   }
 ];

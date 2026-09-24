@@ -295,7 +295,9 @@ class MenuRenderingMethods {
     // ── Bottom info ──
     ctx.fillStyle = CONFIG.colors.dim;
     ctx.font = "600 12px system-ui";
-    ctx.fillText("Drag to move · Auto-fire · Survive the fleet", cx, 614);
+    ctx.fillText(this.input.keyboardMovementEnabled
+      ? "Drag or WASD to move · Auto-fire · Survive"
+      : "Drag to move · Auto-fire · Survive the fleet", cx, 614);
 
     if (this.loader.errors.length) {
       ctx.fillStyle = CONFIG.colors.orange;

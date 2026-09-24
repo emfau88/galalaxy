@@ -4,6 +4,8 @@ import { clamp, fmtTime } from "../utils.js";
 class HudRenderingMethods {
   drawHud(ctx) {
     ctx.save();
+    const p = this.player;
+    this.drawSurvivalAlerts(ctx, p);
     // Portrait displays can have a genuine letterbox area above the 420×760
     // playfield. Use it only when the entire compact HUD fits there; shorter
     // displays and desktop retain the in-world placement.
@@ -11,50 +13,57 @@ class HudRenderingMethods {
     ctx.save();
     if (headerOffsetY) ctx.translate(0, headerOffsetY);
     const W = CONFIG.designW;
-    const p = this.player;
     const sector = SECTORS[this.currentSectorIndex];
     const [tr, tg, tb] = sector.tint;
     const sectorAccent = `rgb(${Math.min(255, tr + 140)},${Math.min(255, tg + 140)},${Math.min(255, tb + 170)})`;
 
     // A single compact rail preserves the playfield; information is grouped
     // by alignment instead of adding heavy nested panels.
-    const panel = ctx.createLinearGradient(0, 8, 0, 82);
+    const panel = ctx.createLinearGradient(0, 8, 0, 90);
     panel.addColorStop(0, "rgba(6,16,42,0.88)");
     panel.addColorStop(1, "rgba(2,7,22,0.82)");
     ctx.fillStyle = panel;
     ctx.strokeStyle = "rgba(112,212,255,0.24)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(10, 8, W - 20, 74, 11);
+    ctx.roundRect(10, 8, W - 20, 82, 11);
     ctx.fill();
     ctx.stroke();
 
-    // ── LEFT: Hull / shield ──────────────────────────────────────────
-    const iconX = 23;
-    const barX = 36;
-    const hpW = 94, hpH = 8, hpY = 22;
-    this.bar(ctx, barX, hpY, hpW, hpH, p.hp / p.maxHp, CONFIG.colors.red, "");
-    this._drawHeartIcon(ctx, iconX, hpY + hpH / 2, 7, "rgba(255,80,105,0.94)");
+    // ── LEFT: survivability is the primary information block ─────────
+    const survivalX = 18, survivalW = 124;
+    const shieldY = 27, shieldH = 18;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(150,238,255,0.88)";
+    ctx.font = "900 9px ui-monospace, monospace";
+    ctx.fillText("SHIELD", survivalX, 23);
     ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(255,220,225,0.86)";
-    ctx.font = "800 8px ui-monospace, monospace";
-    ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, barX + hpW, 19);
+    ctx.fillStyle = "rgba(215,250,255,0.94)";
+    ctx.fillText(`${Math.ceil(p.shield)}`, survivalX + survivalW, 23);
+    this.survivalBar(
+      ctx, survivalX, shieldY, survivalW, shieldH,
+      p.shield / p.maxShield,
+      (p.hudShieldTrail ?? p.shield) / p.maxShield,
+      "#358fc4",
+    );
 
-    const shW = 94, shH = 6, shY = 42;
-    ctx.globalAlpha = 0.9;
-    this.bar(ctx, barX, shY, shW, shH, p.shield / p.maxShield, CONFIG.colors.cyan, "");
-    ctx.globalAlpha = 1;
-
-    const shieldIcon = this.loader.get("pickupShield");
-    if (shieldIcon) this.drawAsset(ctx, shieldIcon, iconX, shY + shH / 2, 15, 15);
-    else this._drawShieldIcon(ctx, iconX, shY + shH / 2, 7, "rgba(88,230,255,0.85)");
+    const hullY = 54, hullH = 18;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,145,160,0.92)";
+    ctx.font = "900 9px ui-monospace, monospace";
+    ctx.fillText("HULL", survivalX, 50);
     ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(195,245,255,0.86)";
-    ctx.font = "800 8px ui-monospace, monospace";
-    ctx.fillText(`${Math.ceil(p.shield)} / ${p.maxShield}`, barX + shW, 39);
+    ctx.fillStyle = "rgba(255,225,230,0.96)";
+    ctx.fillText(`${Math.ceil(p.hp)}`, survivalX + survivalW, 50);
+    this.survivalBar(
+      ctx, survivalX, hullY, survivalW, hullH,
+      p.hp / p.maxHp,
+      (p.hudHpTrail ?? p.hp) / p.maxHp,
+      "#d94b55",
+    );
 
     if (p.emergencyAegis) {
-      const aegisX = 143, aegisY = 45;
+      const aegisX = 157, aegisY = 58;
       const ready = p.aegisCooldown <= 0;
       const aegisIcon = this.loader.get("pickupInvincible");
       ctx.save();
@@ -74,7 +83,7 @@ class HudRenderingMethods {
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(180,210,240,0.48)";
     ctx.font = "700 8px ui-monospace, monospace";
-    ctx.fillText(fmtTime(this.runTime), 18, 68);
+    ctx.fillText(fmtTime(this.runTime), 18, 82);
 
     // ── CENTER: Sector / level / energy ──────────────────────────────
     const cx = W / 2;
@@ -82,9 +91,9 @@ class HudRenderingMethods {
     ctx.textAlign = "center";
     ctx.fillStyle = sectorAccent;
     ctx.font = "900 11px ui-monospace, monospace";
-    ctx.fillText(`${sector.shortName}  ·  LV ${this.level}`, cx, 26);
+    ctx.fillText(`${sector.shortName}  ·  LV ${this.level}`, cx, 24);
 
-    const dotY = 38, dotR = 2.2, dotGap = 10;
+    const dotY = 37, dotR = 2.2, dotGap = 10;
     const dotStartX = cx - (SECTORS.length - 1) * dotGap / 2;
     for (let s = 0; s < SECTORS.length; s++) {
       const dx = dotStartX + s * dotGap;
@@ -115,17 +124,19 @@ class HudRenderingMethods {
       ctx.fillStyle = CONFIG.colors.red;
       ctx.font = "800 8px ui-monospace, monospace";
       ctx.textAlign = "center";
-      ctx.fillText("▸  BOSS  ◂", cx, 39);
+      ctx.fillText("▸  BOSS  ◂", cx, 38);
       ctx.globalAlpha = 1;
     }
 
     const xpFrac = clamp(this.xp / this.xpNeed, 0, 1);
-    const xpX = 165, xpY = 53, xpW = 90, xpH = 6;
-    this.bar(ctx, xpX, xpY, xpW, xpH, xpFrac, xpFrac >= 0.85 ? "#aaffcc" : CONFIG.colors.green, "");
-    ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(190,255,215,0.82)";
+    const xpX = 174, xpY = 61, xpW = 72, xpH = 8;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(175,255,205,0.76)";
     ctx.font = "800 8px ui-monospace, monospace";
-    ctx.fillText(`${this.xp} / ${this.xpNeed}`, xpX + xpW, 68);
+    ctx.fillText("ENERGY", xpX, 56);
+    ctx.textAlign = "right";
+    ctx.fillText(`${this.xp}/${this.xpNeed}`, xpX + xpW, 56);
+    this.bar(ctx, xpX, xpY, xpW, xpH, xpFrac, xpFrac >= 0.85 ? "#aaffcc" : CONFIG.colors.green, "");
 
     // Boss warning — below panel
     if (this.bossWarning > 0) {
@@ -134,7 +145,7 @@ class HudRenderingMethods {
       ctx.fillStyle = CONFIG.colors.red;
       ctx.font = "600 10px system-ui";
       ctx.textAlign = "center";
-      ctx.fillText("⚠  BOSS INCOMING", W / 2, 94);
+      ctx.fillText("⚠  BOSS INCOMING", W / 2, 105);
       ctx.globalAlpha = 1;
     }
 
@@ -154,12 +165,12 @@ class HudRenderingMethods {
     ctx.fillText(`BEST  ${Math.floor(this.best)}`, W - 18, 57);
 
     // ── Boss HP bar ──────────────────────────────────────────────────
-    // Share the header's transform, including its letterbox offset. The frame
-    // extends 17px above the fill: keep its top 6px below the panel bottom (82).
+    // Share the header's transform, including its letterbox offset, and keep
+    // the boss readout clearly separated below the survival panel.
     if (this.bossActive && this.bossWarning <= 0) {
       const boss = this.enemies.find(e => e.boss && !e.dead);
       if (boss) {
-        const bx = 18, by = 105, bw = W - 36, bh = 7;
+        const bx = 18, by = 119, bw = W - 36, bh = 9;
 
         // Three-slice treatment: preserve the detailed alert end-caps while
         // stretching only the central rail to the current viewport width.
@@ -185,13 +196,13 @@ class HudRenderingMethods {
 
         ctx.textAlign = "left";
         ctx.fillStyle = "rgba(255,100,120,0.65)";
-        ctx.font = "600 7px system-ui";
+        ctx.font = "700 8px system-ui";
         ctx.fillText(sector.name.toUpperCase() + " COMMANDER", bx, by - 2);
 
         const hpFrac = boss.hp / boss.maxHp;
         ctx.textAlign = "right";
         ctx.fillStyle = "rgba(255,180,180,0.45)";
-        ctx.font = "500 7px system-ui";
+        ctx.font = "600 8px system-ui";
         ctx.fillText(`${Math.ceil(boss.hp)} / ${boss.maxHp}`, bx + bw, by - 2);
 
         ctx.fillStyle = "rgba(255,255,255,0.07)";
@@ -216,6 +227,28 @@ class HudRenderingMethods {
     this.drawAbilityPips(ctx);
 
     ctx.restore();
+  }
+
+  drawSurvivalAlerts(ctx, p) {
+    const hpFrac = clamp(p.hp / p.maxHp, 0, 1);
+    if (hpFrac < 0.25) {
+      const pulse = 0.035 + (0.25 - hpFrac) * 0.28 + Math.abs(Math.sin(this.time * 4.5)) * 0.035;
+      const warning = ctx.createRadialGradient(
+        CONFIG.designW / 2, CONFIG.designH / 2, CONFIG.designH * 0.28,
+        CONFIG.designW / 2, CONFIG.designH / 2, CONFIG.designH * 0.67,
+      );
+      warning.addColorStop(0, "rgba(255,30,65,0)");
+      warning.addColorStop(1, `rgba(255,30,65,${pulse})`);
+      ctx.fillStyle = warning;
+      ctx.fillRect(0, 0, CONFIG.designW, CONFIG.designH);
+    }
+
+    if (p.shieldBreakFlash > 0) {
+      const alpha = clamp(p.shieldBreakFlash / 0.65, 0, 1) * 0.24;
+      ctx.strokeStyle = `rgba(88,230,255,${alpha})`;
+      ctx.lineWidth = 10;
+      ctx.strokeRect(5, 5, CONFIG.designW - 10, CONFIG.designH - 10);
+    }
   }
 
   // Heart icon — two circular arcs meeting at a bottom point
@@ -275,6 +308,7 @@ class HudRenderingMethods {
   drawAbilityPips(ctx) {
     const p = this.player;
     const abilities = [];
+    if (p.overdriveTimer > 0) abilities.push({ label: "OVERDRIVE", icon: "pickupAuto", activeDuration: p.overdriveTimer, max: 8, color: "#e7a844" });
     if (p.beam)  abilities.push({ label: "BIG GUN", icon: "pickupBigGun", cd: p._beamCooldown ?? 0, max: 7.0, color: "#7cff91" });
     if (p.pulse) abilities.push({ label: "PULSE", icon: "pickupShield", cd: p._pulseCooldown ?? 0, max: 9.0, color: CONFIG.colors.cyan });
     if (!abilities.length) return;
@@ -288,8 +322,11 @@ class HudRenderingMethods {
     for (let i = 0; i < abilities.length; i++) {
       const ab = abilities[i];
       const y = startY + i * (pipH + gap);
-      const ready = ab.cd <= 0;
-      const fill = ready ? 1 : Math.max(0, 1 - ab.cd / ab.max);
+      const timedEffect = ab.activeDuration !== undefined;
+      const ready = !timedEffect && ab.cd <= 0;
+      const fill = timedEffect
+        ? clamp(ab.activeDuration / ab.max, 0, 1)
+        : ready ? 1 : Math.max(0, 1 - ab.cd / ab.max);
 
       // Track
       ctx.fillStyle = "rgba(255,255,255,0.07)";
@@ -299,7 +336,7 @@ class HudRenderingMethods {
 
       // Fill
       if (fill > 0) {
-        ctx.fillStyle = ready ? ab.color : "rgba(88,180,180,0.4)";
+        ctx.fillStyle = ready || timedEffect ? ab.color : "rgba(88,180,180,0.4)";
         ctx.shadowColor = ready ? ab.color : "transparent";
         ctx.shadowBlur  = ready ? 8 : 0;
         ctx.beginPath();
@@ -313,14 +350,14 @@ class HudRenderingMethods {
       if (icon) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = ready ? 1 : 0.5;
+        ctx.globalAlpha = ready || timedEffect ? 1 : 0.5;
         this.drawAsset(ctx, icon, x - 13, y + pipH / 2, 16, 16);
         ctx.restore();
       }
 
       // Label stays adjacent to its contextual cooldown instead of competing
       // with score, level and ship survivability in the header.
-      ctx.fillStyle = ready ? CONFIG.colors.white : "rgba(180,200,230,0.38)";
+      ctx.fillStyle = ready || timedEffect ? CONFIG.colors.white : "rgba(180,200,230,0.38)";
       ctx.font = "700 7px system-ui";
       ctx.textAlign = "left";
       ctx.fillText(ab.label, x, y - 3);
@@ -347,6 +384,47 @@ class HudRenderingMethods {
       ctx.font = "600 8px system-ui";
       ctx.textAlign = "left";
       ctx.fillText(label, x, y - 2);
+    }
+  }
+
+  survivalBar(ctx, x, y, w, h, t, trailT, color) {
+    t = clamp(t, 0, 1);
+    trailT = clamp(Math.max(t, trailT), 0, 1);
+    const insetX = 10;
+    const insetY = 6;
+    const innerX = x + insetX;
+    const innerY = y + insetY;
+    const innerW = w - insetX * 2;
+    const innerH = h - insetY * 2;
+    const frame = this.loader.get("uiStatusBarFrameMatte");
+
+    ctx.fillStyle = "rgba(2,6,12,0.96)";
+    ctx.beginPath();
+    ctx.roundRect(innerX, innerY, innerW, innerH, 1.5);
+    ctx.fill();
+    if (trailT > 0) {
+      ctx.fillStyle = "rgba(196,202,196,0.36)";
+      ctx.beginPath();
+      ctx.roundRect(innerX, innerY, Math.max(innerH, innerW * trailT), innerH, 1.5);
+      ctx.fill();
+    }
+    if (t > 0) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(innerX, innerY, Math.max(innerH, innerW * t), innerH, 1.5);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(innerX + 1, innerY + 1, Math.max(0, innerW * t - 2), 1);
+    }
+    if (frame) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(frame, x, y, w, h);
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = "rgba(86,112,140,0.78)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     }
   }
 

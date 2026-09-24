@@ -1,9 +1,15 @@
 import { CONFIG, SECTORS } from "../config.js";
 import { SECTOR_ASSET_GROUPS } from "../assets.js";
-import { clamp } from "../utils.js";
 import { Player } from "../entities/player.js";
 import { Enemy } from "../entities/enemy.js";
-import { FLEETS, pickSoloEnemy } from "../data/fleets.js";
+import { FLEETS } from "../data/fleets.js";
+import {
+  WAVE_CARDS,
+  createEncounterDirector,
+  encounterProfileFor,
+  pickRoleEnemy,
+  pickWaveCard,
+} from "../data/encounters.js";
 
 class SectorMethods {
   updateSpawning(dt) {
@@ -20,46 +26,135 @@ class SectorMethods {
       return;
     }
 
-    this.spawnTimer -= dt;
     const sector = SECTORS[this.currentSectorIndex];
     const sectorElapsed = sector.duration - this.sectorTimer;
     const sectorProgress = 1 - this.sectorTimer / sector.duration;
-    const difficulty = 1 + this.currentSectorIndex * 0.6 + sectorProgress * 0.5;
-    // Sector I briefly eases entry, then returns to the existing spawn curve.
-    const normalInterval = clamp((1.0 - difficulty * 0.08) / (sector.spawnMult ?? 1.0), 0.22, 1.0);
-    const interval = this.currentSectorIndex === 0 && sectorElapsed < 10
-      ? 1.25
-      : normalInterval;
-
-    if (this.spawnTimer <= 0 && this.enemies.length < CONFIG.enemyCap) {
-      this.spawnTimer = interval;
-      const fleet = FLEETS[sector.fleet];
-      const speedMult = sector.enemySpeedMult ?? 1.0;
-
-      // Formation chance per sector; suppressed in Sector I before 22s elapsed
-      // and suppressed during bossWarning. Formation replaces the normal solo spawn.
-      const formationChance = [0.25, 0.30, 0.34, 0.36][this.currentSectorIndex] ?? 0.25;
-      const formationAllowed = !this.bossWarning &&
-                               !(this.currentSectorIndex === 0 && sectorElapsed < 22) &&
-                               this.enemies.length + 5 <= CONFIG.enemyCap;
-
-      if (formationAllowed && Math.random() < formationChance) {
-        // Formation tick — spawn formation instead of solo enemy; give a longer cooldown
-        this.spawnTimer = interval * 2.2;
-        this.spawnFormation(fleet, sectorProgress, speedMult);
-      } else {
-        const type = pickSoloEnemy(fleet, sectorProgress);
-        // Scouts/fighters that do spawn solo cross diagonally instead of chasing.
-        const isLight = /scout|fighter/i.test(type);
-        const soloFlyby = isLight && Math.random() < 0.50
-          ? this._makeDiagonalFlyby(Enemy.defs[type]?.speed ?? 90, speedMult)
-          : null;
-        this.spawnEnemy(type, false, speedMult, soloFlyby);
-        if (difficulty > 1.8 && Math.random() < 0.2) {
-          this.spawnEnemy(pickSoloEnemy(fleet, sectorProgress), false, speedMult);
-        }
-      }
+    const profile = encounterProfileFor(this.currentSectorIndex);
+    if (!this.encounterDirector || this.encounterDirector.sectorIndex !== this.currentSectorIndex) {
+      this.encounterDirector = createEncounterDirector(this.currentSectorIndex);
     }
+    if (this.encounterDirector.disabled) return;
+
+    const director = this.encounterDirector;
+    director.timer -= dt;
+
+    if (director.phase === "recovery") {
+      if (director.timer <= 0) this._startEncounterWave(profile, sectorProgress, sectorElapsed);
+      return;
+    }
+
+    const card = WAVE_CARDS[director.waveId];
+    if (!card) {
+      this._startEncounterRecovery(profile);
+      return;
+    }
+
+    director.waveElapsed += dt;
+    while (director.eventIndex < card.events.length &&
+           card.events[director.eventIndex].at <= director.waveElapsed) {
+      this._spawnEncounterEvent(card.events[director.eventIndex], card, profile, sector, sectorProgress);
+      director.eventIndex++;
+    }
+    if (director.timer <= 0) this._startEncounterRecovery(profile);
+  }
+
+  _startEncounterWave(profile, sectorProgress, sectorElapsed) {
+    const director = this.encounterDirector;
+    const card = pickWaveCard(profile, sectorProgress, sectorElapsed, director.lastWaveId);
+    director.phase = "active";
+    director.waveId = card.id;
+    director.lastWaveId = card.id;
+    director.timer = card.duration;
+    director.phaseDuration = card.duration;
+    director.waveElapsed = 0;
+    director.eventIndex = 0;
+    director.waveCount++;
+    this.runStats?.encounterStart?.(this, card, profile);
+    // Events authored at t=0 should appear on the exact phase boundary.
+    while (director.eventIndex < card.events.length && card.events[director.eventIndex].at <= 0) {
+      this._spawnEncounterEvent(
+        card.events[director.eventIndex], card, profile,
+        SECTORS[this.currentSectorIndex], sectorProgress,
+      );
+      director.eventIndex++;
+    }
+  }
+
+  _startEncounterRecovery(profile) {
+    const director = this.encounterDirector;
+    const [minRecovery, maxRecovery] = profile.recovery;
+    const recovery = minRecovery + Math.random() * (maxRecovery - minRecovery);
+    director.phase = "recovery";
+    director.timer = recovery;
+    director.phaseDuration = recovery;
+    director.waveElapsed = 0;
+    director.eventIndex = 0;
+    this.runStats?.encounterRecovery?.(this, recovery);
+  }
+
+  _spawnEncounterEvent(event, card, profile, sector, sectorProgress) {
+    const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
+    const available = Math.max(0, Math.min(profile.enemyCap, CONFIG.enemyCap) - livingEnemies);
+    const count = Math.min(event.count, available);
+    for (let index = 0; index < count; index++) {
+      const type = pickRoleEnemy(sector.fleet, event.role, sectorProgress);
+      const placement = this._encounterPlacement(event, card, type, index, count, sector.enemySpeedMult ?? 1);
+      const teachingLock = this.currentSectorIndex === 0 && sectorProgress < 15 / sector.duration
+        ? this.simTime + Math.max(0, 15 - sectorProgress * sector.duration)
+        : 0;
+      this.spawnEnemy(type, false, sector.enemySpeedMult ?? 1, placement.flyby, {
+        x: placement.x,
+        y: placement.y,
+        fireLockedUntil: Math.max(teachingLock, this.simTime + (event.fireDelay ?? 0)),
+        encounterId: card.id,
+      });
+    }
+  }
+
+  _encounterPlacement(event, card, type, index, count, speedMult) {
+    const baseSpeed = Enemy.defs[type]?.speed ?? 90;
+    const flightSpeed = baseSpeed * speedMult * 1.14;
+    const split = [56, 116, 304, 364];
+    const edge = [72, 348];
+    const left = [62, 118, 172];
+    const right = [358, 302, 248];
+    const centered = [210, 154, 266, 104, 316];
+    const entry = event.entry;
+
+    if (entry === "side-left" || entry === "side-right") {
+      const fromLeft = entry === "side-left";
+      const baseY = event.band === "middle" ? 300 : 178;
+      return {
+        x: fromLeft ? -54 - index * 34 : CONFIG.designW + 54 + index * 34,
+        y: baseY + index * 54,
+        flyby: {
+          vx: (fromLeft ? 1 : -1) * flightSpeed * 1.22,
+          vy: 24,
+          sineAmp: 8,
+          sineFreq: 1.7,
+        },
+      };
+    }
+
+    let xs = centered;
+    if (entry === "top-split") xs = split;
+    else if (entry === "top-edges") xs = edge;
+    else if (entry === "top-edge") {
+      const side = (this.encounterDirector?.waveCount ?? 0) % 2;
+      xs = [edge[side], edge[1 - side]];
+    }
+    else if (entry === "top-left") xs = left;
+    else if (entry === "top-right") xs = right;
+
+    const x = xs[index % xs.length];
+    const isFormationFlyby = entry === "top-split" || (event.role === "light" && count > 1);
+    return {
+      x,
+      y: -52 - Math.floor(index / xs.length) * 42,
+      flyby: isFormationFlyby
+        ? { vx: 0, vy: flightSpeed, sineAmp: 0, sineFreq: 0 }
+        : null,
+    };
   }
 
   _hitRect(x, y, rect) {
@@ -87,7 +182,8 @@ class SectorMethods {
 
   onBossKilled(bossX, bossY, bossXp = 12) {
     // Bank only existing, uncollected XP. Surviving enemies grant no free kills.
-    const recoveredXp = this.pickups.reduce((sum, p) => sum + (p.dead ? 0 : p.value), 0);
+    const recoveredXp = this.pickups.reduce((sum, p) =>
+      sum + (p.dead || !Number.isFinite(p.value) ? 0 : p.value), 0);
     this.clearArena();
     this.bossActive = false;
     this.bossWarning = 0;
@@ -172,11 +268,14 @@ class SectorMethods {
     }
   }
 
-  spawnEnemy(type, boss, speedMult = 1.0, flyby = null) {
+  spawnEnemy(type, boss, speedMult = 1.0, flyby = null, options = {}) {
     let x, y;
     if (boss) {
       x = CONFIG.designW / 2;
       y = -90;
+    } else if (Number.isFinite(options.x) && Number.isFinite(options.y)) {
+      x = options.x;
+      y = options.y;
     } else if (flyby && flyby.vx !== 0) {
       // Diagonal flyby: enter from the edge the velocity comes from, at a random vertical position.
       x = flyby.vx > 0 ? -50 : CONFIG.designW + 50;
@@ -199,81 +298,14 @@ class SectorMethods {
         y = CONFIG.designH + 50;
       }
     }
-    this.enemies.push(new Enemy(this, type, x, y, boss, speedMult, flyby));
+    const enemy = new Enemy(this, type, x, y, boss, speedMult, flyby);
+    enemy.fireLockedUntil = options.fireLockedUntil ?? 0;
+    enemy.encounterId = options.encounterId ?? null;
+    this.enemies.push(enemy);
     if (boss) this.bossEntrance(x, y);
+    return enemy;
   }
 
-  // Spawns 3–5 small enemies in a formation using flyby behavior.
-  // Patterns: 0=horizontal line, 1=diagonal line, 2=shallow-V
-  // Always enters from the top. Does NOT add normal spawn timer delay.
-  spawnFormation(fleet, sectorProgress, speedMult) {
-    // Only scouts/fighters in formations
-    const lightTypes = Object.keys(fleet.phases[0]).filter(t => /scout|fighter/i.test(t));
-    if (!lightTypes.length) return;
-    const type = lightTypes[Math.floor(Math.random() * lightTypes.length)];
-
-    const baseSpeed = Enemy.defs[type]?.speed ?? 90;
-    const spd = baseSpeed * speedMult * 1.15;
-    const s = 46; // spacing between slots
-
-    // 5 named shapes — each is an array of {dx, dy} offsets from formation center.
-    // All offsets are in "formation space": x=across travel axis, y=along travel axis.
-    const SHAPES = [
-      // horizontal line (3)
-      [{ dx: -s,   dy: 0 }, { dx: 0,    dy: 0 }, { dx: s,    dy: 0 }],
-      // diagonal line (4)
-      [{ dx: -s*1.5, dy: -s*0.5 }, { dx: -s*0.5, dy: 0 }, { dx: s*0.5, dy: s*0.5 }, { dx: s*1.5, dy: s }],
-      // V-shape (5, tip leads)
-      [{ dx: 0, dy: 0 }, { dx: -s, dy: s*0.7 }, { dx: s, dy: s*0.7 }, { dx: -s*2, dy: s*1.4 }, { dx: s*2, dy: s*1.4 }],
-      // diamond (4)
-      [{ dx: 0, dy: -s*0.7 }, { dx: -s, dy: 0 }, { dx: s, dy: 0 }, { dx: 0, dy: s*0.7 }],
-      // arrow / wedge (5, tip leads)
-      [{ dx: 0, dy: 0 }, { dx: -s, dy: s*0.6 }, { dx: s, dy: s*0.6 }, { dx: -s*1.8, dy: s*0.2 }, { dx: s*1.8, dy: s*0.2 }],
-    ];
-
-    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-    const fromSide = Math.random() < 0.5;
-
-    // All enemies in this formation share the same flyby vector — no individual wobble.
-    // sineAmp:0 keeps the block tight; the shape provides all visual interest.
-    if (fromSide) {
-      const fromLeft = Math.random() < 0.5;
-      const vx = (fromLeft ? 1 : -1) * spd;
-      const cy = CONFIG.designH * (0.15 + Math.random() * 0.40);
-      const flyby = { vx, vy: 0, sineAmp: 0, sineFreq: 0 };
-      for (const off of shape) {
-        if (this.enemies.length >= CONFIG.enemyCap) break;
-        // In side-entry: dx maps to y-axis, dy maps to x-axis (along travel direction)
-        const ex = fromLeft
-          ? -50 - Math.max(0, off.dy)
-          : CONFIG.designW + 50 + Math.max(0, -off.dy);
-        const ey = clamp(cy + off.dx, 30, CONFIG.designH - 30);
-        this.enemies.push(new Enemy(this, type, ex, ey, false, speedMult, flyby));
-      }
-    } else {
-      const cx = CONFIG.designW * (0.2 + Math.random() * 0.6);
-      const flyby = { vx: 0, vy: spd, sineAmp: 0, sineFreq: 0 };
-      for (const off of shape) {
-        if (this.enemies.length >= CONFIG.enemyCap) break;
-        const ex = clamp(cx + off.dx, 30, CONFIG.designW - 30);
-        const ey = -50 - Math.max(0, off.dy); // tip enters first
-        this.enemies.push(new Enemy(this, type, ex, ey, false, speedMult, flyby));
-      }
-    }
-  }
-
-  // Returns a flyby object for a solo enemy crossing diagonally.
-  // Enters from left or right edge, travels toward the opposite side with a downward angle.
-  _makeDiagonalFlyby(baseSpeed, speedMult) {
-    const fromLeft = Math.random() < 0.5;
-    const spd = baseSpeed * speedMult * 1.1;
-    // Horizontal component carries enemy across full canvas width; vertical keeps it moving down.
-    // angle 15–35° below horizontal — horizontal component dominant, clearly crossing not chasing.
-    const angleRad = (0.26 + Math.random() * 0.35); // ~15–35° in radians
-    const vx = (fromLeft ? 1 : -1) * Math.cos(angleRad) * spd;
-    const vy = Math.sin(angleRad) * spd;
-    return { vx, vy, sineAmp: 12, sineFreq: 2.0 };
-  }
 }
 
 export const sectorMethods = Object.fromEntries(

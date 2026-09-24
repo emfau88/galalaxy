@@ -16,6 +16,10 @@ export class Input {
     this.justTapped = false;
     this.tapX = 0;
     this.tapY = 0;
+    // WASD is the browser default. `?controls=pointer` remains a zero-risk
+    // fallback for hosts that intercept physical keyboard events.
+    this.keyboardMovementEnabled = new URLSearchParams(window.location.search).get("controls") !== "pointer";
+    this.movementKeys = new Set();
     this.exclusionZones = []; // { x, y, w, h } in design-space — taps here skip ship movement
 
     const down = e => {
@@ -104,6 +108,15 @@ export class Input {
     canvas.addEventListener("pointercancel", up, { passive: false });
 
     window.addEventListener("keydown", e => {
+      const movementCode = this._movementCode(e);
+      if (movementCode) {
+        if (this.keyboardMovementEnabled && this.game.state === "playing") {
+          e.preventDefault();
+          this.game.activateAudio();
+          this.movementKeys.add(movementCode);
+        }
+        return;
+      }
       if (e.repeat) return;
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
@@ -114,6 +127,35 @@ export class Input {
       }
       if (e.key.toLowerCase() === "p") game.togglePause();
     });
+    window.addEventListener("keyup", e => {
+      const movementCode = this._movementCode(e);
+      if (!movementCode || !this.keyboardMovementEnabled) return;
+      this.movementKeys.delete(movementCode);
+    });
+    window.addEventListener("blur", () => this.clearKeyboardMovement());
+  }
+
+  _movementCode(event) {
+    if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) return event.code;
+    const key = String(event.key || "").toLowerCase();
+    return { w: "KeyW", a: "KeyA", s: "KeyS", d: "KeyD" }[key] || null;
+  }
+
+  movementVector() {
+    if (!this.keyboardMovementEnabled) return { x: 0, y: 0, active: false };
+    const x = (this.movementKeys.has("KeyD") ? 1 : 0) - (this.movementKeys.has("KeyA") ? 1 : 0);
+    const y = (this.movementKeys.has("KeyS") ? 1 : 0) - (this.movementKeys.has("KeyW") ? 1 : 0);
+    const length = Math.hypot(x, y);
+    if (!length) return { x: 0, y: 0, active: false };
+    return { x: x / length, y: y / length, active: true };
+  }
+
+  isKeyboardMovementActive() {
+    return this.keyboardMovementEnabled && this.movementKeys.size > 0;
+  }
+
+  clearKeyboardMovement() {
+    this.movementKeys.clear();
   }
 
   _applyOffset() {
@@ -132,6 +174,7 @@ export class Input {
     this.pointerId = null;
     this.isTouch = false;
     this.justTapped = false;
+    this.clearKeyboardMovement();
   }
 
   getPoint(e) {

@@ -6,6 +6,7 @@ import { SaveSystem } from "./saveSystem.js";
 import { Input } from "./input.js";
 import { Player } from "./entities/player.js";
 import { Enemy } from "./entities/enemy.js";
+import { COMBAT_PICKUP_DROP_CONFIG, CombatPickup } from "./entities/pickup.js";
 import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
 import { RunStats } from "./runStats.js";
 import { SoundSystem } from "./systems/soundSystem.js";
@@ -57,6 +58,9 @@ export class Game {
     this.nairanTestMode = searchParams.get("test") === "nairan-combat";
     this.nautolanTestMode = searchParams.get("test") === "nautolan-combat";
     this.hudTestMode = searchParams.get("test") === "hud-layout";
+    this.pickupTestMode = searchParams.get("test") === "pickup-showcase";
+    this.sectorMapTestMode = searchParams.get("test") === "sector-map";
+    this.sectorMapTestIndex = clamp(Number.parseInt(searchParams.get("sector"), 10) || 0, 0, SECTORS.length - 1);
     this.victoryTestMode = searchParams.get("test") === "victory-screen";
     this.fullRunTestMode = searchParams.get("test") === "full-run";
     this.upgradeCardTestRocketMode = searchParams.get("upgradeFamily") === "rocket";
@@ -82,7 +86,8 @@ export class Game {
     this.lastRun = null;
     this.best = SaveSystem.best();
     this.shake = 0;
-    this.spawnTimer = 0;
+    this.encounterDirector = null;
+    this.nextCombatPickupAt = COMBAT_PICKUP_DROP_CONFIG.firstEligibleAt;
     this.currentSectorIndex = 0;
     this.sectorTimer = SECTORS[0].duration;
     this.bossActive = false;
@@ -144,6 +149,8 @@ export class Game {
       else if (this.nairanTestMode) this.startFleetCombatTest("nairan");
       else if (this.nautolanTestMode) this.startFleetCombatTest("nautolan");
       else if (this.hudTestMode) this.startHudLayoutTest();
+      else if (this.pickupTestMode) this.startPickupShowcase();
+      else if (this.sectorMapTestMode) this.startSectorMapTest(this.sectorMapTestIndex);
       else if (this.victoryTestMode) this.startVictoryTest();
       else if (this.fullRunTestMode) {
         import("./qa/fullRunTest.js")
@@ -198,18 +205,18 @@ export class Game {
   }
 
   hudHeaderOffsetY() {
-    const hudHeight = 74;
+    const hudHeight = 90;
     const topPadding = this.safeTopPx + 4;
     if (this.offsetY < topPadding + hudHeight * this.scale) return 0;
     return (topPadding - this.offsetY) / this.scale - 8;
   }
 
   _fullscreenButtonZone() {
-    return { x: CONFIG.designW - 72, y: 59 + this.hudHeaderOffsetY(), w: 28, h: 22 };
+    return { x: 322, y: 50 + this.hudHeaderOffsetY(), w: 34, h: 28 };
   }
 
   _pauseButtonZone() {
-    return { x: CONFIG.designW - 116, y: 52 + this.hudHeaderOffsetY(), w: 32, h: 26 };
+    return { x: 284, y: 50 + this.hudHeaderOffsetY(), w: 34, h: 28 };
   }
 
   initStars() {
@@ -241,6 +248,8 @@ export class Game {
     if (this.klaedTestMode) groups.push("shared", "klaed");
     if (this.nairanTestMode) groups.push("shared", "klaed", "nairan");
     if (this.nautolanTestMode || this.hudTestMode) groups.push("shared", "klaed", "nautolan");
+    if (this.pickupTestMode) groups.push("shared", "klaed");
+    if (this.sectorMapTestMode) groups.push("shared", "klaed");
     if (this.victoryTestMode) groups.push("shared", "victory");
     return [...new Set(groups)];
   }
@@ -293,7 +302,8 @@ export class Game {
     this.xpNeed = 8;
     this.runTime = 0;
     this.simTime = 0;
-    this.spawnTimer = 1.2;
+    this.encounterDirector = null;
+    this.nextCombatPickupAt = COMBAT_PICKUP_DROP_CONFIG.firstEligibleAt;
     this.currentSectorIndex = 0;
     this.sectorTimer = SECTORS[0].duration;
     this.bossActive = false;
@@ -409,6 +419,38 @@ export class Game {
     this.bossActive = true;
     this.enemies = [new Enemy(this, "nautolanDreadnought", CONFIG.designW / 2, 150, true)];
     this.enemies[0].fireTimer = 0.4;
+  }
+
+  startPickupShowcase() {
+    this.startRun();
+    this.sectorTimer = Number.POSITIVE_INFINITY;
+    this.encounterDirector = { disabled: true, sectorIndex: this.currentSectorIndex };
+    Object.assign(this.player, {
+      x: CONFIG.designW / 2,
+      y: 625,
+      hp: 46,
+      shield: 14,
+      fireTimer: Number.MAX_VALUE,
+      invuln: Number.POSITIVE_INFINITY,
+    });
+    this.pickups = [
+      new CombatPickup(105, 430, "repair"),
+      new CombatPickup(210, 380, "shield"),
+      new CombatPickup(315, 430, "overdrive"),
+    ];
+  }
+
+  startSectorMapTest(index) {
+    this.startRun();
+    this.currentSectorIndex = clamp(index, 0, SECTORS.length - 1);
+    this.sectorTimer = Number.POSITIVE_INFINITY;
+    this.encounterDirector = { disabled: true, sectorIndex: this.currentSectorIndex };
+    Object.assign(this.player, {
+      x: CONFIG.designW / 2,
+      y: 625,
+      fireTimer: Number.MAX_VALUE,
+      invuln: Number.POSITIVE_INFINITY,
+    });
   }
 
   _applyVisualTestStage() {
@@ -638,13 +680,16 @@ export class Game {
     if (this.state === "levelUp") this.upgrades.draw(ctx, this.loader);
     if (this.state === "gameOver") this.drawGameOver(ctx);
     if (this.state === "victory") this.drawVictory(ctx);
+    // Keep the HUD rail visible as dimmed context behind the pause overlay, so
+    // its fullscreen control remains visually anchored instead of floating.
+    if (this.state === "paused") this.drawHud(ctx);
     if (this.state === "paused") this.drawPaused(ctx);
     if (this.state === "bossReward") this.drawBossReward(ctx);
     if (this.state === "visualTest") this.drawVisualTest(ctx);
     if (this.state === "playing") {
       this.drawHud(ctx);
-      this.drawPauseButton(ctx);
     }
+    if (this.state === "playing" || this.state === "paused") this.drawPauseButton(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);
     this.drawFullscreenButton(ctx);
     this.drawMuteButton(ctx);
