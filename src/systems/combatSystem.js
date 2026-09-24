@@ -106,7 +106,7 @@ class CombatMethods {
     // cooldown is applied only after a successful roll, keeping drops scarce.
     const chance = COMBAT_PICKUP_DROP_CONFIG.baseChance + Math.min(
       COMBAT_PICKUP_DROP_CONFIG.scoreChanceCap,
-      enemy.score / COMBAT_PICKUP_DROP_CONFIG.scoreDivisor,
+      (enemy.baseScore ?? enemy.score) / COMBAT_PICKUP_DROP_CONFIG.scoreDivisor,
     );
     if (Math.random() >= chance) return null;
 

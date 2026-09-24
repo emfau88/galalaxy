@@ -107,6 +107,10 @@ function testKeystoneMeasurement() {
   game.isQaRun = false;
   const stats = new RunStats();
   stats.start(game);
+  const trackedEnemy = new Enemy(game, "fighter", 120, 180);
+  stats.enemySpawn(game, trackedEnemy, "pursuit-pressure");
+  stats.enemyKill(game, trackedEnemy);
+  stats.enemyEscape(game, new Enemy(game, "scout", 0, 0));
   const keystone = { id: "reactor", keystone: true };
   game.runTime = 22;
   stats.offer(game, [keystone], [keystone]);
@@ -119,6 +123,11 @@ function testKeystoneMeasurement() {
   assert.equal(summary.keystoneName, "Pulse Reactor");
   assert.equal(summary.timeAfterKeystone, 17);
   assert.equal(summary.keystoneOfferCount, 1);
+  assert.equal(summary.regularEnemiesSpawned, 1);
+  assert.equal(summary.pursuitEnemiesSpawned, 1);
+  assert.equal(summary.regularEnemiesKilled, 1);
+  assert.equal(summary.enemiesEscaped, 1);
+  assert.equal(summary.regularKillScore, trackedEnemy.score);
 }
 
 function testAegis() {
@@ -207,6 +216,25 @@ function testCombatPickups() {
   } finally {
     Math.random = random;
   }
+}
+
+function testSectorScoreScaling() {
+  const game = createGame();
+  game.currentSectorIndex = 3;
+  const enemy = new Enemy(game, "nairanBattlecruiser", 210, 160);
+  assert.equal(enemy.baseScore, 240, "Enemy retains its progression and drop basis");
+  assert.equal(enemy.score, 288, "Sector-IV execution earns the authored 1.2x score reward");
+
+  let droppedXp = 0;
+  game.dropXp = (_x, _y, value) => { droppedXp = value; };
+  game.maybeDropCombatPickup = () => null;
+  game.spawnEnemyDestruction = () => {};
+  game.explosion = () => {};
+  game.deathBurst = () => {};
+  game.burst = () => {};
+  enemy.kill();
+  assert.equal(droppedXp, 4,
+    "Sector score scaling does not accelerate XP progression");
 }
 
 function testOptInKeyboardMovement() {
@@ -360,8 +388,8 @@ function testEncounterDirector() {
   assert.ok(frontier.phases.filter(phase => phase.phase === "active" && phase.at < 25)
     .every(phase => phase.wave === "single-file"),
   "Dense formations remain locked until 25s");
-  assert.ok(frontier.events[7].time >= 17 && frontier.events[7].time <= 19,
-    "The eighth XP-capable target leaves time for a first draft around 20-25s");
+  assert.ok(frontier.events[7].time >= 12 && frontier.events[7].time <= 14,
+    "The restored pursuit stream brings the eighth XP target in before 14s");
 
   const nairan = simulateEncounterSector(1);
   const lateralDirections = new Set(nairan.events
@@ -383,6 +411,50 @@ function testEncounterDirector() {
       .every(phase => phase.duration >= 3 && phase.duration <= 5),
     "Simulated recovery windows remain in the authored range");
   }
+
+  const historicalModeledCounts = [79.8, 143.1, 188.0, 221.9];
+  const fullSectors = SECTORS.map((sector, sectorIndex) =>
+    simulateEncounterSector(sectorIndex, sector.duration));
+  let modeledRunScore = Math.floor(SECTORS.reduce((sum, sector) => sum + sector.duration, 0) * 2.4);
+  for (let sectorIndex = 0; sectorIndex < fullSectors.length; sectorIndex++) {
+    const simulation = fullSectors[sectorIndex];
+    const sector = SECTORS[sectorIndex];
+    const recoveryRatio = simulation.events.length / historicalModeledCounts[sectorIndex];
+    assert.ok(recoveryRatio >= 0.80 && recoveryRatio <= 0.90,
+      `Sector ${sectorIndex + 1} restores roughly 85% of its historical modeled density`);
+    const pursuers = simulation.events.filter(event =>
+      event.options.encounterId === "pursuit-pressure");
+    assert.ok(pursuers.length / simulation.events.length >= 0.55,
+      `Sector ${sectorIndex + 1} keeps a majority stream of active pursuit enemies`);
+    assert.ok(pursuers.every(event => event.flyby === null),
+      "Pressure enemies use active player pursuit rather than flyby movement");
+
+    modeledRunScore += simulation.events.reduce((score, event) =>
+      score + Math.round(Enemy.defs[event.type].score * sector.scoreMult), 0);
+    const bossType = sector.bossType || FLEETS[sector.fleet].bossType;
+    modeledRunScore += Enemy.defs[bossType].score * 8;
+  }
+  assert.ok(modeledRunScore >= 58000 && modeledRunScore <= 63000,
+    `A strong modeled clear can reach the 60,000-point target (${modeledRunScore})`);
+
+  const queuedGame = createGame();
+  queuedGame.currentSectorIndex = 0;
+  queuedGame.encounterDirector = {
+    pendingEvents: [{
+      event: { at: 0, role: "light", count: 2, entry: "top-center" },
+      card: WAVE_CARDS["single-file"],
+      remaining: 2,
+    }],
+  };
+  queuedGame.enemies = Array.from({ length: 8 }, () => ({ dead: false, type: "scout" }));
+  queuedGame._drainPendingEncounterEvents(SECTOR_ENCOUNTER_PROFILES[0], SECTORS[0], 0.5);
+  assert.equal(queuedGame.encounterDirector.pendingEvents[0].remaining, 2,
+    "An authored event remains queued while the arena is full");
+  queuedGame.enemies[0].dead = true;
+  queuedGame.enemies[1].dead = true;
+  queuedGame._drainPendingEncounterEvents(SECTOR_ENCOUNTER_PROFILES[0], SECTORS[0], 0.5);
+  assert.equal(queuedGame.encounterDirector.pendingEvents.length, 0,
+    "The complete authored event spawns when capacity returns");
 }
 
 function testEncounterProjectileBudget() {
@@ -588,6 +660,7 @@ testAegis();
 testPlayerStartsReady();
 testSurvivalFeedback();
 testCombatPickups();
+testSectorScoreScaling();
 testOptInKeyboardMovement();
 testUpgradeCameraShake();
 testEncounterDirector();

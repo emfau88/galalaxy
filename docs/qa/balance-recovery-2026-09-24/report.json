@@ -1,0 +1,298 @@
+{
+  "fullRun": {
+    "ok": true,
+    "transitions": [
+      {
+        "from": 1,
+        "to": 2,
+        "activeGroup": "nairan",
+        "sharedFleetGroup": false
+      },
+      {
+        "from": 2,
+        "to": 3,
+        "activeGroup": "nautolan",
+        "sharedFleetGroup": false
+      },
+      {
+        "from": 3,
+        "to": 4,
+        "activeGroup": "nautolan",
+        "sharedFleetGroup": true
+      }
+    ],
+    "replay": true,
+    "hangar": true,
+    "arenaCleanup": true,
+    "queuedLevels": true,
+    "pausedCombatClock": true
+  },
+  "keyboardControl": {
+    "enabled": true,
+    "movedUp": true,
+    "vectorActive": true,
+    "released": true,
+    "pointerResumed": true,
+    "pauseClearsKeys": true,
+    "pointerFallback": {
+      "enabled": false,
+      "stayedPut": true
+    }
+  },
+  "encounterDefinitions": {
+    "cardCount": 9,
+    "durationsValid": true,
+    "corridorsPresent": true,
+    "identities": [
+      "frontier-training",
+      "nairan-precision",
+      "nautolan-control",
+      "void-combination"
+    ],
+    "openings": [
+      "single-file",
+      "side-sweep",
+      "anchor-corridor",
+      "finale-relay"
+    ],
+    "budgets": [
+      {
+        "enemies": 8,
+        "projectiles": 12,
+        "recovery": [
+          4.2,
+          5
+        ]
+      },
+      {
+        "enemies": 10,
+        "projectiles": 16,
+        "recovery": [
+          3.4,
+          4.3
+        ]
+      },
+      {
+        "enemies": 12,
+        "projectiles": 19,
+        "recovery": [
+          4.1,
+          5
+        ]
+      },
+      {
+        "enemies": 14,
+        "projectiles": 23,
+        "recovery": [
+          3.5,
+          4.5
+        ]
+      }
+    ]
+  },
+  "finalReward": {
+    "queued": 2,
+    "between": "levelUp",
+    "state": "victory",
+    "outcome": "victory",
+    "cleared": 4,
+    "duration": 4.3,
+    "minimumHold": 2.4
+  },
+  "pause": {
+    "frozen": true,
+    "pointerReleased": true
+  },
+  "pointerLifecycle": {
+    "ownerPreserved": true,
+    "stayedPaused": true
+  },
+  "soundCues": {
+    "state": "running",
+    "played": [
+      "boss",
+      "hit",
+      "kill",
+      "shield",
+      "shieldBreak",
+      "upgrade"
+    ]
+  },
+  "runReview": {
+    "outcome": "defeat",
+    "modules": 4,
+    "sector": 3,
+    "cause": "projectile"
+  },
+  "pickupShowcase": {
+    "kinds": [
+      "overdrive",
+      "repair",
+      "shield"
+    ],
+    "assetsLoaded": true
+  },
+  "encounterScenes": [
+    {
+      "sector": 1,
+      "profile": "frontier-training",
+      "wave": "single-file",
+      "enemies": 4,
+      "enemyCap": 8,
+      "enemyProjectiles": 0,
+      "projectileCap": 12
+    },
+    {
+      "sector": 2,
+      "profile": "nairan-precision",
+      "wave": "side-sweep",
+      "enemies": 6,
+      "enemyCap": 10,
+      "enemyProjectiles": 0,
+      "projectileCap": 16
+    },
+    {
+      "sector": 3,
+      "profile": "nautolan-control",
+      "wave": "anchor-corridor",
+      "enemies": 12,
+      "enemyCap": 12,
+      "enemyProjectiles": 5,
+      "projectileCap": 19
+    },
+    {
+      "sector": 4,
+      "profile": "void-combination",
+      "wave": "finale-relay",
+      "enemies": 9,
+      "enemyCap": 14,
+      "enemyProjectiles": 2,
+      "projectileCap": 23
+    }
+  ],
+  "nairanTargetLock": {
+    "kind": "precision",
+    "targetX": 210,
+    "targetY": 630,
+    "queuedShots": 1
+  },
+  "enemyRoles": {
+    "torpedo": {
+      "charge": "torpedo-lock",
+      "warningSeconds": 1.05,
+      "queuedShots": 1,
+      "fullyVisible": true,
+      "assetsLoaded": true
+    },
+    "support": {
+      "protectedTargets": 1,
+      "visibleSources": true,
+      "vulnerable": true,
+      "assetsLoaded": true
+    }
+  },
+  "bossScenes": [
+    {
+      "sector": 1,
+      "type": "dreadnought",
+      "name": "KLA'ED IRON DREAD",
+      "movement": "broad-sweep",
+      "phase": 1,
+      "attack": "torpedo",
+      "safeLanes": null,
+      "protectedBySupport": false,
+      "voidCoreLoaded": true
+    },
+    {
+      "sector": 2,
+      "type": "nairanDreadnought",
+      "name": "NAIRAN LANCER",
+      "movement": "lateral-lancer",
+      "phase": 1,
+      "attack": "boss-target-lock",
+      "safeLanes": null,
+      "protectedBySupport": false,
+      "voidCoreLoaded": true
+    },
+    {
+      "sector": 3,
+      "type": "nautolanDreadnought",
+      "name": "ABYSSAL WARDEN",
+      "movement": "anchored-control",
+      "phase": 2,
+      "attack": "control-gate",
+      "safeLanes": 1,
+      "protectedBySupport": true,
+      "voidCoreLoaded": true
+    },
+    {
+      "sector": 4,
+      "type": "voidSovereign",
+      "name": "VOID SOVEREIGN",
+      "movement": "void-orbit",
+      "phase": 3,
+      "attack": "void-rift",
+      "safeLanes": 1,
+      "protectedBySupport": false,
+      "voidCoreLoaded": true
+    }
+  ],
+  "hudLayouts": [
+    {
+      "width": 390,
+      "height": 844,
+      "safeTop": 0,
+      "headerOffset": 0,
+      "headerTop": 76.5714316368103,
+      "gap": 11.999999669881968,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 360,
+      "height": 900,
+      "safeTop": 0,
+      "headerOffset": -148.33333333333334,
+      "headerTop": 4.000002074809345,
+      "gap": 12.00000011920929,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "safeTop": 0,
+      "headerOffset": -108.37500000000001,
+      "headerTop": 3.9999967589974403,
+      "gap": 12.000000223517418,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "safeTop": 0,
+      "headerOffset": 0,
+      "headerTop": 85.14285373687744,
+      "gap": 12.000000332677088,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 390,
+      "height": 1000,
+      "safeTop": 44,
+      "headerOffset": -114.76923076923073,
+      "headerTop": 47.99999564296604,
+      "gap": 11.999999669881968,
+      "pauseInsideHeader": true
+    },
+    {
+      "width": 900,
+      "height": 420,
+      "safeTop": 0,
+      "headerOffset": 0,
+      "headerTop": 4.421052455902071,
+      "gap": 11.99999952316284,
+      "pauseInsideHeader": true
+    }
+  ],
+  "errors": [],
+  "ok": true
+}

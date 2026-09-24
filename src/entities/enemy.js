@@ -1,4 +1,4 @@
-import { CONFIG, RENDER_CONFIG } from "../config.js";
+import { CONFIG, RENDER_CONFIG, SECTORS } from "../config.js";
 import { clamp, lerp, dist2 } from "../utils.js";
 import { ENEMY_WEAPON_PROFILES } from "../data/projectiles.js";
 import { enemyVisualFor } from "../data/enemyVisuals.js";
@@ -30,7 +30,10 @@ export class Enemy {
     // speedMult only applies to regular enemies; boss speed is never reduced by sector tuning
     this.speed = boss ? def.speed * 0.45 : def.speed * speedMult;
     this.damagePower = boss ? def.damage * 1.8 : def.damage;
-    this.score = boss ? def.score * 8 : def.score;
+    this.baseScore = boss ? def.score * 8 : def.score;
+    this.score = boss
+      ? this.baseScore
+      : Math.round(this.baseScore * (SECTORS[game.currentSectorIndex]?.scoreMult ?? 1));
     this.imgKey = def.img;
     this.projVisual = Enemy._projVisual(type, boss);
     this.weaponProfile = ENEMY_WEAPON_PROFILES[this.projVisual] || DEFAULT_WEAPON_PROFILE;
@@ -465,7 +468,10 @@ export class Enemy {
     if (!this.boss) {
       const margin = this.flyby ? 220 : 160;
       if (this.x < -margin || this.x > CONFIG.designW + margin ||
-          this.y < -margin || this.y > CONFIG.designH + margin) this.dead = true;
+          this.y < -margin || this.y > CONFIG.designH + margin) {
+        this.dead = true;
+        this.game.runStats?.enemyEscape?.(this.game, this);
+      }
     }
   }
 
@@ -498,11 +504,14 @@ export class Enemy {
     this.game.spawnEnemyDestruction(this);
     this.game.score += this.score;
     this.game.kills++;
+    this.game.runStats?.enemyKill?.(this.game, this);
     this.game.sounds?.play("kill");
     const wasBoss = this.boss;
     if (wasBoss) this.game.onBossKilled(this.x, this.y, this.bossProfile?.bossXp ?? 12, this.bossProfile);
     else {
-      this.game.dropXp(this.x, this.y, 1 + Math.floor(this.score / 70));
+      // Score escalation rewards later-sector execution without accelerating
+      // XP progression or increasing utility-pickup frequency.
+      this.game.dropXp(this.x, this.y, 1 + Math.floor(this.baseScore / 70));
       this.game.maybeDropCombatPickup(this);
     }
     if (this.type === "voidSovereign") {

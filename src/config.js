@@ -141,6 +141,7 @@ export const SECTORS = [
     duration: 70,
     fleet: "klaed",
     tint: [30, 60, 140],
+    scoreMult: 1.0,
     enemySpeedMult: 0.9   // regular enemies 10% slower; does not affect boss
   },
   {
@@ -150,6 +151,7 @@ export const SECTORS = [
     duration: 90,
     fleet: "nairan",
     tint: [100, 30, 140],
+    scoreMult: 1.08,
     enemySpeedMult: 1.0
   },
   {
@@ -159,6 +161,7 @@ export const SECTORS = [
     duration: 105,
     fleet: "nautolan",
     tint: [30, 110, 80],
+    scoreMult: 1.12,
     enemySpeedMult: 1.0
   },
   {
@@ -170,6 +173,7 @@ export const SECTORS = [
     encounterFleet: "void",
     bossType: "voidSovereign",
     tint: [140, 30, 30],
+    scoreMult: 1.2,
     enemySpeedMult: 1.0
   }
 ];

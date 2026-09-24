@@ -103,11 +103,14 @@ export const WAVE_CARDS = Object.freeze({
 export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
   Object.freeze({
     id: "frontier-training",
-    identity: "readable formations with generous open space",
-    enemyCap: 6,
-    projectileCap: 9,
+    identity: "readable formations backed by a restrained pursuit stream",
+    enemyCap: 8,
+    projectileCap: 12,
     openingDelay: 1.2,
     openingWave: "single-file",
+    pressureDelay: 10,
+    pressureInterval: [1.30, 1.44],
+    pressureRoles: ["light", "light", "skirmisher", "shooter"],
     recovery: [4.2, 5],
     earlyDeck: ["single-file"],
     midDeck: ["single-file", "open-v"],
@@ -115,11 +118,14 @@ export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
   }),
   Object.freeze({
     id: "nairan-precision",
-    identity: "fast side attacks and committed precision shots",
-    enemyCap: 5,
-    projectileCap: 12,
+    identity: "fast side attacks, active hunters, and committed precision shots",
+    enemyCap: 10,
+    projectileCap: 16,
     openingDelay: 3.6,
     openingWave: "side-sweep",
+    pressureDelay: 3,
+    pressureInterval: [0.90, 1.04],
+    pressureRoles: ["light", "skirmisher", "skirmisher", "shooter"],
     recovery: [3.4, 4.3],
     earlyDeck: ["side-sweep", "open-v"],
     midDeck: ["side-sweep", "precision-cross", "open-v", "torpedo-lock"],
@@ -127,11 +133,14 @@ export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
   }),
   Object.freeze({
     id: "nautolan-control",
-    identity: "slow anchors that control space while preserving corridors",
-    enemyCap: 6,
-    projectileCap: 13,
+    identity: "slow anchors and persistent hunters that control space while preserving corridors",
+    enemyCap: 12,
+    projectileCap: 19,
     openingDelay: 4.2,
     openingWave: "anchor-corridor",
+    pressureDelay: 2.5,
+    pressureInterval: [0.70, 0.82],
+    pressureRoles: ["skirmisher", "shooter", "shooter", "heavy"],
     recovery: [4.1, 5],
     earlyDeck: ["anchor-corridor", "open-v"],
     midDeck: ["anchor-corridor", "hammer-wing", "support-screen"],
@@ -139,11 +148,14 @@ export const SECTOR_ENCOUNTER_PROFILES = Object.freeze([
   }),
   Object.freeze({
     id: "void-combination",
-    identity: "short peaks combining speed, precision, and space control",
-    enemyCap: 8,
-    projectileCap: 16,
+    identity: "relentless pursuit combining speed, precision, and space control",
+    enemyCap: 14,
+    projectileCap: 23,
     openingDelay: 4,
     openingWave: "finale-relay",
+    pressureDelay: 2,
+    pressureInterval: [0.68, 0.82],
+    pressureRoles: ["light", "skirmisher", "shooter", "heavy"],
     recovery: [3.5, 4.5],
     earlyDeck: ["side-sweep", "anchor-corridor", "finale-relay"],
     midDeck: ["precision-cross", "hammer-wing", "support-screen", "finale-relay"],
@@ -201,7 +213,23 @@ export function createEncounterDirector(sectorIndex) {
     waveCount: 0,
     enemyCap: profile.enemyCap,
     projectileCap: profile.projectileCap,
+    pendingEvents: [],
+    pressureTimer: profile.pressureDelay,
+    pressureCount: 0,
   };
+}
+
+export function pressureIntervalFor(profile, roll = Math.random()) {
+  const [minimum, maximum] = profile.pressureInterval;
+  return minimum + roll * (maximum - minimum);
+}
+
+export function pickPressureRole(profile, progress, roll = Math.random()) {
+  const roles = profile.pressureRoles;
+  // Keep the opening readable. The latter half gradually shifts one slot
+  // toward the more demanding end of the authored role list.
+  const adjusted = progress < 0.45 ? roll : Math.min(0.999, roll + 0.12);
+  return roles[Math.min(roles.length - 1, Math.floor(adjusted * roles.length))];
 }
 
 export function deckForProgress(profile, progress, sectorElapsed = 0) {

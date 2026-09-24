@@ -52,6 +52,12 @@ export class RunStats {
       pickupOverdriveSeconds: 0,
       encounterCount: 0,
       encounterTimeline: [],
+      regularEnemiesSpawned: 0,
+      pursuitEnemiesSpawned: 0,
+      regularEnemiesKilled: 0,
+      enemiesEscaped: 0,
+      regularKillScore: 0,
+      bossKillScore: 0,
     };
     this.current.sectorReached = Math.max(1, game.currentSectorIndex + 1);
   }
@@ -112,6 +118,26 @@ export class RunStats {
     if (!this.current || game.isQaRun || !this.current.encounterTimeline.length) return;
     const latest = this.current.encounterTimeline.at(-1);
     latest.recoverySeconds = Number(recoverySeconds.toFixed(1));
+  }
+
+  enemySpawn(game, enemy, source) {
+    if (!this.current || game.isQaRun || enemy.boss) return;
+    this.current.regularEnemiesSpawned++;
+    if (source === "pursuit-pressure") this.current.pursuitEnemiesSpawned++;
+  }
+
+  enemyKill(game, enemy) {
+    if (!this.current || game.isQaRun) return;
+    if (enemy.boss) this.current.bossKillScore += enemy.score;
+    else {
+      this.current.regularEnemiesKilled++;
+      this.current.regularKillScore += enemy.score;
+    }
+  }
+
+  enemyEscape(game, enemy) {
+    if (!this.current || game.isQaRun || enemy.boss) return;
+    this.current.enemiesEscaped++;
   }
 
   complete(game, outcome, cause = null) {

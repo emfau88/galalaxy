@@ -7,8 +7,10 @@ import {
   WAVE_CARDS,
   createEncounterDirector,
   encounterProfileFor,
+  pickPressureRole,
   pickRoleEnemy,
   pickWaveCard,
+  pressureIntervalFor,
 } from "../data/encounters.js";
 
 class SectorMethods {
@@ -38,6 +40,12 @@ class SectorMethods {
 
     const director = this.encounterDirector;
     director.timer -= dt;
+    director.pressureTimer -= dt;
+
+    // Authored formations get first claim on newly available slots. Events
+    // that hit the cap remain queued instead of disappearing from the run.
+    this._drainPendingEncounterEvents(profile, sector, sectorProgress);
+    this._updatePursuitPressure(profile, sector, sectorProgress);
 
     if (director.phase === "recovery") {
       if (director.timer <= 0) this._startEncounterWave(profile, sectorProgress, sectorElapsed);
@@ -53,9 +61,10 @@ class SectorMethods {
     director.waveElapsed += dt;
     while (director.eventIndex < card.events.length &&
            card.events[director.eventIndex].at <= director.waveElapsed) {
-      this._spawnEncounterEvent(card.events[director.eventIndex], card, profile, sector, sectorProgress);
+      this._queueEncounterEvent(card.events[director.eventIndex], card);
       director.eventIndex++;
     }
+    this._drainPendingEncounterEvents(profile, sector, sectorProgress);
     if (director.timer <= 0) this._startEncounterRecovery(profile);
   }
 
@@ -73,12 +82,12 @@ class SectorMethods {
     this.runStats?.encounterStart?.(this, card, profile);
     // Events authored at t=0 should appear on the exact phase boundary.
     while (director.eventIndex < card.events.length && card.events[director.eventIndex].at <= 0) {
-      this._spawnEncounterEvent(
-        card.events[director.eventIndex], card, profile,
-        SECTORS[this.currentSectorIndex], sectorProgress,
-      );
+      this._queueEncounterEvent(card.events[director.eventIndex], card);
       director.eventIndex++;
     }
+    this._drainPendingEncounterEvents(
+      profile, SECTORS[this.currentSectorIndex], sectorProgress,
+    );
   }
 
   _startEncounterRecovery(profile) {
@@ -93,15 +102,61 @@ class SectorMethods {
     this.runStats?.encounterRecovery?.(this, recovery);
   }
 
-  _spawnEncounterEvent(event, card, profile, sector, sectorProgress) {
+  _queueEncounterEvent(event, card) {
+    this.encounterDirector.pendingEvents.push({
+      event,
+      card,
+      remaining: event.count,
+    });
+  }
+
+  _drainPendingEncounterEvents(profile, sector, sectorProgress) {
+    const pending = this.encounterDirector.pendingEvents;
+    while (pending.length) {
+      const item = pending[0];
+      const spawned = this._spawnEncounterEvent(
+        item.event, item.card, profile, sector, sectorProgress, item.remaining,
+      );
+      item.remaining -= spawned;
+      if (item.remaining <= 0) pending.shift();
+      else break;
+    }
+  }
+
+  _updatePursuitPressure(profile, sector, sectorProgress) {
+    const director = this.encounterDirector;
+    if (director.pressureTimer > 0 || director.pendingEvents.length) return;
+
+    const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
+    if (livingEnemies >= Math.min(profile.enemyCap, CONFIG.enemyCap)) {
+      // Do not accumulate a burst while the arena is full. Retry soon and
+      // restore the old continuous pressure as soon as one slot opens.
+      director.pressureTimer = 0.12;
+      return;
+    }
+
+    const role = pickPressureRole(profile, sectorProgress);
+    const type = pickRoleEnemy(sector.encounterFleet || sector.fleet, role, sectorProgress);
+    const teachingLock = this.currentSectorIndex === 0 && sectorProgress < 15 / sector.duration
+      ? this.simTime + Math.max(0, 15 - sectorProgress * sector.duration)
+      : 0;
+    this.spawnEnemy(type, false, sector.enemySpeedMult ?? 1, null, {
+      fireLockedUntil: teachingLock,
+      encounterId: "pursuit-pressure",
+    });
+    director.pressureCount++;
+    director.pressureTimer = pressureIntervalFor(profile);
+  }
+
+  _spawnEncounterEvent(event, card, profile, sector, sectorProgress, requestedCount = event.count) {
     const livingEnemies = this.enemies.filter(enemy => !enemy.dead).length;
     const available = Math.max(0, Math.min(profile.enemyCap, CONFIG.enemyCap) - livingEnemies);
     const roleLimit = event.role === "torpedo"
       ? (this.enemies.some(enemy => !enemy.dead && enemy.type === "nairanTorpedoShip") ? 0 : 1)
       : event.role === "support"
         ? (this.enemies.some(enemy => !enemy.dead && enemy.type === "nautolanSupport") ? 0 : 1)
-        : event.count;
-    const count = Math.min(event.count, available, roleLimit);
+        : requestedCount;
+    const count = Math.min(requestedCount, available, roleLimit);
     for (let index = 0; index < count; index++) {
       const type = pickRoleEnemy(sector.encounterFleet || sector.fleet, event.role, sectorProgress);
       const placement = this._encounterPlacement(event, card, type, index, count, sector.enemySpeedMult ?? 1);
@@ -115,6 +170,7 @@ class SectorMethods {
         encounterId: card.id,
       });
     }
+    return count;
   }
 
   _encounterPlacement(event, card, type, index, count, speedMult) {
@@ -317,6 +373,7 @@ class SectorMethods {
     enemy.fireLockedUntil = options.fireLockedUntil ?? 0;
     enemy.encounterId = options.encounterId ?? null;
     this.enemies.push(enemy);
+    this.runStats?.enemySpawn?.(this, enemy, options.encounterId ?? (boss ? "boss" : "untracked"));
     if (boss) this.bossEntrance(x, y);
     return enemy;
   }

@@ -232,6 +232,33 @@ Plan steht bei jedem Bulk.
 
 ---
 
+## Bulk D.5 – Balance-Recovery nach Spielertest
+
+**Priorität:** P0
+**Status:** TEILWEISE
+**Bezug:** Spielerrückmeldung nach Bulk D: nur rund 20.000 statt knapp 60.000 Punkte, zu wenig Action
+
+- [x] Historischen Spawner vor `e0ca339` als messbare Referenz auswerten.
+- [x] Rund 85 % der historischen modellierten Spawnmenge wiederherstellen.
+- [x] Kuratierte Formationen und sektorbezogene Rollen erhalten.
+- [x] Einen mehrheitlichen Strom aktiv jagender Gegner ergänzen.
+- [x] Gegner- und Projektilbudgets von Sektor I bis IV deutlich eskalieren.
+- [x] Durch volle Gegnerbudgets blockierte Encounter-Spawns kontrolliert nachholen.
+- [x] Rund 60.000 Punkte für einen starken vollständigen Clear rechnerisch ermöglichen.
+- [x] Spätere Sektor-Punkteboni von XP- und Pickup-Berechnung entkoppeln.
+- [x] Spawn-, Kill-, Flucht- und Punktewerte in der Run-Telemetrie erfassen.
+- [x] Automatische Dichte-, Pursuit-, Punkte- und Reliability-Prüfungen ergänzen.
+- [ ] Menschlichen vollständigen Run durchführen und Action, Fairness sowie Punktziel bestätigen.
+
+### Abnahme Bulk D.5
+
+- [x] Modellierte Dichte liegt pro Sektor zwischen 80 und 90 % der historischen Referenz.
+- [x] Aktive Verfolger stellen in jedem Sektor mehr als die Hälfte der regulären Spawns.
+- [x] Modellierter perfekter Clear liegt im Zielkorridor 58.000–63.000 Punkte.
+- [ ] Guter menschlicher Run erreicht etwa 55.000–65.000 Punkte, ohne unlesbar oder unfair zu werden.
+
+---
+
 ## Bulk E – Build-Progression fertigstellen
 
 **Priorität:** P1
@@ -397,3 +424,4 @@ Plan steht bei jedem Bulk.
 - **24.09.2026:** WASD in einem externen Desktop-Browser manuell bestätigt und als Standard aktiviert. `?controls=pointer` bleibt als sicherer Rückfallmodus; der Codex-Browser selbst fängt physische WASD-Eingaben ab.
 - **24.09.2026:** Bulk C technisch umgesetzt: Nairan-Torpedoschiff mit fixiertem 1,05-s-Zielkorridor, Nautolan-Support mit genau einem sichtbaren Schutzlink, zwei neue Encounter-Karten und separate Kleinbild-QA-Szenen. Technische Abnahme bestanden; menschliche Erklärung des Gegenzugs bleibt offen.
 - **24.09.2026:** Bulk D abgeschlossen: hochwertige ImageGen-Void-Core-Landmarke, zurückhaltende Sektor-4-Randatmosphäre, vier getrennte Bossprofile und Bewegungen, Nairan-Ziel-Lock/Sweep, Nautolan-Korridor/Supportphase sowie dreiphasiger Void Sovereign. Boss-QA und kompletter Browser-Vollrun bestanden; Details unter `docs/qa/bulk-d-2026-09-24/bulk-d-report.md`.
+- **24.09.2026:** Balance-Recovery D.5 technisch umgesetzt: 80–90 % der historischen Spawnmenge pro Sektor, mehrheitlich aktive Verfolger, gestaffelte Budgets, nachgeholte Encounter-Spawns und ein modelliertes Punktepotenzial von rund 60.000. Menschliche Vollrun-Abnahme bleibt offen; Details unter `docs/qa/balance-recovery-2026-09-24/report.md`.
