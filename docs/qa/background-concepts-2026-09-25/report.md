@@ -40,6 +40,13 @@ asymmetrisch; die zentrale Kampfzone bleibt transparent.
 Die V2-Rohdateien liegen bei ungefähr 0,43–0,82 MB. Sie sind weiterhin reine
 Abnahmemotive und noch nicht in Laufzeitassets oder Parallax-Ebenen zerlegt.
 
+Für Nairan wurde zusätzlich `sector-2-nairan-expanse-v3.png` als bevorzugte
+Fassung erzeugt. Gegenüber V2 sind ausschließlich die diagonalen
+Energieströme dünner, dunkler und stärker unterbrochen, damit sie nicht wie
+Kollisionshindernisse wirken. Mond, Palette und transparente Mitte bleiben
+erhalten. Die aktuelle Abnahmeauswahl ist damit Nairan V3, Nautolan V2 und
+Void V2.
+
 ## Verwendetes Prompt-Set
 
 Gemeinsame Vorgaben: `stylized-concept`, transparentes vertikales
