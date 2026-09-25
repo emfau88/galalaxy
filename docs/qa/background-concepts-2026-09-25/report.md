@@ -23,6 +23,23 @@ Die Rohkonzepte sind bewusst noch nicht für mobile Laufzeitkosten optimiert
 (0,9–1,4 MB je PNG). Diese Kosten gelangen nicht ins Spiel, solange die
 Abnahme offen ist.
 
+## Überarbeitete Vergleichsmotive V2
+
+Nach der ersten Sichtung wurde die geschlossene Rahmenwirkung verworfen. Die
+V2-Motive verwenden die erste Serie nur als Themenreferenz und reduzieren
+Sättigung, Kontrast und Detaildichte. Alle drei Kompositionen sind bewusst
+asymmetrisch; die zentrale Kampfzone bleibt transparent.
+
+1. `sector-2-nairan-expanse-v2.png` – kleinerer Mond, breite diagonale
+   Energieströme und wenige Ionenschleifen ohne umlaufenden Rahmen.
+2. `sector-3-nautolan-depths-v2.png` – entfernter Ring, ein großer
+   Ruinenanker rechts und eine kleinere organisch-technische Gruppe links.
+3. `sector-4-void-core-v2.png` – kleinerer, dunklerer Void Core, dünne Bögen
+   und nur wenige große Monolithsilhouetten.
+
+Die V2-Rohdateien liegen bei ungefähr 0,43–0,82 MB. Sie sind weiterhin reine
+Abnahmemotive und noch nicht in Laufzeitassets oder Parallax-Ebenen zerlegt.
+
 ## Verwendetes Prompt-Set
 
 Gemeinsame Vorgaben: `stylized-concept`, transparentes vertikales
@@ -38,3 +55,12 @@ kein vollflächiger Farbnebel und Eignung für langsames Parallax-Driften.
 - **Void:** hochwertiger entfernter Void Core, dünne Gravitationsbögen, rote
   Trümmermonolithen und verzerrte Sternspuren; Weinrot, Crimson und sparsame
   Violettakzente, kein heller zentraler Portal-Fokus.
+
+### V2-Ergänzungen
+
+Gemeinsame Vorgaben: gröberes Pixelraster passend zu den Spielsprites,
+limitierte Palette, ungefähr 40 % weniger Sättigung und Kontrast, echte
+Alpha-Transparenz, höchstens rund 15 % Randbelegung, keine Symmetrie und kein
+durchgehender Bilderrahmen. Nairan nutzt zwei breite Energieströme, Nautolan
+trennt entfernten Ring und zwei ungleich große Ruinencluster, Void hält
+Warnfarben durch dunkles Burgund und sparsame rote Highlights lesbar.
