@@ -12,6 +12,7 @@ import { BOSS_PROFILES } from "../src/data/bosses.js";
 import { FLEETS } from "../src/data/fleets.js";
 import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
 import { ASSET_GROUPS } from "../src/assets.js";
+import { Y8_APP_ID, Y8_GAME_ID, Y8Bridge, isY8Environment, isY8Host } from "../src/y8.js";
 
 function createGame() {
   const game = Object.create(Game.prototype);
@@ -893,6 +894,122 @@ function testKongregateStats() {
   });
 }
 
+async function testY8Integration() {
+  assert.equal(Y8_APP_ID, "6ab6e4c5e6dd4122f42af26d");
+  assert.equal(Y8_GAME_ID, "284519");
+  assert.equal(isY8Host("https://y8.com/games/galalaxy"), true);
+  assert.equal(isY8Host("https://www.y8.com/games/galalaxy"), true);
+  assert.equal(isY8Host("https://example.com/y8.com"), false);
+  assert.equal(isY8Environment({
+    __GALALAXY_PLATFORM__: "y8",
+    location: { href: "http://localhost:8000", ancestorOrigins: [] },
+    document: { referrer: "" },
+  }), true, "the generated Y8 package marker enables local SDK testing");
+
+  let continued = 0;
+  const unavailable = new Y8Bridge(null, { enabled: true, autoLoad: false });
+  const unavailableResult = await unavailable.showInterstitial("new-run", () => continued++);
+  assert.deepEqual(unavailableResult, { requested: false, status: "notReady" });
+  assert.equal(continued, 1, "an unavailable SDK never blocks the game");
+
+  const events = [];
+  const game = {
+    beginPlatformAd() { events.push("pause"); },
+    endPlatformAd() { events.push("resume"); },
+  };
+  const displayed = new Y8Bridge(game, {
+    enabled: true,
+    autoLoad: false,
+    sdk: {
+      showAd(options) {
+        assert.equal(options.type, "next");
+        assert.equal(options.name, "sector-complete");
+        options.beforeAd();
+        options.afterAd();
+        options.adBreakDone({ breakStatus: "viewed" });
+        return Promise.resolve();
+      },
+    },
+  });
+  const displayedResult = await displayed.showInterstitial("sector-complete", () => events.push("continue"));
+  assert.deepEqual(displayedResult, { requested: true, status: "viewed" });
+  assert.deepEqual(events, ["pause", "resume", "continue"],
+    "a visible ad pauses audio, restores it, then continues exactly once");
+
+  continued = 0;
+  const capped = new Y8Bridge(null, {
+    enabled: true,
+    autoLoad: false,
+    sdk: {
+      showAd(options) {
+        options.adBreakDone({ breakStatus: "frequencyCapped" });
+        return Promise.resolve();
+      },
+    },
+  });
+  const cappedResult = await capped.showInterstitial("new-run", () => continued++);
+  assert.deepEqual(cappedResult, { requested: true, status: "frequencyCapped" });
+  assert.equal(continued, 1, "a capped ad continues without waiting for pause callbacks");
+
+  continued = 0;
+  const rejected = new Y8Bridge(null, {
+    enabled: true,
+    autoLoad: false,
+    sdk: { showAd: () => Promise.reject(new Error("test failure")) },
+  });
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  const rejectedResult = await rejected.showInterstitial("new-run", () => continued++);
+  console.warn = originalWarn;
+  assert.deepEqual(rejectedResult, { requested: true, status: "error" });
+  assert.equal(continued, 1, "a rejected ad request also continues exactly once");
+
+  const audioEvents = [];
+  const audioGame = Object.create(Game.prototype);
+  Object.assign(audioGame, {
+    musicMuted: false,
+    input: { cancelMovement: () => audioEvents.push("cancel") },
+    sounds: { setMuted: value => audioEvents.push(`sfx:${value}`) },
+    _music: {
+      paused: false,
+      pause() { this.paused = true; audioEvents.push("music:pause"); },
+      play() { this.paused = false; audioEvents.push("music:play"); return Promise.resolve(); },
+    },
+    _platformAdAudio: null,
+  });
+  audioGame.beginPlatformAd();
+  audioGame.endPlatformAd();
+  assert.deepEqual(audioEvents, ["cancel", "music:pause", "sfx:true", "sfx:false", "music:play"]);
+
+  const sectorGame = createGame();
+  let sectorAdRequests = 0;
+  let continueSector;
+  Object.assign(sectorGame, {
+    state: "bossReward",
+    currentSectorIndex: 1,
+    bossRewardData: { finalBoss: false, bossXp: 0 },
+    y8: {
+      enabled: true,
+      showInterstitial(name, callback) {
+        assert.equal(name, "sector-complete");
+        sectorAdRequests++;
+        continueSector = callback;
+      },
+    },
+    _assetGroupsReady: () => true,
+    _unloadAssetGroups() {},
+    _preloadNextSectorAssets() {},
+    clearArena() {},
+  });
+  sectorGame._endBossReward();
+  sectorGame._endBossReward();
+  assert.equal(sectorAdRequests, 1, "repeated reward taps cannot request a second ad");
+  assert.equal(sectorGame.state, "bossReward", "the next sector waits for the ad result");
+  continueSector();
+  assert.equal(sectorGame.state, "playing", "the next sector starts after the ad result");
+  assert.equal(sectorGame.bossRewardData, null);
+}
+
 function testSectorEnvironments() {
   assert.equal(SECTOR_ENVIRONMENTS.length, SECTORS.length, "Every sector has an environment profile");
   assert.equal(new Set(SECTOR_ENVIRONMENTS.map(environment => environment.id)).size, SECTORS.length,
@@ -945,6 +1062,7 @@ testNairanTorpedoRole();
 testNautolanSupportRole();
 testDistinctBossProfiles();
 testKongregateStats();
+await testY8Integration();
 testSectorEnvironments();
 console.log(`Reliability checks passed (formation calibration seed: ${scoreModel.formationSeedScore}; ` +
   `500-seed distribution: ${JSON.stringify(scoreModel.scoreDistribution)})`);

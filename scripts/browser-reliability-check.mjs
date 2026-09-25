@@ -286,6 +286,9 @@ try {
       const profile = encounterProfileFor(sectorIndex);
       const environment = SECTOR_ENVIRONMENTS[sectorIndex];
       const backgroundLayers = [environment.farLayer, environment.edgeLayer].filter(Boolean);
+      const expectedBackgroundLayers = g.lowEffects
+        ? backgroundLayers.filter(key => !key.endsWith("EnvironmentEdge"))
+        : backgroundLayers;
       return {
         sector: sectorIndex + 1,
         profile: profile.id,
@@ -295,13 +298,18 @@ try {
         enemyProjectiles: g.projectiles.filter(projectile => projectile.owner === "enemy" && !projectile.dead).length,
         projectileCap: profile.projectileCap,
         backgroundLayers,
-        backgroundLayersLoaded: backgroundLayers.every(key => Boolean(g.loader.get(key))),
+        expectedBackgroundLayers,
+        backgroundLayersLoaded: expectedBackgroundLayers.every(key => Boolean(g.loader.get(key))),
+        optionalEdgeLayersSkipped: !g.lowEffects || backgroundLayers
+          .filter(key => key.endsWith("EnvironmentEdge"))
+          .every(key => !g.loader.get(key)),
         tintAlpha: environment.tintAlpha,
       };
     }, sectorIndex);
     assert.ok(scene.enemies <= scene.enemyCap, JSON.stringify(scene));
     assert.ok(scene.enemyProjectiles <= scene.projectileCap, JSON.stringify(scene));
     assert.equal(scene.backgroundLayersLoaded, true, JSON.stringify(scene));
+    assert.equal(scene.optionalEdgeLayersSkipped, true, JSON.stringify(scene));
     assert.equal(scene.backgroundLayers.length, sectorIndex === 0 ? 0 : 2, JSON.stringify(scene));
     if (sectorIndex > 0) assert.ok(scene.tintAlpha <= 0.035, JSON.stringify(scene));
     report.encounterScenes.push(scene);
@@ -508,7 +516,9 @@ try {
           2: ["nairanEnvironmentFar", "nairanEnvironmentEdge"],
           3: ["nautolanEnvironmentFar", "nautolanEnvironmentEdge"],
           4: ["nautolanVoidEnvironmentFar", "nautolanVoidEnvironmentEdge"],
-        })[sector].every(key => Boolean(g.loader.get(key))),
+        })[sector]
+          .filter(key => !g.lowEffects || !key.endsWith("EnvironmentEdge"))
+          .every(key => Boolean(g.loader.get(key))),
       };
     }, { sector, phase });
     assert.equal(scene.attack, attack, JSON.stringify(scene));

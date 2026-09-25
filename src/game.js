@@ -12,6 +12,7 @@ import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
 import { RunStats } from "./runStats.js";
 import { SoundSystem } from "./systems/soundSystem.js";
 import { KongregateBridge } from "./kongregate.js";
+import { Y8Bridge } from "./y8.js";
 import { sectorMethods } from "./systems/sectorSystem.js";
 import { combatMethods } from "./systems/combatSystem.js";
 import { worldRenderingMethods } from "./rendering/worldRenderer.js";
@@ -111,6 +112,9 @@ export class Game {
     this._music = new Audio("assets/music/track1.ogg");
     this._music.loop = true;
     this._music.volume = 0.28;
+    this.y8 = new Y8Bridge(this);
+    this._platformAdAudio = null;
+    this._runRestartAdPending = false;
     // Browsers may block autoplay; handleTap() retries on the first gesture.
     if (!this.musicMuted) this._music.play().catch(() => {});
     this.player = new Player(this);
@@ -348,6 +352,18 @@ export class Game {
     this.state = "playing";
     this.runStats.start(this);
     this._preloadNextSectorAssets();
+    return true;
+  }
+
+  startRunFromResults() {
+    if (this._runRestartAdPending) return false;
+    if (!this.y8?.enabled) return this.startRun();
+
+    this._runRestartAdPending = true;
+    this.y8.showInterstitial("new-run", () => {
+      this._runRestartAdPending = false;
+      if (this.state === "gameOver" || this.state === "victory") this.startRun();
+    });
     return true;
   }
 
@@ -616,6 +632,24 @@ export class Game {
     this._tryStartMusic();
   }
 
+  beginPlatformAd() {
+    if (this._platformAdAudio) return;
+    this._platformAdAudio = {
+      musicWasPlaying: !this.musicMuted && !this._music.paused,
+    };
+    this.input.cancelMovement();
+    this._music.pause();
+    this.sounds.setMuted(true);
+  }
+
+  endPlatformAd() {
+    const audio = this._platformAdAudio;
+    if (!audio) return;
+    this._platformAdAudio = null;
+    this.sounds.setMuted(this.musicMuted);
+    if (audio.musicWasPlaying && !this.musicMuted) this._music.play().catch(() => {});
+  }
+
   loop(now) {
     const rawDt = (now - this.last) / 1000;
     this.last = now;
@@ -723,10 +757,10 @@ export class Game {
     if (this.state === "title") {
       if (y > 500 && y < 610) this.startRun();
     } else if (this.state === "gameOver") {
-      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRun();
+      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRunFromResults();
       else if (this._hitRect(x, y, VICTORY_HANGAR_BUTTON)) this.returnToHangar();
     } else if (this.state === "victory") {
-      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRun();
+      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRunFromResults();
       else if (this._hitRect(x, y, VICTORY_HANGAR_BUTTON)) this.returnToHangar();
     } else if (this.state === "levelUp") {
       this.upgrades.handleTap(x, y);

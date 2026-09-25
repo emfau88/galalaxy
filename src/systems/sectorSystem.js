@@ -448,6 +448,20 @@ class SectorMethods {
       return;
     }
 
+    // The reward screen is already a natural, player-controlled break. Ask
+    // Y8 for an interstitial exactly once before continuing into the next
+    // sector. A capped, unavailable, or failed break continues immediately.
+    if (reward.y8AdPending) return;
+    if (!reward.finalBoss && !reward.y8AdRequested && this.y8?.enabled) {
+      reward.y8AdRequested = true;
+      reward.y8AdPending = true;
+      this.y8.showInterstitial("sector-complete", () => {
+        reward.y8AdPending = false;
+        if (this.bossRewardData === reward && this.state === "bossReward") this._endBossReward();
+      });
+      return;
+    }
+
     this.bossRewardData = null;
     // The boss death effect may have been created after onBossKilled returned.
     // Release every fleet reference before unloading its image group.

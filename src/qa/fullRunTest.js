@@ -1,5 +1,5 @@
 import { SECTORS } from "../config.js";
-import { ASSET_GROUPS, SECTOR_ASSET_GROUPS } from "../assets.js";
+import { SECTOR_ASSET_GROUPS } from "../assets.js";
 import { Enemy } from "../entities/enemy.js";
 
 const TEST_TIMEOUT_MS = 15000;
@@ -27,11 +27,11 @@ function assert(condition, message) {
 }
 
 function groupLoaded(game, groupName) {
-  return Object.keys(ASSET_GROUPS[groupName]).every(key => game.loader.get(key));
+  return Object.keys(game._assetManifest([groupName])).every(key => game.loader.get(key));
 }
 
 function groupReleased(game, groupName) {
-  return Object.keys(ASSET_GROUPS[groupName]).every(key => !game.loader.get(key));
+  return Object.keys(game._assetManifest([groupName])).every(key => !game.loader.get(key));
 }
 
 function publish(report) {
