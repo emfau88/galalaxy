@@ -296,6 +296,50 @@ Plan steht bei jedem Bulk.
 
 ---
 
+## Bulk D.7 – Boss 2–4 als echte Mehrphasen-Kämpfe
+
+**Priorität:** P0
+**Status:** TECHNISCH ABGESCHLOSSEN
+**Bezug:** Vollrun-Feedback: Bosse 2–4 zu leicht, Phasenwechsel kaum wahrnehmbar
+
+- [x] Phasenwechsel bei 60 % und 30 % HP auf jeweils 1,35–1,55 Sekunden unterbrechen.
+- [x] `PHASE II`/`PHASE III` groß im freien mittleren Spielfeld anzeigen.
+- [x] Eigenen Phasensound, expandierende Aura und drei Farbstufen je Boss ergänzen.
+- [x] Schwellen-Schutz implementieren: ein Treffer kann nur eine Schwelle erreichen; während des Übergangs ist weiterer Schaden blockiert.
+- [x] Alte Bossprojektile und verzögerte Schüsse beim Phasenwechsel entfernen.
+- [x] Nairan: Zielerfassung → Beam-Sweep → Präzisionssalve mit wanderndem Fluchtfenster.
+- [x] Nautolan: Ankerbeschuss → einmalige Support-/Schildphase → wandernder Kontrollkorridor.
+- [x] Void: Ziel-Lanzen → Void-Rifts → kombinierter Rift/Lock mit angekündigter sicherer Spur.
+- [x] Bestehende Boss-HP unverändert lassen.
+- [ ] Zielzeiten und Entscheidungsdruck in einem menschlichen Run bestätigen.
+
+### Abnahme Bulk D.7
+
+- [x] Alle neun Phasenszenen verwenden unterschiedliche Muster und je Boss drei Aura-Farben.
+- [x] Die Nautolan-Unterstützung erscheint genau einmal und endet vor Phase III.
+- [x] Jeder flächige Phase-III-Angriff besitzt eine explizite sichere Spur.
+- [x] Modellierte Zielzeiten eines guten Builds: Sektor II 40,7 s, Sektor III 51,4 s, Sektor IV 65,9 s.
+- [x] Reliability-Suite, Browser-Vollrun, Phasenbanner und alle zehn Boss-Szenen bestehen ohne Browser- oder Assetfehler.
+
+---
+
+## Bulk D.8 – Individuelle Sektorhintergründe 2–4
+
+**Priorität:** P1
+**Status:** MOTIVABNAHME OFFEN
+**Bezug:** zu starke globale Rot-/Grün-Nebeltönung und fehlende individuelle Dekoration
+
+- [x] Drei originale transparente ImageGen-Pixel-Art-Vergleichsmotive erzeugen.
+- [x] Nairan Expanse mit Ionenschleifen, zerbrochenem Mond und diagonalen Energieströmen entwerfen.
+- [x] Nautolan Depths mit Weltraumruinen, Ringstrukturen und organisch-technischen Randformen entwerfen.
+- [x] Void Core mit Gravitationsbögen, roten Monolithen und verzerrten Sternspuren entwerfen.
+- [x] Zentrale 65–70 % in allen Motiven ruhig halten.
+- [ ] Vergleichsmotive durch den Nutzer abnehmen oder Änderungswünsche erfassen.
+- [ ] Abgenommene Motive in getrennte Fern- und Randebenen aufteilen, auf 420×760 optimieren und in die Assetgruppen einbauen.
+- [ ] Globale Sektor-II/III/IV-Tönung nach Einbau reduzieren und mobile Speicher-/Renderkosten messen.
+
+---
+
 ## Bulk E – Build-Progression fertigstellen
 
 **Priorität:** P1
@@ -452,6 +496,8 @@ Plan steht bei jedem Bulk.
 - [x] Mobile HUD-Leiste unabhängig vom Letterbox-Platz fest vier Pixel unter der Safe Area verankert; Pause, Fullscreen und Bossleiste folgen derselben Transformation.
 - [x] Punkteprüfung von einem fest verdrahteten Niedrigwert-Seed auf eine reproduzierbare 500-Seed-Verteilung erweitert.
 - [x] Kleine schnelle Pseudoformationen durch vier echte Verbände mit stabilen Slots, gemeinsamer Geschwindigkeit und eigenem Einflugfenster ersetzt.
+- [x] Bossphasen 2–4 mit Übergangspause, Anzeige, Sound, Farbwechsel, Schwellen-Schutz und neun getrennten Angriffsmustern ausgebaut.
+- [x] Drei transparente ImageGen-Vergleichsmotive für die individuellen Sektorhintergründe erstellt; Einbau wartet bewusst auf Motivabnahme.
 - [x] Lokalen Entwicklungsserver nach manuellen Tests sauber beenden.
 
 ## Änderungsprotokoll
@@ -469,3 +515,5 @@ Plan steht bei jedem Bulk.
 - **25.09.2026:** Torpedo- und Support-Wellen zu kurzen Elite-Kampfmomenten verdichtet: Start erst bei höchstens zwei Altgegnern, kein paralleler Dauerstrom, vier Gegner Gesamtlimit, kleinere Supportgruppe und robusteres Torpedoschiff. Vollrun, Rollenszenen und 60.070-Punkte-Modell bestanden; Details unter `docs/qa/elite-followup-2026-09-25/report.md`.
 - **25.09.2026:** Spieltest-Follow-up Punkt 1 umgesetzt: HUD auf allen mobilen Formaten direkt an die Safe Area gesetzt, sektorbezogene Punkte- und Bosszeit-Telemetrie ergänzt und den irreführenden 60.070-Einzeltest durch eine 500-Seed-Verteilung ergänzt. Aktuelle Baseline: Median 71.703, P90 74.403; Details unter `docs/qa/hud-telemetry-2026-09-25/report.md`.
 - **25.09.2026:** Formations-P0 technisch umgesetzt: vier feste Verbände mit fünf bis sieben Schiffen, 82,8–104 px/s, gemeinsamem geraden Flugvektor, freigeräumtem Einflugfenster und sektorspezifischer Rollenkomposition. Die modellierte Median-Punktzahl fällt auf 67.151; Vollrun und dedizierte Browser-Szenen bestehen. Details unter `docs/qa/formation-followup-2026-09-25/report.md`.
+- **25.09.2026:** Boss-P0 technisch umgesetzt: klar unterbrochene Phasenwechsel, Phasenbanner/-sound, phasenabhängige Aura, harte Schadensschwellen und neun getrennte Muster für Boss 2–4. HP blieben unverändert; Zielzeitmodelle liegen bei 40,7/51,4/65,9 Sekunden. Details unter `docs/qa/boss-phases-2026-09-25/report.md`.
+- **25.09.2026:** Drei originale transparente ImageGen-Vergleichsmotive für Nairan Expanse, Nautolan Depths und Void Core erzeugt. Die Dateien sind bewusst noch nicht eingebunden; Motivabnahme und anschließende Aufteilung/Optimierung bleiben offen. Details unter `docs/qa/background-concepts-2026-09-25/report.md`.

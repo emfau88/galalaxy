@@ -518,8 +518,12 @@ export class Game {
     boss.fireTimer = 0.18;
     this.enemies = [boss];
     if (phase > 1) {
-      boss.hp = boss.maxHp * (phase === 2 ? 0.58 : 0.28);
-      boss._syncBossPhase();
+      boss.hp = boss.maxHp * (phase === 2 ? 0.6 : 0.3);
+      boss._enterBossPhase(2);
+      if (phase === 3) {
+        this.simTime = boss.phaseTransitionUntil;
+        boss._enterBossPhase(3);
+      }
     }
   }
 
@@ -760,6 +764,7 @@ export class Game {
     if (this.state === "visualTest") this.drawVisualTest(ctx);
     if (this.state === "playing") {
       this.drawHud(ctx);
+      this.drawBossPhaseNotice(ctx);
     }
     if (this.state === "playing" || this.state === "paused") this.drawPauseButton(ctx);
     if (this.state === "playing" && this.sectorTransition > 0) this.drawSectorTransition(ctx);

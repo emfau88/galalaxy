@@ -8,6 +8,7 @@ export const BOSS_PROFILES = Object.freeze({
     bossXp: 12,
     movement: "broad-sweep",
     aura: "#ff4f55",
+    phaseAuras: ["#ff4f55"],
     phaseThresholds: [],
   }),
   nairanDreadnought: Object.freeze({
@@ -19,7 +20,10 @@ export const BOSS_PROFILES = Object.freeze({
     bossXp: 14,
     movement: "lateral-lancer",
     aura: "#c66cff",
+    phaseAuras: ["#c66cff", "#8d7dff", "#f0a8ff"],
     phaseThresholds: [0.6, 0.3],
+    phasePause: 1.35,
+    targetTime: [35, 45],
   }),
   nautolanDreadnought: Object.freeze({
     id: "nautolan-warden",
@@ -30,7 +34,10 @@ export const BOSS_PROFILES = Object.freeze({
     bossXp: 16,
     movement: "anchored-control",
     aura: "#39d6aa",
+    phaseAuras: ["#39d6aa", "#75ffd2", "#2dd6e6"],
     phaseThresholds: [0.6, 0.3],
+    phasePause: 1.45,
+    targetTime: [45, 55],
   }),
   voidSovereign: Object.freeze({
     id: "void-sovereign",
@@ -41,7 +48,10 @@ export const BOSS_PROFILES = Object.freeze({
     bossXp: 22,
     movement: "void-orbit",
     aura: "#d34768",
+    phaseAuras: ["#d34768", "#b765e8", "#ff6688"],
     phaseThresholds: [0.6, 0.3],
+    phasePause: 1.55,
+    targetTime: [55, 70],
   }),
 });
 

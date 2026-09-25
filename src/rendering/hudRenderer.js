@@ -229,6 +229,44 @@ class HudRenderingMethods {
     ctx.restore();
   }
 
+  drawBossPhaseNotice(ctx) {
+    const boss = this.enemies.find(enemy => enemy.boss && !enemy.dead);
+    if (!boss || this.simTime >= (boss.phaseTransitionUntil ?? 0)) return;
+    const duration = boss.phaseTransitionDuration || 1;
+    const elapsed = this.simTime - (boss.phaseTransitionStartedAt ?? this.simTime);
+    const progress = clamp(elapsed / duration, 0, 1);
+    const fade = Math.min(1, progress * 5, (1 - progress) * 5);
+    const color = boss._bossAura?.() || boss.bossProfile?.aura || CONFIG.colors.red;
+    const numeral = boss.bossPhase === 2 ? "II" : "III";
+    const y = 372;
+    ctx.save();
+    ctx.globalAlpha = 0.82 * fade;
+    ctx.fillStyle = "rgba(3,5,18,0.92)";
+    ctx.fillRect(0, y - 42, CONFIG.designW, 82);
+    ctx.globalAlpha = 0.28 * fade;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, y - 42, CONFIG.designW, 82);
+    ctx.globalAlpha = fade;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = this.lowEffects ? 0 : 16;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(42, y - 27); ctx.lineTo(CONFIG.designW - 42, y - 27);
+    ctx.moveTo(42, y + 27); ctx.lineTo(CONFIG.designW - 42, y + 27);
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "900 26px ui-monospace, monospace";
+    ctx.fillText(`PHASE ${numeral}`, CONFIG.designW / 2, y + 4);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.76 * fade;
+    ctx.fillStyle = color;
+    ctx.font = "800 9px ui-monospace, monospace";
+    ctx.fillText(boss.bossProfile?.name || "BOSS", CONFIG.designW / 2, y + 20);
+    ctx.restore();
+  }
+
   drawSurvivalAlerts(ctx, p) {
     const hpFrac = clamp(p.hp / p.maxHp, 0, 1);
     if (hpFrac < 0.25) {

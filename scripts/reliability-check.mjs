@@ -756,38 +756,79 @@ function testDistinctBossProfiles() {
 
   const nairanGame = createGame();
   nairanGame.currentSectorIndex = 1;
+  const phaseSounds = [];
+  nairanGame.sounds.play = cue => phaseSounds.push(cue);
   const nairan = new Enemy(nairanGame, "nairanDreadnought", 210, 170, true);
   nairanGame.enemies = [nairan];
   nairan.fireTimer = 0;
   nairan.update(0.01);
   assert.equal(nairan.specialCharge?.kind, "boss-target-lock", "Nairan boss opens with a fixed target lock");
   assert.equal(nairan.pendingShots.length, 3, "Nairan precision salvo queues three committed shots");
+  const nairanPhaseOneAura = nairan._bossAura();
+  nairan.damage(nairan.maxHp * 4);
+  assert.equal(nairan.bossPhase, 2, "One large hit advances Nairan by exactly one phase");
+  assert.equal(nairan.hp, nairan.maxHp * 0.6, "Nairan damage clamps at the phase-two threshold");
+  assert.equal(nairan.specialCharge?.kind, "phase-shift", "Nairan phase two begins with a visible interruption");
+  const protectedHp = nairan.hp;
+  nairan.damage(nairan.maxHp);
+  assert.equal(nairan.hp, protectedHp, "Threshold protection blocks damage during the phase interruption");
+  assert.notEqual(nairan._bossAura(), nairanPhaseOneAura, "Nairan phase two changes aura color");
+  nairanGame.simTime = nairan.phaseTransitionUntil + 0.01;
+  assert.ok(nairan.fireTimer <= 0.35,
+    "Nairan resumes its new phase quickly after the interruption");
   nairan.pendingShots = [];
   nairan.specialCharge = null;
   nairan.fireTimer = 0;
   nairan.update(0.01);
-  assert.equal(nairan.specialCharge?.kind, "beam-sweep", "Nairan boss alternates into its precision sweep");
+  assert.equal(nairan.specialCharge?.kind, "beam-sweep", "Nairan phase two replaces locks with a lateral beam sweep");
+  nairan.damage(nairan.maxHp * 4);
+  assert.equal(nairan.bossPhase, 3, "Nairan reaches phase three only after the second threshold");
+  assert.equal(nairan.hp, nairan.maxHp * 0.3, "Nairan damage clamps at the phase-three threshold");
+  nairanGame.simTime = nairan.phaseTransitionUntil + 0.01;
+  nairan.pendingShots = [];
+  nairan.specialCharge = null;
+  nairan.fireTimer = 0;
+  nairan.update(0.01);
+  assert.equal(nairan.specialCharge?.kind, "precision-salvo",
+    "Nairan phase three uses a new combined precision salvo");
+  assert.notEqual(nairan.specialCharge.safeSequence[0], nairan.specialCharge.safeSequence[1],
+    "Nairan phase-three escape window shifts between salvos");
+  assert.equal(phaseSounds.filter(cue => cue === "phase").length, 2,
+    "Every Nairan phase transition emits its dedicated sound cue");
 
   const nautolanGame = createGame();
   nautolanGame.currentSectorIndex = 2;
   const nautolan = new Enemy(nautolanGame, "nautolanDreadnought", 210, 170, true);
   nautolanGame.enemies = [nautolan];
-  nautolan.hp = nautolan.maxHp * 0.58;
-  nautolan._syncBossPhase();
+  nautolan.damage(nautolan.maxHp * 4);
   const support = nautolanGame.enemies.find(enemy => enemy.type === "nautolanSupport");
-  assert.equal(nautolan.bossPhase, 2, "Nautolan boss crosses its sixty-percent phase gate");
-  assert.ok(support, "Nautolan control phase summons a support ship");
+  assert.equal(nautolan.bossPhase, 2, "Nautolan boss stops at its sixty-percent phase gate");
+  assert.ok(support, "Nautolan phase two summons its one support ship");
   support._refreshSupportTargets();
   assert.equal(support.supportTargets[0], nautolan, "The support phase visibly protects the boss");
+  nautolanGame.simTime = nautolan.phaseTransitionUntil + 0.01;
   nautolan.specialCharge = null;
   nautolan.fireTimer = 0;
   nautolan.update(0.01);
+  assert.equal(nautolan.specialCharge?.kind, "support-barrage",
+    "Nautolan phase two uses a dedicated shield-support barrage");
+  support.dead = true;
+  nautolan.supportSource = null;
+  nautolan.damage(nautolan.maxHp * 4);
+  assert.equal(nautolan.bossPhase, 3, "Nautolan phase three follows the protected phase");
+  assert.equal(nautolanGame.enemies.filter(enemy => enemy.type === "nautolanSupport").length, 1,
+    "The boss support is a one-time phase event and is never resummoned");
+  assert.equal(nautolanGame.enemies.find(enemy => enemy.type === "nautolanSupport").dead, true,
+    "The one-time support phase ends before the wandering corridor begins");
+  nautolanGame.simTime = nautolan.phaseTransitionUntil + 0.01;
   nautolan.pendingShots = [];
   nautolan.specialCharge = null;
   nautolan.fireTimer = 0;
   nautolan.update(0.01);
-  assert.equal(nautolan.specialCharge?.kind, "control-gate", "Nautolan boss creates a space-control gate");
-  assert.equal(nautolan.specialCharge.activeLanes.length, 4, "The control gate always leaves one safe corridor");
+  assert.equal(nautolan.specialCharge?.kind, "wandering-control",
+    "Nautolan phase three replaces the support barrage with a wandering corridor");
+  assert.equal(new Set(nautolan.specialCharge.safeSequence).size, 3,
+    "The Nautolan safe corridor visibly travels across three lanes");
 
   const voidGame = createGame();
   voidGame.currentSectorIndex = 3;
@@ -796,20 +837,43 @@ function testDistinctBossProfiles() {
   sovereign.fireTimer = 0;
   sovereign.update(0.01);
   assert.equal(sovereign.specialCharge?.kind, "void-lock", "Void Sovereign opens with a readable lock corridor");
-  sovereign.pendingShots = [];
-  sovereign.hp = sovereign.maxHp * 0.58;
-  sovereign._syncBossPhase();
+  sovereign.damage(sovereign.maxHp * 4);
   assert.equal(sovereign.bossPhase, 2, "Void Sovereign enters phase two at sixty percent");
+  voidGame.simTime = sovereign.phaseTransitionUntil + 0.01;
+  sovereign.pendingShots = [];
   sovereign.specialCharge = null;
   sovereign.fireTimer = 0;
   sovereign.update(0.01);
-  assert.equal(sovereign.specialCharge?.kind, "void-rift", "Phase two combines the lock with space control");
+  assert.equal(sovereign.specialCharge?.kind, "void-rift", "Void phase two replaces locks with rifts");
   assert.equal(sovereign.specialCharge.activeLanes.length, 4, "Void rift preserves one safe lane");
-  sovereign.hp = sovereign.maxHp * 0.28;
-  sovereign._syncBossPhase();
+  sovereign.damage(sovereign.maxHp * 4);
   assert.equal(sovereign.bossPhase, 3, "Void Sovereign enters phase three at thirty percent");
+  voidGame.simTime = sovereign.phaseTransitionUntil + 0.01;
+  sovereign.pendingShots = [];
+  sovereign.specialCharge = null;
+  sovereign.fireTimer = 0;
+  sovereign.update(0.01);
+  assert.equal(sovereign.specialCharge?.kind, "void-combo", "Void phase three combines lock and rift");
+  assert.equal(sovereign.specialCharge.activeLanes.includes(sovereign.specialCharge.safeLane), false,
+    "The combined Void pattern always preserves its announced safe lane");
   assert.deepEqual(sovereign.bossProfile.phaseThresholds, [0.6, 0.3]);
   assert.ok(sovereign.maxHp > nautolan.maxHp, "The final boss has an independent, higher durability profile");
+
+  const targetModels = [
+    { profile: BOSS_PROFILES.nairanDreadnought, dps: 55, extra: 0 },
+    {
+      profile: BOSS_PROFILES.nautolanDreadnought,
+      dps: 56,
+      extra: Enemy.defs.nautolanSupport.hp + BOSS_PROFILES.nautolanDreadnought.maxShield * 0.35,
+    },
+    { profile: BOSS_PROFILES.voidSovereign, dps: 58, extra: 0 },
+  ];
+  for (const { profile, dps, extra } of targetModels) {
+    const modeledSeconds = (profile.maxHp + profile.maxShield + extra) / dps +
+      profile.phasePause * profile.phaseThresholds.length;
+    assert.ok(modeledSeconds >= profile.targetTime[0] && modeledSeconds <= profile.targetTime[1],
+      `${profile.name} modeled good-build time ${modeledSeconds.toFixed(1)}s stays inside its target`);
+  }
 }
 
 function testKongregateStats() {

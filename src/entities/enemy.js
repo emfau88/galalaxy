@@ -57,7 +57,21 @@ export class Enemy {
     this.supportTargets = [];
     this.supportRefreshTimer = 0;
     this.bossPhase = 1;
+    this.phaseTransitionUntil = 0;
+    this.phaseTransitionStartedAt = 0;
+    this.phaseTransitionDuration = 0;
+    this._bossSupportSummoned = false;
     this.protectableBySupport = boss && type === "nautolanDreadnought";
+  }
+
+  _bossAura() {
+    const phaseAuras = this.bossProfile?.phaseAuras;
+    return phaseAuras?.[Math.min(phaseAuras.length - 1, this.bossPhase - 1)] ||
+      this.bossProfile?.aura || CONFIG.colors.red;
+  }
+
+  _isPhaseTransitioning() {
+    return this.boss && this.game.simTime < this.phaseTransitionUntil;
   }
 
   _facingAngle() {
@@ -177,9 +191,9 @@ export class Enemy {
   _fireNairanBossPattern(player) {
     this._bossPattern = (this._bossPattern ?? 0) + 1;
     const facing = Math.atan2(player.y - this.y, player.x - this.x);
-    if (this._bossPattern % 2 === 1) {
+    if (this.bossPhase === 1) {
       const charge = 0.72;
-      this.fireTimer = this.bossPhase >= 3 ? 2.15 : 2.7;
+      this.fireTimer = 2.7;
       this._beginSpecialCharge("boss-target-lock", charge, {
         targetX: player.x, targetY: player.y, angle: facing,
       });
@@ -196,36 +210,93 @@ export class Enemy {
       return;
     }
 
-    const charge = 0.88;
-    const sweep = [-0.30, -0.15, 0, 0.15, 0.30];
-    this.fireTimer = this.bossPhase >= 2 ? 3.15 : 3.65;
-    this._beginSpecialCharge("beam-sweep", charge, {
-      angle: facing, offsets: sweep,
+    if (this.bossPhase === 2) {
+      const charge = 0.98;
+      const direction = this._bossPattern % 2 ? -1 : 1;
+      const sweep = [-0.34, -0.17, 0, 0.17, 0.34].map(offset => offset * direction);
+      this.fireTimer = 3.35;
+      this._beginSpecialCharge("beam-sweep", charge, {
+        angle: facing, offsets: sweep,
+      });
+      sweep.forEach((offset, index) => this._queueWeaponShot(facing + offset, {
+        delay: charge + index * 0.11,
+        facingAngle: facing + offset,
+        damageMult: 0.68,
+        visualKey: "nairanBossSweep",
+        skipWeaponAnimation: true,
+      }));
+      return;
+    }
+
+    const laneXs = [46, 128, 210, 292, 374];
+    const firstSafe = [1, 3, 2][(this._precisionGateIndex = (this._precisionGateIndex ?? -1) + 1) % 3];
+    const secondSafe = firstSafe === 1 ? 3 : firstSafe === 3 ? 1 : (this._bossPattern % 2 ? 1 : 3);
+    const safeSequence = [firstSafe, secondSafe];
+    const charge = 0.92;
+    this.fireTimer = 4.65;
+    this._beginSpecialCharge("precision-salvo", charge + 0.72, {
+      targetX: player.x, targetY: player.y, angle: facing, laneXs, safeSequence,
     });
-    sweep.forEach((offset, index) => this._queueWeaponShot(facing + offset, {
-      delay: charge + index * 0.10,
-      facingAngle: facing + offset,
-      damageMult: 0.68,
-      visualKey: "nairanBossSweep",
-      skipWeaponAnimation: true,
-    }));
+    for (const offset of [-0.065, 0, 0.065]) {
+      this._queueWeaponShot(facing + offset, {
+        delay: charge,
+        facingAngle: facing,
+        damageMult: offset === 0 ? 0.84 : 0.6,
+        visualKey: "nairanBossPrecision",
+        skipWeaponAnimation: true,
+      });
+    }
+    safeSequence.forEach((safeLane, waveIndex) => {
+      laneXs.forEach((x, laneIndex) => {
+        if (laneIndex === safeLane) return;
+        this._queueWeaponShot(Math.PI / 2, {
+          delay: charge + 0.38 + waveIndex * 0.44,
+          damageMult: 0.62,
+          visualKey: "nairanBossSweep",
+          skipWeaponAnimation: true,
+          origin: { x, y: this.y + 138 },
+        });
+      });
+    });
   }
 
   _fireNautolanBossPattern(player) {
     this._bossPattern = (this._bossPattern ?? 0) + 1;
-    if (this._bossPattern % 2 === 0) {
-      const charge = 0.92;
+    if (this.bossPhase === 3) {
+      const charge = 0.96;
       const laneXs = [46, 128, 210, 292, 374];
-      const safeLane = [1, 3, 2][(this._controlGateIndex = (this._controlGateIndex ?? -1) + 1) % 3];
-      const activeLanes = laneXs.map((_, index) => index).filter(index => index !== safeLane);
-      this.fireTimer = 4.45;
-      this._beginSpecialCharge("control-gate", charge, { laneXs, activeLanes, safeLane });
-      for (const index of activeLanes) {
-        this._queueWeaponShot(Math.PI / 2, {
-          delay: charge,
-          visualKey: "nautolanWave",
+      const start = [1, 3, 2][(this._controlGateIndex = (this._controlGateIndex ?? -1) + 1) % 3];
+      const direction = start === 3 ? -1 : 1;
+      const safeSequence = Array.from({ length: 3 }, (_, step) =>
+        1 + ((start - 1 + direction * step + 3) % 3));
+      this.fireTimer = 5.1;
+      this._beginSpecialCharge("wandering-control", charge + 1.0, { laneXs, safeSequence });
+      safeSequence.forEach((safeLane, waveIndex) => {
+        laneXs.forEach((x, laneIndex) => {
+          if (laneIndex === safeLane) return;
+          this._queueWeaponShot(Math.PI / 2, {
+            delay: charge + waveIndex * 0.48,
+            visualKey: "nautolanWave",
+            skipWeaponAnimation: true,
+            origin: { x, y: this.y + 136 },
+          });
+        });
+      });
+      return;
+    }
+
+    if (this.bossPhase === 2) {
+      const charge = 0.82;
+      const facing = Math.atan2(player.y - this.y, player.x - this.x);
+      this.fireTimer = 3.9;
+      this._beginSpecialCharge("support-barrage", charge, { angle: facing });
+      for (const offset of [-0.42, -0.2, 0.2, 0.42]) {
+        this._queueWeaponShot(facing + offset, {
+          delay: charge + Math.abs(offset) * 0.32,
+          facingAngle: facing,
+          damageMult: 0.68,
+          visualKey: "nautolanBoss",
           skipWeaponAnimation: true,
-          origin: { x: laneXs[index], y: this.y + 136 },
         });
       }
       return;
@@ -248,14 +319,18 @@ export class Enemy {
 
   _fireVoidBossPattern(player) {
     this._bossPattern = (this._bossPattern ?? 0) + 1;
-    const useRift = this.bossPhase >= 2 && this._bossPattern % 2 === 0;
-    if (useRift) {
-      const charge = this.bossPhase >= 3 ? 0.72 : 0.88;
+    if (this.bossPhase >= 2) {
+      const charge = this.bossPhase === 3 ? 1.02 : 0.9;
       const laneXs = [48, 129, 210, 291, 372];
       const safeLane = [2, 1, 3][(this._voidGateIndex = (this._voidGateIndex ?? -1) + 1) % 3];
       const activeLanes = laneXs.map((_, index) => index).filter(index => index !== safeLane);
-      this.fireTimer = this.bossPhase >= 3 ? 3.35 : 4.05;
-      this._beginSpecialCharge("void-rift", charge, { laneXs, activeLanes, safeLane });
+      const targetX = player.x;
+      const targetY = player.y;
+      const facing = Math.atan2(targetY - this.y, targetX - this.x);
+      this.fireTimer = this.bossPhase === 3 ? 4.25 : 4.05;
+      this._beginSpecialCharge(this.bossPhase === 3 ? "void-combo" : "void-rift", charge, {
+        laneXs, activeLanes, safeLane, targetX, targetY, angle: facing,
+      });
       for (const index of activeLanes) {
         this._queueWeaponShot(Math.PI / 2, {
           delay: charge,
@@ -264,14 +339,25 @@ export class Enemy {
           origin: { x: laneXs[index], y: this.y + 145 },
         });
       }
+      if (this.bossPhase === 3) {
+        for (const offset of [-0.065, 0, 0.065]) {
+          this._queueWeaponShot(facing + offset, {
+            delay: charge * 0.72,
+            facingAngle: facing,
+            damageMult: offset === 0 ? 0.78 : 0.56,
+            visualKey: "voidLance",
+            skipWeaponAnimation: true,
+          });
+        }
+      }
       return;
     }
 
-    const charge = this.bossPhase >= 3 ? 0.70 : 0.86;
+    const charge = 0.86;
     const targetX = player.x;
     const targetY = player.y;
     const facing = Math.atan2(targetY - this.y, targetX - this.x);
-    this.fireTimer = this.bossPhase >= 3 ? 2.25 : 2.85;
+    this.fireTimer = 2.85;
     this._beginSpecialCharge("void-lock", charge, { targetX, targetY, angle: facing });
     for (const offset of [-0.07, 0, 0.07]) {
       this._queueWeaponShot(facing + offset, {
@@ -285,8 +371,9 @@ export class Enemy {
   }
 
   _summonBossSupport() {
-    if (this.type !== "nautolanDreadnought") return;
+    if (this.type !== "nautolanDreadnought" || this._bossSupportSummoned) return;
     const existing = this.game.enemies.some(enemy => !enemy.dead && enemy.type === "nautolanSupport");
+    this._bossSupportSummoned = true;
     if (existing) return;
     const side = this.bossPhase % 2 ? -1 : 1;
     const support = this.game.spawnEnemy("nautolanSupport", false, 1, null, {
@@ -302,15 +389,43 @@ export class Enemy {
   _syncBossPhase() {
     if (!this.boss || !this.bossProfile?.phaseThresholds?.length || this.dead || this.hp <= 0) return;
     const hpFraction = Math.max(0, this.hp / this.maxHp);
-    const nextPhase = 1 + this.bossProfile.phaseThresholds.filter(threshold => hpFraction <= threshold).length;
-    if (nextPhase <= this.bossPhase) return;
+    const threshold = this.bossProfile.phaseThresholds[this.bossPhase - 1];
+    if (threshold === undefined || hpFraction > threshold) return;
+    this._enterBossPhase(this.bossPhase + 1);
+  }
+
+  _enterBossPhase(nextPhase) {
+    if (!this.boss || nextPhase <= this.bossPhase) return;
     this.bossPhase = nextPhase;
     this.pendingShots = [];
-    this.fireTimer = Math.max(this.fireTimer, 1.15);
-    this._beginSpecialCharge("phase-shift", 1.05, { phase: this.bossPhase });
-    this.shield = Math.min(this.maxShield, this.shield + this.maxShield * 0.18);
-    if (this.type === "nautolanDreadnought") this._summonBossSupport();
-    this.game.burst(this.x, this.y, this.bossProfile.aura, 24);
+    this.weaponAnimation = null;
+    const pause = this.bossProfile?.phasePause ?? 1.25;
+    this.phaseTransitionStartedAt = this.game.simTime;
+    this.phaseTransitionDuration = pause;
+    this.phaseTransitionUntil = this.game.simTime + pause;
+    // The timer is frozen during the interruption; resume with only a short
+    // readable beat before the new pattern begins.
+    this.fireTimer = 0.35;
+    this._beginSpecialCharge("phase-shift", pause, { phase: this.bossPhase });
+    if (this.type === "nautolanDreadnought" && this.bossPhase === 2) {
+      this.shield = Math.max(this.shield, this.maxShield * 0.35);
+      this._summonBossSupport();
+    } else if (this.type === "nautolanDreadnought" && this.bossPhase === 3) {
+      for (const support of this.game.enemies.filter(enemy =>
+        !enemy.dead && enemy.type === "nautolanSupport" && enemy.encounterId === "boss-support-phase")) {
+        support.dead = true;
+        for (const target of support.supportTargets) {
+          if (target.supportSource === support) target.supportSource = null;
+        }
+        support.supportTargets = [];
+      }
+    }
+    for (const projectile of this.game.projectiles) {
+      if (projectile.owner === "enemy") projectile.dead = true;
+    }
+    const aura = this._bossAura();
+    this.game.sounds?.play("phase");
+    this.game.burst(this.x, this.y, aura, 32);
     this.game.shake = Math.max(this.game.shake, 7);
   }
 
@@ -425,8 +540,8 @@ export class Enemy {
       this.y += Math.sin(a) * this.speed * dt + Math.sin(a + Math.PI / 2) * side * dt;
     }
 
-    this.fireTimer -= dt;
-    if (this.boss && this.fireTimer <= 0) {
+    if (!this._isPhaseTransitioning()) this.fireTimer -= dt;
+    if (this.boss && !this._isPhaseTransitioning() && this.fireTimer <= 0) {
       if (this.type === "dreadnought") this._fireKlaedBossPattern(p);
       else if (this.type === "nairanDreadnought") this._fireNairanBossPattern(p);
       else if (this.type === "nautolanDreadnought") this._fireNautolanBossPattern(p);
@@ -493,6 +608,10 @@ export class Enemy {
 
   damage(amount) {
     if (this.dead) return;
+    if (this._isPhaseTransitioning()) {
+      this.shieldFlash = Math.max(this.shieldFlash, 0.2);
+      return;
+    }
     const support = this.supportSource;
     if (support && !support.dead && support.supportTargets.includes(this) &&
         dist2(this.x, this.y, support.x, support.y) <= 210 ** 2) {
@@ -501,7 +620,15 @@ export class Enemy {
     const absorbed = Math.min(this.shield, amount);
     this.shield -= absorbed;
     if (absorbed > 0) this.shieldFlash = 0.72;
-    this.hp -= amount - absorbed;
+    let hullDamage = amount - absorbed;
+    if (this.boss && hullDamage > 0) {
+      const nextThreshold = this.bossProfile?.phaseThresholds?.[this.bossPhase - 1];
+      if (nextThreshold !== undefined) {
+        const thresholdHp = this.maxHp * nextThreshold;
+        hullDamage = Math.min(hullDamage, Math.max(0, this.hp - thresholdHp));
+      }
+    }
+    this.hp -= hullDamage;
     this.hitFlash = 0.11;
     this.game.burst(this.x, this.y, CONFIG.colors.cyan, 5);
     this._syncBossPhase();
@@ -560,7 +687,7 @@ export class Enemy {
     if (this.boss) {
       const pulse = 0.28 + Math.sin(this.game.simTime * 4) * 0.08;
       ctx.globalAlpha = pulse;
-      const auraColor = this.bossProfile?.aura || CONFIG.colors.red;
+      const auraColor = this._bossAura();
       ctx.fillStyle = auraColor;
       ctx.shadowColor = auraColor;
       ctx.shadowBlur = 24;
@@ -604,7 +731,7 @@ export class Enemy {
       ctx.globalCompositeOperation = "lighter";
       if (this.specialCharge.kind === "phase-shift") {
         ctx.globalAlpha = 0.26 + progress * 0.5;
-        ctx.strokeStyle = this.bossProfile?.aura || CONFIG.colors.red;
+        ctx.strokeStyle = this._bossAura();
         ctx.shadowColor = ctx.strokeStyle;
         ctx.shadowBlur = 12;
         ctx.lineWidth = 3;
@@ -673,8 +800,65 @@ export class Enemy {
           ctx.stroke();
         }
         ctx.setLineDash([]);
-      } else if (this.specialCharge.kind === "control-gate" || this.specialCharge.kind === "void-rift") {
-        const voidGate = this.specialCharge.kind === "void-rift";
+      } else if (this.specialCharge.kind === "precision-salvo") {
+        const tx = this.specialCharge.targetX - this.x;
+        const ty = this.specialCharge.targetY - this.y;
+        const activeStep = Math.min(1, Math.floor(progress * 2));
+        const safeLane = this.specialCharge.safeSequence[activeStep];
+        ctx.globalAlpha = 0.3 + progress * 0.38;
+        ctx.strokeStyle = "#f1c5ff";
+        ctx.shadowColor = "#b65cff";
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([5, 6]);
+        ctx.beginPath();
+        ctx.moveTo(0, 22);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        for (let index = 0; index < this.specialCharge.laneXs.length; index++) {
+          const x = this.specialCharge.laneXs[index] - this.x;
+          if (index === safeLane) continue;
+          ctx.strokeRect(x - 28, 112, 56, CONFIG.designH - this.y - 102);
+        }
+        const safeX = this.specialCharge.laneXs[safeLane] - this.x;
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.18 + progress * 0.13;
+        ctx.fillStyle = "#8060b8";
+        ctx.fillRect(safeX - 34, 112, 68, CONFIG.designH - this.y - 102);
+      } else if (this.specialCharge.kind === "support-barrage") {
+        ctx.globalAlpha = 0.24 + progress * 0.48;
+        ctx.strokeStyle = "#91ffe0";
+        ctx.shadowColor = "#27d6a6";
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([5, 7]);
+        for (const offset of [-0.42, -0.2, 0.2, 0.42]) {
+          const angle = this.specialCharge.angle + offset;
+          ctx.beginPath();
+          ctx.moveTo(0, 22);
+          ctx.lineTo(Math.cos(angle) * CONFIG.designH, Math.sin(angle) * CONFIG.designH);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      } else if (this.specialCharge.kind === "wandering-control") {
+        const activeStep = Math.min(2, Math.floor(progress * 3));
+        const safeLane = this.specialCharge.safeSequence[activeStep];
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([6, 6]);
+        for (let index = 0; index < this.specialCharge.laneXs.length; index++) {
+          const x = this.specialCharge.laneXs[index] - this.x;
+          if (index === safeLane) continue;
+          ctx.globalAlpha = 0.24 + progress * 0.36;
+          ctx.strokeStyle = "#60f0c0";
+          ctx.strokeRect(x - 28, 112, 56, CONFIG.designH - this.y - 102);
+        }
+        const safeX = this.specialCharge.laneXs[safeLane] - this.x;
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.16 + progress * 0.12;
+        ctx.fillStyle = "#36a985";
+        ctx.fillRect(safeX - 34, 112, 68, CONFIG.designH - this.y - 102);
+      } else if (["control-gate", "void-rift", "void-combo"].includes(this.specialCharge.kind)) {
+        const voidGate = this.specialCharge.kind !== "control-gate";
         ctx.lineWidth = 1.5;
         ctx.setLineDash([6, 6]);
         for (const index of this.specialCharge.activeLanes) {
@@ -688,6 +872,20 @@ export class Enemy {
         ctx.globalAlpha = 0.10 + progress * 0.12;
         ctx.fillStyle = voidGate ? "#8d3559" : "#36a985";
         ctx.fillRect(safeX - 34, 112, 68, CONFIG.designH - this.y - 102);
+        if (this.specialCharge.kind === "void-combo") {
+          const tx = this.specialCharge.targetX - this.x;
+          const ty = this.specialCharge.targetY - this.y;
+          ctx.globalAlpha = 0.48 + progress * 0.3;
+          ctx.strokeStyle = "#ff9db7";
+          ctx.shadowColor = "#d34768";
+          ctx.shadowBlur = 7;
+          ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          ctx.moveTo(0, 22);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       } else if (this.specialCharge.kind === "anchor-bomb") {
         const tx = this.specialCharge.targetX - this.x;
         const ty = this.specialCharge.targetY - this.y;
@@ -810,7 +1008,7 @@ export class Enemy {
       ctx.globalCompositeOperation = "source-over";
       ctx.rotate(-(Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2));
       ctx.globalAlpha = 0.5 + Math.sin(this.game.simTime * 5) * 0.15;
-      ctx.strokeStyle = this.bossProfile?.aura || CONFIG.colors.red;
+      ctx.strokeStyle = this._bossAura();
       ctx.lineWidth = 1.8;
       ctx.shadowColor = ctx.strokeStyle;
       ctx.shadowBlur = 6;

@@ -5,6 +5,7 @@ const CUES = {
   kill:    { frequency: 330, type: "square",   duration: 0.055, volume: 0.028, cooldown: 0.045 },
   upgrade: { frequency: 520, type: "sine",     duration: 0.16, volume: 0.055, cooldown: 0.14, harmony: 660 },
   boss:    { frequency: 86,  type: "sawtooth", duration: 0.28, volume: 0.055, cooldown: 0.5, sweep: 56 },
+  phase:   { frequency: 148, type: "sawtooth", duration: 0.34, volume: 0.052, cooldown: 0.7, sweep: 420, harmony: 222 },
   pickup:  { frequency: 430, type: "triangle", duration: 0.12, volume: 0.042, cooldown: 0.12, harmony: 645 },
 };
 

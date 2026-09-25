@@ -200,11 +200,15 @@ try {
     g.player.damage(1, { kind: "projectile" });
     g.gainXp(8);
     g.upgrades.pick(0);
+    g.sounds.play("phase");
     g.sectorTimer = 0;
     g.updateSpawning(0.01);
     return { state: g.sounds.context?.state, played: [...g.sounds.lastPlayed.keys()].sort() };
   });
-  assert.deepEqual(report.soundCues, { state: "running", played: ["boss", "hit", "kill", "shield", "shieldBreak", "upgrade"] });
+  assert.deepEqual(report.soundCues, {
+    state: "running",
+    played: ["boss", "hit", "kill", "phase", "shield", "shieldBreak", "upgrade"],
+  });
 
   // Use an actual recorded run with all four module rows and the longest name.
   report.runReview = await page.evaluate(() => {
@@ -432,19 +436,51 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
 
   report.bossScenes = [];
-  const bossPhases = [1, 1, 2, 3];
-  for (let sector = 1; sector <= 4; sector++) {
-    const phase = bossPhases[sector - 1];
+  const bossScenarios = [
+    { sector: 1, phase: 1, attack: "torpedo" },
+    { sector: 2, phase: 1, attack: "boss-target-lock" },
+    { sector: 2, phase: 2, attack: "beam-sweep" },
+    { sector: 2, phase: 3, attack: "precision-salvo" },
+    { sector: 3, phase: 1, attack: "anchor-bomb" },
+    { sector: 3, phase: 2, attack: "support-barrage" },
+    { sector: 3, phase: 3, attack: "wandering-control" },
+    { sector: 4, phase: 1, attack: "void-lock" },
+    { sector: 4, phase: 2, attack: "void-rift" },
+    { sector: 4, phase: 3, attack: "void-combo" },
+  ];
+  for (const { sector, phase, attack } of bossScenarios) {
     await page.goto(`${base}/?test=boss&sector=${sector}&phase=${phase}`);
     await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+    if (phase > 1) {
+      await page.evaluate(() => {
+        const g = window.__galalaxyTestGame;
+        const boss = g.enemies.find(enemy => enemy.boss && !enemy.dead);
+        g.simTime = boss.phaseTransitionStartedAt + boss.phaseTransitionDuration * 0.45;
+        g.draw();
+      });
+      await screenshot(`boss-sector-${sector}-phase-${phase}-transition`);
+    }
     const scene = await page.evaluate(({ sector, phase }) => {
       const g = window.__galalaxyTestGame;
       const boss = g.enemies.find(enemy => enemy.boss && !enemy.dead);
+      const phaseLabels = [];
+      const fillText = g.ctx.fillText;
+      g.ctx.fillText = function(value, ...args) {
+        phaseLabels.push(String(value));
+        return fillText.call(this, value, ...args);
+      };
+      try { g.drawBossPhaseNotice(g.ctx); } finally { g.ctx.fillText = fillText; }
+      const transition = {
+        active: g.simTime < boss.phaseTransitionUntil,
+        kind: boss.specialCharge?.kind,
+        duration: boss.phaseTransitionDuration,
+        label: phaseLabels.find(value => value.startsWith("PHASE ")) ?? null,
+      };
+      g.simTime = Math.max(g.simTime, boss.phaseTransitionUntil + 0.01);
       boss.pendingShots = [];
       boss.specialCharge = null;
       boss.fireTimer = 0;
       if (sector === 1) boss._klaedPattern = 2;
-      else if (sector >= 3) boss._bossPattern = 1;
       boss.update(0.01);
       const support = g.enemies.find(enemy => enemy.type === "nautolanSupport" && !enemy.dead);
       g.update = () => {};
@@ -455,22 +491,35 @@ try {
         movement: boss.bossProfile?.movement,
         phase: boss.bossPhase,
         attack: boss.specialCharge?.kind,
-        safeLanes: boss.specialCharge?.safeLane === undefined ? null : 1,
+        aura: boss._bossAura(),
+        transition,
+        hasSafeLane: boss.specialCharge?.safeLane !== undefined ||
+          Boolean(boss.specialCharge?.safeSequence?.length),
         protectedBySupport: Boolean(support?.supportTargets.includes(boss)),
         voidCoreLoaded: sector !== 4 || Boolean(g.loader.get("environmentVoidCore")),
       };
     }, { sector, phase });
+    assert.equal(scene.attack, attack, JSON.stringify(scene));
+    if (phase > 1) {
+      assert.equal(scene.transition.active, true, JSON.stringify(scene));
+      assert.equal(scene.transition.kind, "phase-shift", JSON.stringify(scene));
+      assert.ok(scene.transition.duration >= 1.35, JSON.stringify(scene));
+      assert.equal(scene.transition.label, `PHASE ${phase === 2 ? "II" : "III"}`, JSON.stringify(scene));
+    }
     report.bossScenes.push(scene);
     await screenshot(`boss-sector-${sector}-phase-${phase}`);
   }
-  assert.deepEqual(report.bossScenes.map(scene => scene.type),
-    ["dreadnought", "nairanDreadnought", "nautolanDreadnought", "voidSovereign"]);
   assert.equal(new Set(report.bossScenes.map(scene => scene.name)).size, 4);
-  assert.equal(new Set(report.bossScenes.map(scene => scene.movement)).size, 4);
-  assert.deepEqual(report.bossScenes.map(scene => scene.attack),
-    ["torpedo", "boss-target-lock", "control-gate", "void-rift"]);
-  assert.equal(report.bossScenes[2].protectedBySupport, true);
-  assert.ok(report.bossScenes.slice(2).every(scene => scene.safeLanes === 1));
+  for (const sector of [2, 3, 4]) {
+    const phases = report.bossScenes.filter(scene => scene.sector === sector);
+    assert.equal(new Set(phases.map(scene => scene.attack)).size, 3);
+    assert.equal(new Set(phases.map(scene => scene.aura)).size, 3);
+  }
+  assert.equal(report.bossScenes.find(scene => scene.sector === 3 && scene.phase === 2).protectedBySupport, true);
+  assert.equal(report.bossScenes.find(scene => scene.sector === 3 && scene.phase === 3).protectedBySupport, false);
+  assert.ok(report.bossScenes.filter(scene =>
+    ["precision-salvo", "wandering-control", "void-rift", "void-combo"].includes(scene.attack))
+    .every(scene => scene.hasSafeLane));
   assert.ok(report.bossScenes.every(scene => scene.voidCoreLoaded));
 
   await page.goto(`${base}/?test=hud-layout`);
