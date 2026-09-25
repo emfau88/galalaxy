@@ -111,6 +111,12 @@ function testKeystoneMeasurement() {
   stats.enemySpawn(game, trackedEnemy, "pursuit-pressure");
   stats.enemyKill(game, trackedEnemy);
   stats.enemyEscape(game, new Enemy(game, "scout", 0, 0));
+  stats.combatTick(game, 1.5);
+  game.runTime = 10;
+  const trackedBoss = new Enemy(game, "dreadnought", 210, 140, true);
+  stats.enemySpawn(game, trackedBoss, "boss");
+  game.runTime = 19.4;
+  stats.enemyKill(game, trackedBoss);
   const keystone = { id: "reactor", keystone: true };
   game.runTime = 22;
   stats.offer(game, [keystone], [keystone]);
@@ -128,6 +134,22 @@ function testKeystoneMeasurement() {
   assert.equal(summary.regularEnemiesKilled, 1);
   assert.equal(summary.enemiesEscaped, 1);
   assert.equal(summary.regularKillScore, trackedEnemy.score);
+  assert.equal(summary.bossKillScore, trackedBoss.score);
+  assert.deepEqual(summary.sectorStats[0], {
+    sector: 1,
+    name: SECTORS[0].name,
+    combatSeconds: 1.5,
+    timeScore: 3.6,
+    regularEnemiesSpawned: 1,
+    pursuitEnemiesSpawned: 1,
+    regularEnemiesKilled: 1,
+    enemiesEscaped: 1,
+    regularKillScore: trackedEnemy.score,
+    bossKillScore: trackedBoss.score,
+    bossStartedAt: 10,
+    bossFightSeconds: 9.4,
+    score: Math.floor(3.6 + trackedEnemy.score + trackedBoss.score),
+  });
 }
 
 function testAegis() {
@@ -316,7 +338,7 @@ function testUpgradeCameraShake() {
   assert.ok(translations.every(([x, y]) => x === 0 && y === 0), "Pause screen also stays still");
 }
 
-function simulateEncounterSector(sectorIndex, seconds = 48) {
+function simulateEncounterSector(sectorIndex, seconds = 48, randomSource = () => 0.25) {
   const game = createGame();
   game.currentSectorIndex = sectorIndex;
   game.sectorTimer = SECTORS[sectorIndex].duration;
@@ -340,7 +362,7 @@ function simulateEncounterSector(sectorIndex, seconds = 48) {
   };
   const random = Math.random;
   try {
-    Math.random = () => 0.25;
+    Math.random = randomSource;
     const step = 0.05;
     for (let frame = 1; frame <= seconds / step; frame++) {
       elapsed = frame * step;
@@ -352,6 +374,54 @@ function simulateEncounterSector(sectorIndex, seconds = 48) {
     Math.random = random;
   }
   return { events, phases };
+}
+
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6D2B79F5;
+    let value = state;
+    value = Math.imul(value ^ value >>> 15, value | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function modeledFullClearScore(randomSource) {
+  let score = Math.floor(SECTORS.reduce((sum, sector) => sum + sector.duration, 0) * 2.4);
+  for (let sectorIndex = 0; sectorIndex < SECTORS.length; sectorIndex++) {
+    const sector = SECTORS[sectorIndex];
+    const simulation = simulateEncounterSector(sectorIndex, sector.duration, randomSource);
+    score += simulation.events.reduce((total, event) =>
+      total + Math.round(Enemy.defs[event.type].score * sector.scoreMult), 0);
+    const bossType = sector.bossType || FLEETS[sector.fleet].bossType;
+    score += Enemy.defs[bossType].score * 8;
+  }
+  return score;
+}
+
+function percentile(sortedValues, fraction) {
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil(sortedValues.length * fraction) - 1));
+  return sortedValues[index];
+}
+
+function modelScoreDistribution(sampleCount = 500) {
+  const scores = Array.from({ length: sampleCount }, (_, index) =>
+    modeledFullClearScore(seededRandom(index + 1))).sort((a, b) => a - b);
+  const distribution = {
+    samples: scores.length,
+    min: scores[0],
+    p10: percentile(scores, 0.10),
+    median: percentile(scores, 0.50),
+    p90: percentile(scores, 0.90),
+    max: scores.at(-1),
+  };
+  assert.equal(distribution.samples, sampleCount, "Score telemetry covers every requested seed");
+  assert.ok(distribution.min < distribution.median && distribution.median < distribution.max,
+    "Seeded score telemetry captures genuine encounter-role variance");
+  assert.ok(distribution.p10 <= distribution.median && distribution.median <= distribution.p90,
+    "Score percentiles remain ordered");
+  return distribution;
 }
 
 function testEncounterDirector() {
@@ -458,7 +528,7 @@ function testEncounterDirector() {
     modeledRunScore += Enemy.defs[bossType].score * 8;
   }
   assert.ok(modeledRunScore >= 58000 && modeledRunScore <= 63000,
-    `A strong modeled clear can reach the 60,000-point target (${modeledRunScore})`);
+    `The legacy low-value calibration seed remains reproducible (${modeledRunScore})`);
 
   const queuedGame = createGame();
   queuedGame.currentSectorIndex = 0;
@@ -508,7 +578,10 @@ function testEncounterDirector() {
     "The elite encounter begins as soon as only two prior enemies remain");
   assert.equal(eliteGame.enemies.filter(enemy => !enemy.dead).length, 3,
     "The torpedo introduction starts as a compact three-threat moment");
-  return modeledRunScore;
+  return {
+    legacySeedScore: modeledRunScore,
+    scoreDistribution: modelScoreDistribution(500),
+  };
 }
 
 function testEncounterProjectileBudget() {
@@ -737,7 +810,7 @@ testCombatPickups();
 testSectorScoreScaling();
 testOptInKeyboardMovement();
 testUpgradeCameraShake();
-const modeledRunScore = testEncounterDirector();
+const scoreModel = testEncounterDirector();
 testEncounterProjectileBudget();
 testPursuitDisengage();
 testNairanPrecisionTelegraph();
@@ -746,4 +819,5 @@ testNautolanSupportRole();
 testDistinctBossProfiles();
 testKongregateStats();
 testSectorEnvironments();
-console.log(`Reliability checks passed (modeled full-clear score: ${modeledRunScore})`);
+console.log(`Reliability checks passed (legacy calibration seed: ${scoreModel.legacySeedScore}; ` +
+  `500-seed distribution: ${JSON.stringify(scoreModel.scoreDistribution)})`);

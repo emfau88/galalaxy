@@ -1,4 +1,4 @@
-import { CONFIG } from "./config.js";
+import { CONFIG, SECTORS } from "./config.js";
 import { SaveSystem } from "./saveSystem.js";
 
 const MAX_HISTORY = 24;
@@ -24,6 +24,21 @@ const moduleEntries = player => [
   ["Fire Rate", player.fireLevel],
 ];
 
+const createSectorStats = () => SECTORS.map((sector, index) => ({
+  sector: index + 1,
+  name: sector.name,
+  combatSeconds: 0,
+  timeScore: 0,
+  regularEnemiesSpawned: 0,
+  pursuitEnemiesSpawned: 0,
+  regularEnemiesKilled: 0,
+  enemiesEscaped: 0,
+  regularKillScore: 0,
+  bossKillScore: 0,
+  bossStartedAt: null,
+  bossFightSeconds: null,
+}));
+
 export class RunStats {
   constructor() {
     const saved = SaveSystem.readJson(CONFIG.runHistoryKey, { history: [] });
@@ -33,7 +48,7 @@ export class RunStats {
 
   start(game) {
     this.current = {
-      version: 3,
+      version: 4,
       offers: 0,
       picks: 0,
       firstDraftAt: null,
@@ -58,6 +73,7 @@ export class RunStats {
       enemiesEscaped: 0,
       regularKillScore: 0,
       bossKillScore: 0,
+      sectorStats: createSectorStats(),
     };
     this.current.sectorReached = Math.max(1, game.currentSectorIndex + 1);
   }
@@ -121,23 +137,54 @@ export class RunStats {
   }
 
   enemySpawn(game, enemy, source) {
-    if (!this.current || game.isQaRun || enemy.boss) return;
+    if (!this.current || game.isQaRun) return;
+    const sector = this.current.sectorStats?.[game.currentSectorIndex];
+    if (enemy.boss) {
+      if (sector && sector.bossStartedAt === null) sector.bossStartedAt = game.runTime;
+      return;
+    }
     this.current.regularEnemiesSpawned++;
     if (source === "pursuit-pressure") this.current.pursuitEnemiesSpawned++;
+    if (sector) {
+      sector.regularEnemiesSpawned++;
+      if (source === "pursuit-pressure") sector.pursuitEnemiesSpawned++;
+    }
   }
 
   enemyKill(game, enemy) {
     if (!this.current || game.isQaRun) return;
-    if (enemy.boss) this.current.bossKillScore += enemy.score;
-    else {
+    const sector = this.current.sectorStats?.[game.currentSectorIndex];
+    if (enemy.boss) {
+      this.current.bossKillScore += enemy.score;
+      if (sector) {
+        sector.bossKillScore += enemy.score;
+        if (sector.bossStartedAt !== null) {
+          sector.bossFightSeconds = Math.max(0, game.runTime - sector.bossStartedAt);
+        }
+      }
+    } else {
       this.current.regularEnemiesKilled++;
       this.current.regularKillScore += enemy.score;
+      if (sector) {
+        sector.regularEnemiesKilled++;
+        sector.regularKillScore += enemy.score;
+      }
     }
   }
 
   enemyEscape(game, enemy) {
     if (!this.current || game.isQaRun || enemy.boss) return;
     this.current.enemiesEscaped++;
+    const sector = this.current.sectorStats?.[game.currentSectorIndex];
+    if (sector) sector.enemiesEscaped++;
+  }
+
+  combatTick(game, dt) {
+    if (!this.current || game.isQaRun || !Number.isFinite(dt) || dt <= 0) return;
+    const sector = this.current.sectorStats?.[game.currentSectorIndex];
+    if (!sector) return;
+    sector.combatSeconds += dt;
+    sector.timeScore += dt * 2.4;
   }
 
   complete(game, outcome, cause = null) {
@@ -148,8 +195,22 @@ export class RunStats {
       .sort(([, a], [, b]) => b - a)
       .slice(0, 4)
       .map(([name, level]) => ({ name, level }));
+    const sectorStats = (current.sectorStats || createSectorStats()).map(sector => ({
+      ...sector,
+      combatSeconds: Number((sector.combatSeconds || 0).toFixed(1)),
+      timeScore: Number((sector.timeScore || 0).toFixed(1)),
+      bossFightSeconds: sector.bossFightSeconds === null
+        ? null
+        : Number(sector.bossFightSeconds.toFixed(1)),
+      score: Math.floor(
+        (sector.timeScore || 0) +
+        (sector.regularKillScore || 0) +
+        (sector.bossKillScore || 0)
+      ),
+    }));
     const summary = {
       ...current,
+      sectorStats,
       outcome,
       score: Math.floor(game.score),
       kills: game.kills,

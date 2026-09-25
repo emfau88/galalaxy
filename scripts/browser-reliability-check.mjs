@@ -416,7 +416,7 @@ try {
   await page.evaluate(() => { window.__galalaxyTestGame.update = () => {}; });
   await screenshot("hud");
   report.hudLayouts = [];
-  for (const [width, height, safeTop] of [[390, 844, 0], [360, 900, 0], [320, 740, 0], [430, 932, 0], [390, 1000, 44], [900, 420, 0]]) {
+  for (const [width, height, safeTop] of [[390, 844, 0], [360, 800, 0], [360, 900, 0], [320, 740, 0], [430, 932, 0], [390, 1000, 44], [900, 420, 0]]) {
     await page.setViewportSize({ width, height });
     const layout = await page.evaluate(({ safeTop }) => {
       const g = window.__galalaxyTestGame;
@@ -448,12 +448,13 @@ try {
     }, { safeTop });
     assert.ok(Math.abs(layout.gap - 12) < 0.001, `Boss frame gap: ${JSON.stringify(layout)}`);
     assert.ok(layout.pauseInsideHeader, "Pause control follows the relocated header");
-    assert.ok(layout.headerTop >= safeTop, "HUD respects top safe area");
+    assert.ok(Math.abs(layout.headerTop - (safeTop + 4)) < 0.01,
+      `HUD is anchored 4px below the safe area: ${JSON.stringify(layout)}`);
     report.hudLayouts.push({ width, height, safeTop, ...layout });
     await screenshot(`hud-${width}x${height}-safe${safeTop}`);
   }
-  assert.ok(report.hudLayouts.some(layout => layout.headerOffset < 0), "Test covers a relocated header");
-  assert.ok(report.hudLayouts.some(layout => layout.headerOffset === 0), "Test covers an in-field header");
+  assert.ok(report.hudLayouts.every(layout => layout.headerOffset < 0),
+    "Every tested viewport relocates the header to the physical safe-area edge");
   assert.deepEqual(errors, [], "No browser errors or failed asset responses");
   report.errors = errors;
   report.ok = true;

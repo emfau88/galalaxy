@@ -254,15 +254,17 @@ Plan steht bei jedem Bulk.
 - [x] Rund 60.000 Punkte für einen starken vollständigen Clear rechnerisch ermöglichen.
 - [x] Spätere Sektor-Punkteboni von XP- und Pickup-Berechnung entkoppeln.
 - [x] Spawn-, Kill-, Flucht- und Punktewerte in der Run-Telemetrie erfassen.
+- [x] Punkte, Kampfzeit und Bosskampfzeit zusätzlich pro Sektor erfassen.
 - [x] Automatische Dichte-, Pursuit-, Punkte- und Reliability-Prüfungen ergänzen.
-- [ ] Menschlichen vollständigen Run durchführen und Action, Fairness sowie Punktziel bestätigen.
+- [x] Ersten menschlichen vollständigen Run durchführen: 74.058 Punkte, kein Tod; Angriffsrichtungen verbessert, Punktziel und Boss-Schwierigkeit nicht bestanden.
+- [ ] Action, Fairness und korrigiertes Punktziel in weiteren menschlichen Runs bestätigen.
 
 ### Abnahme Bulk D.5
 
 - [x] Sektor I/II liegen bei 80–90 %, Sektor III bei 65–75 % und Sektor IV bei 70–80 % der historischen Referenz.
 - [x] Aktive Verfolger bleiben in jedem Sektor zwischen 20 und 45 % der regulären Spawns.
 - [x] Sektor III/IV enthalten mindestens doppelt so viele Lane-Verstärkungen wie Dauerverfolger.
-- [x] Modellierter perfekter Clear liegt im Zielkorridor 58.000–63.000 Punkte.
+- [ ] 500-Seed-Volltrefferverteilung liegt im Zielkorridor; aktuelle Baseline: Median 71.703, P90 74.403, Maximum 78.151.
 - [ ] Guter menschlicher Run erreicht etwa 55.000–65.000 Punkte, ohne unlesbar oder unfair zu werden.
 
 ---
@@ -420,7 +422,9 @@ Plan steht bei jedem Bulk.
 - [x] Sporadischen Timing-Ausreißer der Sektor-Cleanup-Prüfung reproduziert und den Test deterministisch gemacht.
 - [x] Isolierten WASD-Kandidaten in einem normalen Desktop-Browser manuell abgenommen; der eingebettete Codex-Browser reicht physische WASD-Eingaben nicht zuverlässig weiter.
 - [x] Fehlende Support-Weapon-/Shield-PNGs im Quellpaket verifiziert; Schutzwirkung daher sichtbar prozedural statt mit sachfremden Torpedo-Layern umgesetzt.
-- [ ] Lokalen Entwicklungsserver nach manuellen Tests sauber beenden.
+- [x] Mobile HUD-Leiste unabhängig vom Letterbox-Platz fest vier Pixel unter der Safe Area verankert; Pause, Fullscreen und Bossleiste folgen derselben Transformation.
+- [x] Punkteprüfung von einem fest verdrahteten Niedrigwert-Seed auf eine reproduzierbare 500-Seed-Verteilung erweitert.
+- [x] Lokalen Entwicklungsserver nach manuellen Tests sauber beenden.
 
 ## Änderungsprotokoll
 
@@ -435,3 +439,4 @@ Plan steht bei jedem Bulk.
 - **24.09.2026:** Balance-Recovery D.5 technisch umgesetzt: 80–90 % der historischen Spawnmenge pro Sektor, mehrheitlich aktive Verfolger, gestaffelte Budgets, nachgeholte Encounter-Spawns und ein modelliertes Punktepotenzial von rund 60.000. Menschliche Vollrun-Abnahme bleibt offen; Details unter `docs/qa/balance-recovery-2026-09-24/report.md`.
 - **25.09.2026:** Balance-Recovery nach menschlichem Sektor-III-Test korrigiert: Sektor III/IV reduziert, Dauerverfolger hart begrenzt, sämtliche Verfolger-Spawns hinter dem Spieler entfernt und schwere Homing-Rollen aus dem Dauerstrom genommen. Die 60.000-Punkte-Chance bleibt über entkoppelte Sektorwertung erhalten; Details unter `docs/qa/balance-followup-2026-09-25/report.md`.
 - **25.09.2026:** Torpedo- und Support-Wellen zu kurzen Elite-Kampfmomenten verdichtet: Start erst bei höchstens zwei Altgegnern, kein paralleler Dauerstrom, vier Gegner Gesamtlimit, kleinere Supportgruppe und robusteres Torpedoschiff. Vollrun, Rollenszenen und 60.070-Punkte-Modell bestanden; Details unter `docs/qa/elite-followup-2026-09-25/report.md`.
+- **25.09.2026:** Spieltest-Follow-up Punkt 1 umgesetzt: HUD auf allen mobilen Formaten direkt an die Safe Area gesetzt, sektorbezogene Punkte- und Bosszeit-Telemetrie ergänzt und den irreführenden 60.070-Einzeltest durch eine 500-Seed-Verteilung ergänzt. Aktuelle Baseline: Median 71.703, P90 74.403; Details unter `docs/qa/hud-telemetry-2026-09-25/report.md`.

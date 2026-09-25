@@ -213,9 +213,14 @@ export class Game {
   }
 
   hudHeaderOffsetY() {
-    const hudHeight = 90;
     const topPadding = this.safeTopPx + 4;
-    if (this.offsetY < topPadding + hudHeight * this.scale) return 0;
+    // HUD coordinates live in the 420x760 design space while the top safe
+    // area is measured in viewport pixels. Always translate the header so its
+    // 8px design-space inset lands directly below the device safe area. The
+    // former all-or-nothing fit check left a large empty strip on common tall
+    // phone viewports whenever the complete 90px rail did not fit above the
+    // playfield.
+    if (!Number.isFinite(this.scale) || this.scale <= 0) return 0;
     return (topPadding - this.offsetY) / this.scale - 8;
   }
 
@@ -619,6 +624,7 @@ export class Game {
       this.simTime += dt;
       this.runTime += dt;
       this.score += dt * 2.4;
+      this.runStats?.combatTick?.(this, dt);
       this.player.update(dt);
       if (this.state === "playing") this.updateSpawning(dt);
       this.updateCollections(dt);
