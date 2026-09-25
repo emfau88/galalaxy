@@ -85,7 +85,7 @@ class HudRenderingMethods {
     ctx.font = "700 8px ui-monospace, monospace";
     ctx.fillText(fmtTime(this.runTime), 18, 82);
 
-    // ── CENTER: Sector / level / energy ──────────────────────────────
+    // ── CENTER: Sector / level / XP ──────────────────────────────────
     const cx = W / 2;
 
     ctx.textAlign = "center";
@@ -133,7 +133,7 @@ class HudRenderingMethods {
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(175,255,205,0.76)";
     ctx.font = "800 8px ui-monospace, monospace";
-    ctx.fillText("ENERGY", xpX, 56);
+    ctx.fillText("XP", xpX, 56);
     ctx.textAlign = "right";
     ctx.fillText(`${this.xp}/${this.xpNeed}`, xpX + xpW, 56);
     this.bar(ctx, xpX, xpY, xpW, xpH, xpFrac, xpFrac >= 0.85 ? "#aaffcc" : CONFIG.colors.green, "");
