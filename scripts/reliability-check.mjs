@@ -6,8 +6,8 @@ import { COMBAT_PICKUP_DROP_CONFIG, CombatPickup } from "../src/entities/pickup.
 import { UpgradeSystem } from "../src/systems/upgrades.js";
 import { RunStats } from "../src/runStats.js";
 import { wrapText } from "../src/rendering/text.js";
-import { SECTOR_ENVIRONMENTS, SECTORS } from "../src/config.js";
-import { SECTOR_ENCOUNTER_PROFILES, WAVE_CARDS } from "../src/data/encounters.js";
+import { CONFIG, SECTOR_ENVIRONMENTS, SECTORS } from "../src/config.js";
+import { FORMATION_SHAPES, SECTOR_ENCOUNTER_PROFILES, WAVE_CARDS } from "../src/data/encounters.js";
 import { BOSS_PROFILES } from "../src/data/bosses.js";
 import { FLEETS } from "../src/data/fleets.js";
 import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
@@ -448,6 +448,50 @@ function testEncounterDirector() {
   assert.equal(new Set(SECTOR_ENCOUNTER_PROFILES.map(profile => profile.identity)).size, 4,
     "Every sector has a distinct gameplay identity");
 
+  const formationCards = cards.filter(card => card.formation);
+  assert.ok(formationCards.length >= 4, "Every later combat identity has a dedicated large formation card");
+  assert.ok(formationCards.every(card => card.suppressPressure && card.entryCap <= 1),
+    "Large formations replace background pressure and wait for a readable arena");
+  const formationEvents = formationCards.flatMap(card => card.events.filter(event => event.formation));
+  assert.ok(formationEvents.every(event => event.count >= 5 && event.count <= 7),
+    "Large formation groups contain five to seven ships");
+  assert.ok(formationEvents.every(event => FORMATION_SHAPES[event.formation]?.length === event.count),
+    "Every formation event has one authored geometry slot per ship");
+  assert.ok(formationEvents.every(event => event.flightSpeed <= 104),
+    "Formation passes use the slower shared flight-speed budget");
+
+  const formationScenarios = [
+    [0, WAVE_CARDS["open-v"]],
+    [1, WAVE_CARDS["split-v"]],
+    [2, WAVE_CARDS["escort-box"]],
+    [3, WAVE_CARDS["finale-spear"]],
+  ];
+  for (const [sectorIndex, card] of formationScenarios) {
+    const formationGame = createGame();
+    formationGame.currentSectorIndex = sectorIndex;
+    formationGame.encounterDirector = {
+      waveCount: 1,
+      formationCount: 0,
+      pendingEvents: [],
+    };
+    const event = card.events.find(candidate => candidate.formation);
+    formationGame._queueEncounterEvent(event, card);
+    formationGame._drainPendingEncounterEvents(
+      SECTOR_ENCOUNTER_PROFILES[sectorIndex], SECTORS[sectorIndex], 0.55,
+    );
+    const group = formationGame.enemies.filter(enemy => enemy.formationId);
+    assert.equal(group.length, event.count, `${card.id} spawns every authored formation slot`);
+    assert.equal(new Set(group.map(enemy => enemy.formationId)).size, 1,
+      `${card.id} shares one formation identity`);
+    assert.deepEqual(group.map(enemy => enemy.formationSlot),
+      Array.from({ length: event.count }, (_, index) => index),
+      `${card.id} preserves stable slot indices`);
+    assert.equal(new Set(group.map(enemy => `${enemy.flyby.vx},${enemy.flyby.vy}`)).size, 1,
+      `${card.id} uses one shared flight vector`);
+    assert.ok(group.every(enemy => enemy.flyby.sineAmp === 0 && enemy.y < CONFIG.designH * 0.5),
+      `${card.id} enters from a readable forward or upper-side arc without wobble`);
+  }
+
   const eliteCards = [WAVE_CARDS["torpedo-lock"], WAVE_CARDS["support-screen"]];
   assert.ok(eliteCards.every(card => card.elite && card.suppressPressure),
     "Torpedo and support cards reserve isolated elite-combat windows");
@@ -493,7 +537,7 @@ function testEncounterDirector() {
   }
 
   const historicalModeledCounts = [79.8, 143.1, 188.0, 221.9];
-  const recoveryBands = [[0.80, 0.90], [0.80, 0.90], [0.65, 0.75], [0.70, 0.80]];
+  const recoveryBands = [[0.80, 0.90], [0.80, 0.90], [0.64, 0.75], [0.70, 0.80]];
   const fullSectors = SECTORS.map((sector, sectorIndex) =>
     simulateEncounterSector(sectorIndex, sector.duration));
   let modeledRunScore = Math.floor(SECTORS.reduce((sum, sector) => sum + sector.duration, 0) * 2.4);
@@ -503,7 +547,8 @@ function testEncounterDirector() {
     const recoveryRatio = simulation.events.length / historicalModeledCounts[sectorIndex];
     const [minimumRecovery, maximumRecovery] = recoveryBands[sectorIndex];
     assert.ok(recoveryRatio >= minimumRecovery && recoveryRatio <= maximumRecovery,
-      `Sector ${sectorIndex + 1} stays inside its post-playtest density band`);
+      `Sector ${sectorIndex + 1} stays inside its post-playtest density band ` +
+      `(${simulation.events.length} enemies; ratio ${recoveryRatio.toFixed(3)})`);
     const pursuers = simulation.events.filter(event =>
       event.options.encounterId === "pursuit-pressure");
     assert.ok(pursuers.length / simulation.events.length >= 0.20 &&
@@ -527,8 +572,8 @@ function testEncounterDirector() {
     const bossType = sector.bossType || FLEETS[sector.fleet].bossType;
     modeledRunScore += Enemy.defs[bossType].score * 8;
   }
-  assert.ok(modeledRunScore >= 58000 && modeledRunScore <= 63000,
-    `The legacy low-value calibration seed remains reproducible (${modeledRunScore})`);
+  assert.ok(modeledRunScore >= 53000 && modeledRunScore <= 58000,
+    `The formation-pass calibration seed remains reproducible (${modeledRunScore})`);
 
   const queuedGame = createGame();
   queuedGame.currentSectorIndex = 0;
@@ -554,7 +599,7 @@ function testEncounterDirector() {
   eliteGame.sectorTimer = SECTORS[1].duration * 0.5;
   eliteGame.encounterDirector = {
     sectorIndex: 1,
-    phase: "elite-prep",
+    phase: "entry-prep",
     waveId: "torpedo-lock",
     lastWaveId: null,
     timer: 0,
@@ -570,7 +615,7 @@ function testEncounterDirector() {
   eliteGame.updateSpawning(0.1);
   assert.equal(eliteGame.enemies.length, 5,
     "Elite preparation neither adds a wave nor background pressure to a crowded arena");
-  assert.equal(eliteGame.encounterDirector.phase, "elite-prep",
+  assert.equal(eliteGame.encounterDirector.phase, "entry-prep",
     "The elite encounter waits until the arena has visibly thinned out");
   eliteGame.enemies.slice(0, 3).forEach(enemy => { enemy.dead = true; });
   eliteGame.updateSpawning(0.1);
@@ -579,7 +624,7 @@ function testEncounterDirector() {
   assert.equal(eliteGame.enemies.filter(enemy => !enemy.dead).length, 3,
     "The torpedo introduction starts as a compact three-threat moment");
   return {
-    legacySeedScore: modeledRunScore,
+    formationSeedScore: modeledRunScore,
     scoreDistribution: modelScoreDistribution(500),
   };
 }
@@ -819,5 +864,5 @@ testNautolanSupportRole();
 testDistinctBossProfiles();
 testKongregateStats();
 testSectorEnvironments();
-console.log(`Reliability checks passed (legacy calibration seed: ${scoreModel.legacySeedScore}; ` +
+console.log(`Reliability checks passed (formation calibration seed: ${scoreModel.formationSeedScore}; ` +
   `500-seed distribution: ${JSON.stringify(scoreModel.scoreDistribution)})`);

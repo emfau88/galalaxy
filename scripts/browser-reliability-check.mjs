@@ -112,7 +112,7 @@ try {
       })),
     };
   });
-  assert.equal(report.encounterDefinitions.cardCount, 9);
+  assert.equal(report.encounterDefinitions.cardCount, 12);
   assert.equal(report.encounterDefinitions.durationsValid, true);
   assert.equal(report.encounterDefinitions.corridorsPresent, true);
   assert.equal(new Set(report.encounterDefinitions.identities).size, 4);
@@ -318,6 +318,68 @@ try {
   }
   assert.deepEqual(report.encounterScenes.map(scene => scene.wave),
     ["single-file", "side-sweep", "anchor-corridor", "finale-relay"]);
+
+  report.formationScenes = [];
+  const formationScenarios = [
+    { sectorIndex: 0, cardId: "open-v", expected: 5 },
+    { sectorIndex: 1, cardId: "split-v", expected: 6 },
+    { sectorIndex: 2, cardId: "escort-box", expected: 5 },
+    { sectorIndex: 3, cardId: "finale-spear", expected: 7 },
+  ];
+  for (const scenario of formationScenarios) {
+    await page.goto(`${base}/?test=sector-map&sector=${scenario.sectorIndex}`);
+    await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
+    const scene = await page.evaluate(async ({ sectorIndex, cardId }) => {
+      const g = window.__galalaxyTestGame;
+      const { SECTORS } = await import("/src/config.js");
+      const { SECTOR_ASSET_GROUPS } = await import("/src/assets.js");
+      const {
+        WAVE_CARDS, createEncounterDirector, encounterProfileFor,
+      } = await import("/src/data/encounters.js");
+      await g._loadAssetGroups([SECTOR_ASSET_GROUPS[sectorIndex]]);
+      g.clearArena();
+      g.currentSectorIndex = sectorIndex;
+      g.sectorTimer = SECTORS[sectorIndex].duration;
+      g.encounterDirector = createEncounterDirector(sectorIndex);
+      g.bossActive = false;
+      g.bossWarning = 0;
+      g.state = "playing";
+      g.player.x = 210;
+      g.player.y = 630;
+      g.player.fireTimer = Number.MAX_VALUE;
+      g.player.invuln = Number.POSITIVE_INFINITY;
+      g._activateEncounterWave(WAVE_CARDS[cardId], encounterProfileFor(sectorIndex), 0.55);
+      const update = g.update.bind(g);
+      for (let i = 0; i < Math.ceil(2.4 * 60); i++) update(1 / 60);
+      g.update = () => {};
+      const group = g.enemies.filter(enemy => !enemy.dead && enemy.formationId);
+      const speeds = group.map(enemy => Math.hypot(enemy.flyby.vx, enemy.flyby.vy));
+      return {
+        sector: sectorIndex + 1,
+        cardId,
+        ships: group.length,
+        groupIds: [...new Set(group.map(enemy => enemy.formationId))],
+        slots: group.map(enemy => enemy.formationSlot).sort((a, b) => a - b),
+        sharedVelocity: new Set(group.map(enemy => `${enemy.flyby.vx},${enemy.flyby.vy}`)).size === 1,
+        maxSpeed: Math.max(...speeds),
+        allVisible: group.every(enemy => enemy.x >= -20 && enemy.x <= 440 && enemy.y >= -20 && enemy.y <= 760),
+        bounds: {
+          left: Math.min(...group.map(enemy => enemy.x)),
+          right: Math.max(...group.map(enemy => enemy.x)),
+          top: Math.min(...group.map(enemy => enemy.y)),
+          bottom: Math.max(...group.map(enemy => enemy.y)),
+        },
+      };
+    }, scenario);
+    assert.equal(scene.ships, scenario.expected, JSON.stringify(scene));
+    assert.equal(scene.groupIds.length, 1, JSON.stringify(scene));
+    assert.deepEqual(scene.slots, Array.from({ length: scenario.expected }, (_, index) => index));
+    assert.equal(scene.sharedVelocity, true, JSON.stringify(scene));
+    assert.ok(scene.maxSpeed <= 120, JSON.stringify(scene));
+    assert.equal(scene.allVisible, true, JSON.stringify(scene));
+    report.formationScenes.push(scene);
+    await screenshot(`formation-sector-${scenario.sectorIndex + 1}`);
+  }
 
   report.enemyRoles = {};
   await page.goto(`${base}/?test=enemy-role&role=torpedo`);

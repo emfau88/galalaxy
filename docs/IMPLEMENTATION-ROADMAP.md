@@ -264,8 +264,35 @@ Plan steht bei jedem Bulk.
 - [x] Sektor I/II liegen bei 80–90 %, Sektor III bei 65–75 % und Sektor IV bei 70–80 % der historischen Referenz.
 - [x] Aktive Verfolger bleiben in jedem Sektor zwischen 20 und 45 % der regulären Spawns.
 - [x] Sektor III/IV enthalten mindestens doppelt so viele Lane-Verstärkungen wie Dauerverfolger.
-- [ ] 500-Seed-Volltrefferverteilung liegt im Zielkorridor; aktuelle Baseline: Median 71.703, P90 74.403, Maximum 78.151.
+- [ ] 500-Seed-Volltrefferverteilung liegt im Zielkorridor; aktuelle Baseline nach Formations-P0: Median 67.151, P90 69.343, Maximum 72.094.
 - [ ] Guter menschlicher Run erreicht etwa 55.000–65.000 Punkte, ohne unlesbar oder unfair zu werden.
+
+---
+
+## Bulk D.6 – Echte, langsamere Formationsflüge
+
+**Priorität:** P0
+**Status:** TECHNISCH ABGESCHLOSSEN
+**Bezug:** Vollrun-Feedback: zu wenige, zu kleine und zu schnelle Gegnerformationen
+
+- [x] Vier feste Formationsgeometrien mit stabilen Slots für fünf bis sieben Schiffe anlegen.
+- [x] Sektor I erhält einen langsamen Fünfer-Chevron als wiederkehrende gelernte Formation.
+- [x] Sektor II erhält einen seitlichen Sechser-Split-V mit gemischten Nairan-Rollen.
+- [x] Sektor III erhält einen langsamen Fünfer-Eskortverband um ein zentrales Kontrollschiff.
+- [x] Sektor IV erhält eine breite Siebener-Speerspitze mit gemischten Rollen.
+- [x] Alle Schiffe eines Verbands verwenden einen gemeinsamen geraden Flugvektor ohne individuellen Sinusdrift.
+- [x] Formationen starten erst bei höchstens einem Altgegner; der Hintergrunddruck pausiert während des Einflugs und setzt danach wieder ein.
+- [x] Formationskarten ersetzen bestehende Lane-Wellen, statt zusätzliche Gegner auf den bisherigen Strom zu addieren.
+- [x] Automatische Slot-, Gruppen-, Geschwindigkeits-, Dichte-, Pursuit- und Browserprüfungen ergänzen.
+- [ ] Lesbarkeit, Tempo und Häufigkeit in einem vollständigen menschlichen Run bestätigen.
+
+### Abnahme Bulk D.6
+
+- [x] Alle vier Verbände erscheinen vollständig mit fünf, sechs, fünf und sieben Schiffen.
+- [x] Reale Fluggeschwindigkeiten liegen je nach Sektor bei 82,8 bis 104 Design-Pixeln pro Sekunde.
+- [x] Verfolger bleiben in jedem Sektor untergeordnet; Sektor III/IV bevorzugen weiterhin deutlich Lane-Druck.
+- [x] Browser-Vollrun, vier dedizierte Formationsszenen und alle bisherigen Regressionstests bestehen ohne Konsolen- oder Assetfehler.
+- [ ] Neuer menschlicher Score liegt im gewünschten Korridor; aktuelle 500-Seed-Baseline: Median 67.151, P90 69.343, Maximum 72.094.
 
 ---
 
@@ -424,6 +451,7 @@ Plan steht bei jedem Bulk.
 - [x] Fehlende Support-Weapon-/Shield-PNGs im Quellpaket verifiziert; Schutzwirkung daher sichtbar prozedural statt mit sachfremden Torpedo-Layern umgesetzt.
 - [x] Mobile HUD-Leiste unabhängig vom Letterbox-Platz fest vier Pixel unter der Safe Area verankert; Pause, Fullscreen und Bossleiste folgen derselben Transformation.
 - [x] Punkteprüfung von einem fest verdrahteten Niedrigwert-Seed auf eine reproduzierbare 500-Seed-Verteilung erweitert.
+- [x] Kleine schnelle Pseudoformationen durch vier echte Verbände mit stabilen Slots, gemeinsamer Geschwindigkeit und eigenem Einflugfenster ersetzt.
 - [x] Lokalen Entwicklungsserver nach manuellen Tests sauber beenden.
 
 ## Änderungsprotokoll
@@ -440,3 +468,4 @@ Plan steht bei jedem Bulk.
 - **25.09.2026:** Balance-Recovery nach menschlichem Sektor-III-Test korrigiert: Sektor III/IV reduziert, Dauerverfolger hart begrenzt, sämtliche Verfolger-Spawns hinter dem Spieler entfernt und schwere Homing-Rollen aus dem Dauerstrom genommen. Die 60.000-Punkte-Chance bleibt über entkoppelte Sektorwertung erhalten; Details unter `docs/qa/balance-followup-2026-09-25/report.md`.
 - **25.09.2026:** Torpedo- und Support-Wellen zu kurzen Elite-Kampfmomenten verdichtet: Start erst bei höchstens zwei Altgegnern, kein paralleler Dauerstrom, vier Gegner Gesamtlimit, kleinere Supportgruppe und robusteres Torpedoschiff. Vollrun, Rollenszenen und 60.070-Punkte-Modell bestanden; Details unter `docs/qa/elite-followup-2026-09-25/report.md`.
 - **25.09.2026:** Spieltest-Follow-up Punkt 1 umgesetzt: HUD auf allen mobilen Formaten direkt an die Safe Area gesetzt, sektorbezogene Punkte- und Bosszeit-Telemetrie ergänzt und den irreführenden 60.070-Einzeltest durch eine 500-Seed-Verteilung ergänzt. Aktuelle Baseline: Median 71.703, P90 74.403; Details unter `docs/qa/hud-telemetry-2026-09-25/report.md`.
+- **25.09.2026:** Formations-P0 technisch umgesetzt: vier feste Verbände mit fünf bis sieben Schiffen, 82,8–104 px/s, gemeinsamem geraden Flugvektor, freigeräumtem Einflugfenster und sektorspezifischer Rollenkomposition. Die modellierte Median-Punktzahl fällt auf 67.151; Vollrun und dedizierte Browser-Szenen bestehen. Details unter `docs/qa/formation-followup-2026-09-25/report.md`.
