@@ -99,39 +99,59 @@ class WorldRenderingMethods {
   drawBackground(ctx) {
     const W = CONFIG.designW, H = CONFIG.designH;
     const environment = SECTOR_ENVIRONMENTS[this.currentSectorIndex] || SECTOR_ENVIRONMENTS[0];
+    // Gameplay keeps its stable 420x760 coordinate system, but tall phones
+    // have extra viewport space above and below it. Extend all non-interactive
+    // background fills through that space so the canvas never reveals a
+    // letterbox band while HUD and collision coordinates remain unchanged.
+    const viewportBounds = {
+      x: -this.offsetX / this.scale,
+      y: -this.offsetY / this.scale,
+      w: this.viewportW / this.scale,
+      h: this.viewportH / this.scale,
+    };
 
     // Every sector gets a restrained base palette before its fleet tint is
     // applied. Landmarks stay in the upper/outer field so combat remains clear.
-    const g = ctx.createLinearGradient(0, 0, 0, H);
+    const g = ctx.createLinearGradient(
+      0, viewportBounds.y,
+      0, viewportBounds.y + viewportBounds.h,
+    );
     g.addColorStop(0, environment.gradient[0]);
     g.addColorStop(0.45, environment.gradient[1]);
     g.addColorStop(1, environment.gradient[2]);
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(viewportBounds.x, viewportBounds.y, viewportBounds.w, viewportBounds.h);
 
-    this.drawSectorAtmosphere(ctx, environment, W, H);
+    this.drawSectorAtmosphere(ctx, environment, W, H, viewportBounds);
     this.drawSectorLandmark(ctx, environment);
+    this.drawSectorImageLayer(ctx, environment, "far", W, H);
 
-    // Sector tint overlay — stronger in later sectors
+    // Individual art now carries the sector identity. Keep the global tint
+    // deliberately faint so it no longer reads as a red/green fog filter.
     const sector = SECTORS[this.currentSectorIndex];
     const [tr, tg, tb] = sector.tint;
-    const tintStrength = 0.09 + this.currentSectorIndex * 0.018;
-    ctx.fillStyle = `rgba(${tr},${tg},${tb},${tintStrength})`;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = `rgba(${tr},${tg},${tb},${environment.tintAlpha ?? 0.08})`;
+    ctx.fillRect(viewportBounds.x, viewportBounds.y, viewportBounds.w, viewportBounds.h);
 
     // Stars — brighter and more visible
     for (const s of this.stars) {
       s.y += s.v * 0.016;
       if (s.y > H) { s.y = -5; s.x = Math.random() * W; }
-      ctx.globalAlpha = s.a * 0.95 * environment.starAlpha;
-      // Brighter large stars get a cross sparkle
-      if (s.s > 1.5 && s.a > 0.6) {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(s.x - 0.5, s.y - s.s * 1.2, 1, s.s * 2.4);
-        ctx.fillRect(s.x - s.s * 1.2, s.y - 0.5, s.s * 2.4, 1);
+      // Repeat the scrolling field once above and below the logical arena.
+      // Tall phones therefore retain moving stars through their viewport
+      // bleed instead of exposing a flat band at the 760px world boundary.
+      for (const starY of [s.y - H, s.y, s.y + H]) {
+        if (starY < viewportBounds.y - 5 || starY > viewportBounds.y + viewportBounds.h + 5) continue;
+        ctx.globalAlpha = s.a * 0.95 * environment.starAlpha;
+        // Brighter large stars get a cross sparkle
+        if (s.s > 1.5 && s.a > 0.6) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(s.x - 0.5, starY - s.s * 1.2, 1, s.s * 2.4);
+          ctx.fillRect(s.x - s.s * 1.2, starY - 0.5, s.s * 2.4, 1);
+        }
+        ctx.fillStyle = environment.starColor;
+        ctx.fillRect(s.x, starY, s.s, s.s);
       }
-      ctx.fillStyle = environment.starColor;
-      ctx.fillRect(s.x, s.y, s.s, s.s);
     }
     ctx.globalAlpha = 1;
 
@@ -161,30 +181,35 @@ class WorldRenderingMethods {
       ctx.restore();
     }
 
+    // The sparse edge layer drifts slightly faster than the distant motif,
+    // creating parallax while keeping every gameplay object above both.
+    if (!this.lowEffects) this.drawSectorImageLayer(ctx, environment, "edge", W, H);
+
     // Subtle edge glow lines (arena framing)
     const [er, eg, eb] = environment.edgeColor;
     const edgeGrad = ctx.createLinearGradient(0, 0, 22, 0);
     edgeGrad.addColorStop(0, `rgba(${er},${eg},${eb},0.19)`);
     edgeGrad.addColorStop(1, `rgba(${er},${eg},${eb},0)`);
     ctx.fillStyle = edgeGrad;
-    ctx.fillRect(0, 0, 22, H);
+    ctx.fillRect(0, viewportBounds.y, 22, viewportBounds.h);
     const edgeGradR = ctx.createLinearGradient(W, 0, W - 22, 0);
     edgeGradR.addColorStop(0, `rgba(${er},${eg},${eb},0.19)`);
     edgeGradR.addColorStop(1, `rgba(${er},${eg},${eb},0)`);
     ctx.fillStyle = edgeGradR;
-    ctx.fillRect(W - 22, 0, 22, H);
+    ctx.fillRect(W - 22, viewportBounds.y, 22, viewportBounds.h);
 
     // Inner vignette
     const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.28, W / 2, H / 2, H * 0.72);
     vig.addColorStop(0, "rgba(0,0,0,0)");
     vig.addColorStop(1, "rgba(0,0,8,0.42)");
     ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(viewportBounds.x, viewportBounds.y, viewportBounds.w, viewportBounds.h);
 
     ctx.globalAlpha = 1;
   }
 
   drawSectorLandmark(ctx, environment) {
+    if (!environment.landmark) return;
     const image = this.loader.get(environment.landmark);
     const y = environment.landmarkY + Math.sin(this.time * 0.22) * 5;
     ctx.save();
@@ -201,7 +226,26 @@ class WorldRenderingMethods {
     ctx.restore();
   }
 
-  drawSectorAtmosphere(ctx, environment, W, H) {
+  drawSectorImageLayer(ctx, environment, kind, W, H) {
+    const assetKey = environment[`${kind}Layer`];
+    if (!assetKey) return;
+    const image = this.loader.get(assetKey);
+    if (!image) return;
+
+    const [driftX, driftY] = environment[`${kind}Drift`] || [0, 0];
+    const phase = this.currentSectorIndex * 1.37 + (kind === "edge" ? 0.8 : 0);
+    const x = Math.round(Math.sin(this.time * (kind === "edge" ? 0.075 : 0.04) + phase) * driftX);
+    const y = Math.round(Math.cos(this.time * (kind === "edge" ? 0.055 : 0.03) + phase) * driftY);
+    const pad = kind === "edge" ? 7 : 5;
+
+    ctx.save();
+    ctx.globalAlpha = environment[`${kind}Alpha`] ?? 0.25;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, x - pad, y - pad, W + pad * 2, H + pad * 2);
+    ctx.restore();
+  }
+
+  drawSectorAtmosphere(ctx, environment, W, H, viewportBounds = { x: 0, y: 0, w: W, h: H }) {
     ctx.save();
     if (environment.id === "frontier-lane") {
       ctx.strokeStyle = "rgba(82,138,220,0.09)";
@@ -217,21 +261,21 @@ class WorldRenderingMethods {
     } else if (environment.id === "nairan-expanse") {
       for (const [x, y, radius] of [[W + 18, 310, 230], [-24, 650, 180]]) {
         const cloud = ctx.createRadialGradient(x, y, 12, x, y, radius);
-        cloud.addColorStop(0, "rgba(154,62,185,0.13)");
-        cloud.addColorStop(0.52, "rgba(88,35,135,0.07)");
+        cloud.addColorStop(0, "rgba(154,62,185,0.045)");
+        cloud.addColorStop(0.52, "rgba(88,35,135,0.025)");
         cloud.addColorStop(1, "rgba(50,20,90,0)");
         ctx.fillStyle = cloud;
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillRect(viewportBounds.x, viewportBounds.y, viewportBounds.w, viewportBounds.h);
       }
     } else if (environment.id === "nautolan-depths") {
       const depth = ctx.createLinearGradient(0, 0, W, 0);
-      depth.addColorStop(0, "rgba(38,150,112,0.11)");
+      depth.addColorStop(0, "rgba(38,150,112,0.035)");
       depth.addColorStop(0.22, "rgba(20,80,66,0)");
       depth.addColorStop(0.78, "rgba(20,80,66,0)");
-      depth.addColorStop(1, "rgba(38,150,112,0.11)");
+      depth.addColorStop(1, "rgba(38,150,112,0.035)");
       ctx.fillStyle = depth;
-      ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = "rgba(104,230,184,0.10)";
+      ctx.fillRect(viewportBounds.x, viewportBounds.y, viewportBounds.w, viewportBounds.h);
+      ctx.strokeStyle = "rgba(104,230,184,0.045)";
       for (const [x, y, r] of [[28, 280, 12], [390, 410, 18], [42, 620, 8], [376, 690, 11]]) {
         ctx.beginPath();
         ctx.arc(x, y + Math.sin(this.time * 0.35 + x) * 5, r, 0, Math.PI * 2);
@@ -239,40 +283,17 @@ class WorldRenderingMethods {
       }
     } else if (environment.id === "void-core") {
       const coreShade = ctx.createRadialGradient(W / 2, 156, 24, W / 2, 156, 210);
-      coreShade.addColorStop(0, "rgba(0,0,0,0.58)");
-      coreShade.addColorStop(0.45, "rgba(75,10,18,0.10)");
+      coreShade.addColorStop(0, "rgba(0,0,0,0.24)");
+      coreShade.addColorStop(0.45, "rgba(75,10,18,0.035)");
       coreShade.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = coreShade;
       ctx.fillRect(0, 0, W, 390);
-      ctx.strokeStyle = "rgba(220,70,76,0.11)";
+      ctx.strokeStyle = "rgba(220,70,76,0.035)";
       ctx.lineWidth = 1;
       for (const radius of [92, 124, 158]) {
         ctx.beginPath();
         ctx.ellipse(W / 2, 156, radius, radius * 0.38, -0.16, 0, Math.PI * 2);
         ctx.stroke();
-      }
-      // Sparse fragments and dust live only in the outer 14% of the arena.
-      // Their slow drift implies depth without creating projectile-like noise.
-      const fragments = [
-        [18, 238, 13, -0.2], [39, 466, 8, 0.4], [15, 650, 11, -0.5],
-        [402, 302, 10, 0.3], [384, 528, 14, -0.35], [405, 698, 7, 0.55],
-      ];
-      ctx.fillStyle = "rgba(128,46,70,0.16)";
-      ctx.strokeStyle = "rgba(214,82,112,0.10)";
-      for (const [x, baseY, size, tilt] of fragments) {
-        const y = baseY + Math.sin(this.time * 0.18 + baseY) * 7;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(tilt + this.time * 0.015);
-        ctx.beginPath();
-        ctx.moveTo(-size, -size * 0.22);
-        ctx.lineTo(size * 0.35, -size * 0.48);
-        ctx.lineTo(size, size * 0.18);
-        ctx.lineTo(-size * 0.28, size * 0.42);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
       }
     }
     ctx.restore();

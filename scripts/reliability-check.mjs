@@ -11,6 +11,7 @@ import { FORMATION_SHAPES, SECTOR_ENCOUNTER_PROFILES, WAVE_CARDS } from "../src/
 import { BOSS_PROFILES } from "../src/data/bosses.js";
 import { FLEETS } from "../src/data/fleets.js";
 import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
+import { ASSET_GROUPS } from "../src/assets.js";
 
 function createGame() {
   const game = Object.create(Game.prototype);
@@ -896,13 +897,30 @@ function testSectorEnvironments() {
   assert.equal(SECTOR_ENVIRONMENTS.length, SECTORS.length, "Every sector has an environment profile");
   assert.equal(new Set(SECTOR_ENVIRONMENTS.map(environment => environment.id)).size, SECTORS.length,
     "Every sector has a distinct map identity");
-  assert.equal(new Set(SECTOR_ENVIRONMENTS.map(environment => environment.landmark)).size, SECTORS.length,
-    "Every sector has a distinct landmark asset");
   assert.ok(SECTOR_ENVIRONMENTS.every(environment => environment.asteroidCount <= 8),
     "Sector decoration stays within the existing sparse asteroid budget");
-  assert.equal(SECTOR_ENVIRONMENTS[3].landmark, "environmentVoidCore");
-  assert.ok(SECTOR_ENVIRONMENTS[3].landmarkAlpha <= 0.28,
-    "The finale landmark remains subdued behind combat");
+  const authored = SECTOR_ENVIRONMENTS.slice(1);
+  assert.ok(authored.every(environment => environment.farLayer && environment.edgeLayer),
+    "Sectors two through four each have far and edge art layers");
+  assert.equal(new Set(authored.flatMap(environment => [environment.farLayer, environment.edgeLayer])).size, 6,
+    "Every authored environment layer uses a distinct asset");
+  assert.ok(authored.every(environment => environment.tintAlpha <= 0.035),
+    "Authored art replaces the former heavy global sector tint");
+  assert.ok(authored.every(environment => environment.farAlpha <= 0.34 && environment.edgeAlpha <= 0.32),
+    "Environment art remains subdued behind combat");
+  assert.ok(["nairanEnvironmentFar", "nairanEnvironmentEdge"]
+    .every(key => ASSET_GROUPS.nairan[key]), "Nairan layers stream with sector two");
+  assert.ok([
+    "nautolanEnvironmentFar", "nautolanEnvironmentEdge",
+    "nautolanVoidEnvironmentFar", "nautolanVoidEnvironmentEdge",
+  ].every(key => ASSET_GROUPS.nautolan[key]), "Late-run layers share the existing streamed fleet group");
+  const mobileGame = createGame();
+  mobileGame.lowEffects = true;
+  const mobileManifest = mobileGame._assetManifest(["nautolan"]);
+  assert.ok(mobileManifest.nautolanEnvironmentFar && mobileManifest.nautolanVoidEnvironmentFar,
+    "Reduced-effects devices retain both distant sector identities");
+  assert.ok(!Object.keys(mobileManifest).some(key => key.endsWith("EnvironmentEdge")),
+    "Reduced-effects devices do not load the optional near-edge RGBA layers");
   assert.ok(SECTOR_ENVIRONMENTS[3].asteroidCount <= 4,
     "The finale keeps its central combat area visually quiet");
 }

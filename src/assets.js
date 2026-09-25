@@ -150,9 +150,14 @@ export const ASSETS = {
   asteroidFlame:"assets/Foozle_2DS0015_Void_EnvironmentPack/Effects/PNGs/Asteroid - Flame.png",
   planet:       "assets/Foozle_2DS0015_Void_EnvironmentPack/Planets/PNGs/Earth-Like planet.png",
   planetNoGlow: "assets/Foozle_2DS0015_Void_EnvironmentPack/Planets/PNGs/Earth-Like planet - Without back glow.png",
-  environmentNairanStar: "assets/environment/runtime/nairan-star-v1.png",
-  environmentNautolanStar: "assets/environment/runtime/nautolan-star-v1.png",
-  environmentVoidCore: "assets/environment/runtime/void-core-v2.png",
+  nairanEnvironmentFar: "assets/environment/runtime/sector-2-nairan-far-v1.png",
+  nairanEnvironmentEdge: "assets/environment/runtime/sector-2-nairan-edge-v1.png",
+  nautolanEnvironmentFar: "assets/environment/runtime/sector-3-nautolan-far-v1.png",
+  nautolanEnvironmentEdge: "assets/environment/runtime/sector-3-nautolan-edge-v1.png",
+  // Sector IV deliberately stays in the Nautolan group: both sectors share
+  // the fleet group, so these two images are loaded once for the late run.
+  nautolanVoidEnvironmentFar: "assets/environment/runtime/sector-4-void-far-v1.png",
+  nautolanVoidEnvironmentEdge: "assets/environment/runtime/sector-4-void-edge-v1.png",
 
   pickupEngine:    "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Base Engine.png",
   pickupPulse:     "assets/Foozle_2DS0016_Void_PickupsPack/Engines/PNGs/Pickup Icon - Engines - Big Pulse Engine.png",

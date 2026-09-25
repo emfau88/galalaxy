@@ -273,7 +273,16 @@ export class Game {
   }
 
   _assetManifest(groupNames) {
-    return Object.assign({}, ...groupNames.map(name => ASSET_GROUPS[name] || {}));
+    const manifest = Object.assign({}, ...groupNames.map(name => ASSET_GROUPS[name] || {}));
+    // Coarse-pointer devices already use the reduced-effects renderer. Do not
+    // decode the optional near-edge art there either; the far layer preserves
+    // each sector identity while saving one large RGBA surface per sector.
+    if (this.lowEffects) {
+      for (const key of Object.keys(manifest)) {
+        if (key.endsWith("EnvironmentEdge")) delete manifest[key];
+      }
+    }
+    return manifest;
   }
 
   _loadAssetGroups(groupNames) {

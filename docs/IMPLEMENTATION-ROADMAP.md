@@ -326,7 +326,7 @@ Plan steht bei jedem Bulk.
 ## Bulk D.8 – Individuelle Sektorhintergründe 2–4
 
 **Priorität:** P1
-**Status:** MOTIVABNAHME OFFEN
+**Status:** TECHNISCH ABGESCHLOSSEN
 **Bezug:** zu starke globale Rot-/Grün-Nebeltönung und fehlende individuelle Dekoration
 
 - [x] Drei originale transparente ImageGen-Pixel-Art-Vergleichsmotive erzeugen.
@@ -334,9 +334,12 @@ Plan steht bei jedem Bulk.
 - [x] Nautolan Depths mit Weltraumruinen, Ringstrukturen und organisch-technischen Randformen entwerfen.
 - [x] Void Core mit Gravitationsbögen, roten Monolithen und verzerrten Sternspuren entwerfen.
 - [x] Zentrale 65–70 % in allen Motiven ruhig halten.
-- [ ] Vergleichsmotive durch den Nutzer abnehmen oder Änderungswünsche erfassen.
-- [ ] Abgenommene Motive in getrennte Fern- und Randebenen aufteilen, auf 420×760 optimieren und in die Assetgruppen einbauen.
-- [ ] Globale Sektor-II/III/IV-Tönung nach Einbau reduzieren und mobile Speicher-/Renderkosten messen.
+- [x] Vergleichsmotive durch den Nutzer abnehmen oder Änderungswünsche erfassen.
+- [x] Abgenommene Motive in getrennte Fern- und Randebenen aufteilen, auf die 420×760-Renderfläche abstimmen und in die Assetgruppen einbauen.
+- [x] Globale Sektor-II/III/IV-Tönung nach Einbau auf 3–3,5 % reduzieren und mobile Speicher-/Renderkosten begrenzen.
+- [x] Fern- und Randebenen mit unterschiedlichen langsamen Driftfrequenzen rendern; Randebenen im Reduced-Effects-Modus weder laden noch zeichnen.
+- [x] Sektorgradient, Vignette und Sternenfeld über hohe Handyformate hinaus verlängern, ohne Gameplay- oder HUD-Koordinaten zu verändern.
+- [x] Drei Encounter-Screens, zehn Bosszustände, sieben HUD-Formate und vollständigen Browserlauf ohne Asset-/Konsolenfehler prüfen.
 
 ---
 
@@ -497,7 +500,7 @@ Plan steht bei jedem Bulk.
 - [x] Punkteprüfung von einem fest verdrahteten Niedrigwert-Seed auf eine reproduzierbare 500-Seed-Verteilung erweitert.
 - [x] Kleine schnelle Pseudoformationen durch vier echte Verbände mit stabilen Slots, gemeinsamer Geschwindigkeit und eigenem Einflugfenster ersetzt.
 - [x] Bossphasen 2–4 mit Übergangspause, Anzeige, Sound, Farbwechsel, Schwellen-Schutz und neun getrennten Angriffsmustern ausgebaut.
-- [x] Drei transparente ImageGen-Vergleichsmotive für die individuellen Sektorhintergründe erstellt; Einbau wartet bewusst auf Motivabnahme.
+- [x] Individuelle ImageGen-Hintergründe für Sektor II–IV als getrennte Fern-/Randebenen integriert, globalen Farbschleier reduziert und hohe Handyformate ohne Letterbox-Rand gefüllt.
 - [x] Lokalen Entwicklungsserver nach manuellen Tests sauber beenden.
 
 ## Änderungsprotokoll
@@ -516,4 +519,4 @@ Plan steht bei jedem Bulk.
 - **25.09.2026:** Spieltest-Follow-up Punkt 1 umgesetzt: HUD auf allen mobilen Formaten direkt an die Safe Area gesetzt, sektorbezogene Punkte- und Bosszeit-Telemetrie ergänzt und den irreführenden 60.070-Einzeltest durch eine 500-Seed-Verteilung ergänzt. Aktuelle Baseline: Median 71.703, P90 74.403; Details unter `docs/qa/hud-telemetry-2026-09-25/report.md`.
 - **25.09.2026:** Formations-P0 technisch umgesetzt: vier feste Verbände mit fünf bis sieben Schiffen, 82,8–104 px/s, gemeinsamem geraden Flugvektor, freigeräumtem Einflugfenster und sektorspezifischer Rollenkomposition. Die modellierte Median-Punktzahl fällt auf 67.151; Vollrun und dedizierte Browser-Szenen bestehen. Details unter `docs/qa/formation-followup-2026-09-25/report.md`.
 - **25.09.2026:** Boss-P0 technisch umgesetzt: klar unterbrochene Phasenwechsel, Phasenbanner/-sound, phasenabhängige Aura, harte Schadensschwellen und neun getrennte Muster für Boss 2–4. HP blieben unverändert; Zielzeitmodelle liegen bei 40,7/51,4/65,9 Sekunden. Details unter `docs/qa/boss-phases-2026-09-25/report.md`.
-- **25.09.2026:** Drei originale transparente ImageGen-Vergleichsmotive für Nairan Expanse, Nautolan Depths und Void Core erzeugt. Die Dateien sind bewusst noch nicht eingebunden; Motivabnahme und anschließende Aufteilung/Optimierung bleiben offen. Details unter `docs/qa/background-concepts-2026-09-25/report.md`.
+- **25.09.2026:** Drei originale transparente ImageGen-Vergleichsmotive für Nairan Expanse, Nautolan Depths und Void Core erzeugt, nach Nutzerfeedback beruhigt und freigegeben. Die finalen Fassungen wurden in sechs getrennte Fern-/Randebenen überführt, mit eigenem Parallax-Drift integriert und auf mobilen Reduced-Effects-Geräten auf die Fernlagen begrenzt. Gradient, Tint, Vignette und Sternenfeld füllen auch hohe Handyformate ohne sichtbare Mapkante. Details unter `docs/qa/background-concepts-2026-09-25/report.md`.

@@ -262,7 +262,7 @@ try {
     await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
     const scene = await page.evaluate(async sectorIndex => {
       const g = window.__galalaxyTestGame;
-      const { SECTORS } = await import("/src/config.js");
+      const { SECTOR_ENVIRONMENTS, SECTORS } = await import("/src/config.js");
       const { SECTOR_ASSET_GROUPS } = await import("/src/assets.js");
       const { encounterProfileFor } = await import("/src/data/encounters.js");
       await g._loadAssetGroups([SECTOR_ASSET_GROUPS[sectorIndex]]);
@@ -284,6 +284,8 @@ try {
       for (let i = 0; i < Math.ceil(previewSeconds * 60); i++) update(1 / 60);
       g.update = () => {};
       const profile = encounterProfileFor(sectorIndex);
+      const environment = SECTOR_ENVIRONMENTS[sectorIndex];
+      const backgroundLayers = [environment.farLayer, environment.edgeLayer].filter(Boolean);
       return {
         sector: sectorIndex + 1,
         profile: profile.id,
@@ -292,10 +294,16 @@ try {
         enemyCap: profile.enemyCap,
         enemyProjectiles: g.projectiles.filter(projectile => projectile.owner === "enemy" && !projectile.dead).length,
         projectileCap: profile.projectileCap,
+        backgroundLayers,
+        backgroundLayersLoaded: backgroundLayers.every(key => Boolean(g.loader.get(key))),
+        tintAlpha: environment.tintAlpha,
       };
     }, sectorIndex);
     assert.ok(scene.enemies <= scene.enemyCap, JSON.stringify(scene));
     assert.ok(scene.enemyProjectiles <= scene.projectileCap, JSON.stringify(scene));
+    assert.equal(scene.backgroundLayersLoaded, true, JSON.stringify(scene));
+    assert.equal(scene.backgroundLayers.length, sectorIndex === 0 ? 0 : 2, JSON.stringify(scene));
+    if (sectorIndex > 0) assert.ok(scene.tintAlpha <= 0.035, JSON.stringify(scene));
     report.encounterScenes.push(scene);
     await screenshot(`encounter-sector-${sectorIndex + 1}`);
     if (sectorIndex === 1) {
@@ -496,7 +504,11 @@ try {
         hasSafeLane: boss.specialCharge?.safeLane !== undefined ||
           Boolean(boss.specialCharge?.safeSequence?.length),
         protectedBySupport: Boolean(support?.supportTargets.includes(boss)),
-        voidCoreLoaded: sector !== 4 || Boolean(g.loader.get("environmentVoidCore")),
+        environmentLayersLoaded: sector === 1 || ({
+          2: ["nairanEnvironmentFar", "nairanEnvironmentEdge"],
+          3: ["nautolanEnvironmentFar", "nautolanEnvironmentEdge"],
+          4: ["nautolanVoidEnvironmentFar", "nautolanVoidEnvironmentEdge"],
+        })[sector].every(key => Boolean(g.loader.get(key))),
       };
     }, { sector, phase });
     assert.equal(scene.attack, attack, JSON.stringify(scene));
@@ -520,7 +532,7 @@ try {
   assert.ok(report.bossScenes.filter(scene =>
     ["precision-salvo", "wandering-control", "void-rift", "void-combo"].includes(scene.attack))
     .every(scene => scene.hasSafeLane));
-  assert.ok(report.bossScenes.every(scene => scene.voidCoreLoaded));
+  assert.ok(report.bossScenes.every(scene => scene.environmentLayersLoaded));
 
   await page.goto(`${base}/?test=hud-layout`);
   await page.waitForFunction(() => window.__galalaxyTestGame?.state === "playing");
