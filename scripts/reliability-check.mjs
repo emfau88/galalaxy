@@ -11,6 +11,7 @@ import { FORMATION_SHAPES, SECTOR_ENCOUNTER_PROFILES, WAVE_CARDS } from "../src/
 import { BOSS_PROFILES } from "../src/data/bosses.js";
 import { FLEETS } from "../src/data/fleets.js";
 import { KONGREGATE_STATS, isKongregateHost, kongregateStatsForRun } from "../src/kongregate.js";
+import { GameMonetizeBridge, isGameMonetizeHost } from "../src/gamemonetize.js";
 import { ASSET_GROUPS } from "../src/assets.js";
 
 function createGame() {
@@ -893,6 +894,35 @@ function testKongregateStats() {
   });
 }
 
+function testGameMonetizeBridge() {
+  assert.equal(isGameMonetizeHost("https://html5.gamemonetize.games/example/"), true);
+  assert.equal(isGameMonetizeHost("https://uncached.gamemonetize.com/example/"), true);
+  assert.equal(isGameMonetizeHost("https://example.com/gamemonetize.com"), false);
+
+  const events = [];
+  const game = {
+    beginPlatformAd() { events.push("pause"); },
+    endPlatformAd() { events.push("resume"); },
+  };
+  const sdk = { showBanner() { events.push("request"); } };
+  const bridge = new GameMonetizeBridge(game, {
+    enabled: true,
+    ready: true,
+    sdk,
+    windowRef: { sdk },
+    autoLoad: false,
+  });
+  let continued = 0;
+  bridge.showInterstitial("play", () => { continued += 1; });
+  assert.deepEqual(events, ["request"], "Play requests one GameMonetize interstitial");
+  bridge._handleEvent({ name: "SDK_GAME_PAUSE" });
+  assert.deepEqual(events, ["request", "pause"], "The SDK pause event freezes and mutes the game");
+  bridge._handleEvent({ name: "SDK_GAME_START" });
+  assert.deepEqual(events, ["request", "pause", "resume"], "The SDK start event restores the game");
+  assert.equal(continued, 1, "Gameplay continues exactly once after the ad");
+  assert.equal(bridge.inFlight, false, "The ad lock clears after completion");
+}
+
 function testSectorEnvironments() {
   assert.equal(SECTOR_ENVIRONMENTS.length, SECTORS.length, "Every sector has an environment profile");
   assert.equal(new Set(SECTOR_ENVIRONMENTS.map(environment => environment.id)).size, SECTORS.length,
@@ -945,6 +975,7 @@ testNairanTorpedoRole();
 testNautolanSupportRole();
 testDistinctBossProfiles();
 testKongregateStats();
+testGameMonetizeBridge();
 testSectorEnvironments();
 console.log(`Reliability checks passed (formation calibration seed: ${scoreModel.formationSeedScore}; ` +
   `500-seed distribution: ${JSON.stringify(scoreModel.scoreDistribution)})`);

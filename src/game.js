@@ -12,6 +12,7 @@ import { UpgradeSystem, createUpgradeCards } from "./systems/upgrades.js";
 import { RunStats } from "./runStats.js";
 import { SoundSystem } from "./systems/soundSystem.js";
 import { KongregateBridge } from "./kongregate.js";
+import { GameMonetizeBridge } from "./gamemonetize.js";
 import { sectorMethods } from "./systems/sectorSystem.js";
 import { combatMethods } from "./systems/combatSystem.js";
 import { worldRenderingMethods } from "./rendering/worldRenderer.js";
@@ -107,6 +108,8 @@ export class Game {
     this.sounds = new SoundSystem(this.musicMuted);
     this.runStats = new RunStats();
     this.kongregate = new KongregateBridge();
+    this._platformAdAudio = null;
+    this._runStartAdPending = false;
     this.fullscreenActive = Boolean(document.fullscreenElement);
     this._music = new Audio("assets/music/track1.ogg");
     this._music.loop = true;
@@ -124,6 +127,7 @@ export class Game {
     this.asteroids = [];
     this.upgrades = new UpgradeSystem(this);
     this.input = new Input(this.canvas, this);
+    this.gameMonetize = new GameMonetizeBridge(this);
 
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -358,6 +362,19 @@ export class Game {
     this.runTime = 735;
     this.best = Math.max(this.best, this.score);
     this.state = "victory";
+  }
+
+  startRunWithPortalAd() {
+    if (this._runStartAdPending) return false;
+    if (!this.gameMonetize?.enabled) return this.startRun();
+
+    const sourceState = this.state;
+    this._runStartAdPending = true;
+    this.gameMonetize.showInterstitial(sourceState === "title" ? "play" : "replay", () => {
+      this._runStartAdPending = false;
+      if (["title", "gameOver", "victory"].includes(this.state)) this.startRun();
+    });
+    return true;
   }
 
   startVisualTest() {
@@ -616,6 +633,24 @@ export class Game {
     this._tryStartMusic();
   }
 
+  beginPlatformAd() {
+    if (this._platformAdAudio) return;
+    this._platformAdAudio = {
+      musicWasPlaying: !this.musicMuted && !this._music.paused,
+    };
+    this.input.cancelMovement();
+    this._music.pause();
+    this.sounds.setMuted(true);
+  }
+
+  endPlatformAd() {
+    const audio = this._platformAdAudio;
+    if (!audio) return;
+    this._platformAdAudio = null;
+    this.sounds.setMuted(this.musicMuted);
+    if (audio.musicWasPlaying && !this.musicMuted) this._music.play().catch(() => {});
+  }
+
   loop(now) {
     const rawDt = (now - this.last) / 1000;
     this.last = now;
@@ -626,6 +661,7 @@ export class Game {
   }
 
   update(dt) {
+    if (this._platformAdAudio) return;
     this.time += dt;
 
     const tap = this.input.consumeTap();
@@ -721,12 +757,12 @@ export class Game {
     this._tryStartMusic();
 
     if (this.state === "title") {
-      if (y > 500 && y < 610) this.startRun();
+      if (y > 500 && y < 610) this.startRunWithPortalAd();
     } else if (this.state === "gameOver") {
-      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRun();
+      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRunWithPortalAd();
       else if (this._hitRect(x, y, VICTORY_HANGAR_BUTTON)) this.returnToHangar();
     } else if (this.state === "victory") {
-      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRun();
+      if (this._hitRect(x, y, VICTORY_PLAY_BUTTON)) this.startRunWithPortalAd();
       else if (this._hitRect(x, y, VICTORY_HANGAR_BUTTON)) this.returnToHangar();
     } else if (this.state === "levelUp") {
       this.upgrades.handleTap(x, y);
